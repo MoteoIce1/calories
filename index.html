@@ -64,14 +64,12 @@
       const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
       const [activeTab, setActiveTab] = useState('diary');
       
-      // Состояния форм
       const [selectedFoodId, setSelectedFoodId] = useState('');
       const [gramsInput, setGramsInput] = useState('');
       const [newFoodName, setNewFoodName] = useState('');
       const [newFoodCals, setNewFoodCals] = useState('');
       const [newFoodProtein, setNewFoodProtein] = useState('');
 
-      // Состояния редактирования
       const [editingLogId, setEditingLogId] = useState(null);
       const [editingFoodId, setEditingFoodId] = useState(null);
       const [editValue, setEditValue] = useState({});
@@ -118,7 +116,6 @@
 
       const updateFoodBase = (id) => {
         setFoods(foods.map(f => f.id === id ? { ...f, ...editValue } : f));
-        // Также обновляем все записи в дневнике с этим продуктом, чтобы Ккал пересчитались
         setDailyLogs(prev => {
           const newLogs = { ...prev };
           Object.keys(newLogs).forEach(date => {
@@ -162,14 +159,12 @@
             {activeTab === 'diary' ? (
               <div className="space-y-6">
                 
-                {/* Дата */}
                 <div className="flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
                   <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(getLocalDateString(d));}} className="fast-touch p-3 text-zinc-400"><IconChevronLeft className="w-5 h-5" /></button>
                   <div className="font-bold text-sm text-zinc-200">{displayDate(currentDate)}</div>
                   <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()+1); setCurrentDate(getLocalDateString(d));}} disabled={currentDate === getLocalDateString(new Date())} className="fast-touch p-3 text-zinc-400 disabled:opacity-20"><IconChevronRight className="w-5 h-5" /></button>
                 </div>
 
-                {/* Прогресс */}
                 <div className="bg-[#18181b] rounded-3xl p-5 shadow-xl border border-zinc-800/50">
                   <div className="flex justify-between items-end mb-4">
                     <div>
@@ -197,7 +192,6 @@
                   </div>
                 </div>
 
-                {/* Добавление записи */}
                 <form onSubmit={handleAddLog} className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
                   <select className="w-full bg-[#27272a] rounded-2xl p-4 outline-none appearance-none text-zinc-200" value={selectedFoodId} onChange={(e) => setSelectedFoodId(e.target.value)} required>
                     <option value="" disabled>Что съели?</option>
@@ -209,20 +203,19 @@
                   </div>
                 </form>
 
-                {/* Список записей */}
                 <div className="space-y-3">
                   {currentDayLogs.map(log => (
                     <div key={log.id} className="bg-[#18181b] rounded-2xl p-4 flex justify-between items-center border border-zinc-800/30">
-                      <div className="flex-1" onClick={() => { setEditingLogId(log.id); setEditValue({ grams: log.grams }); }}>
+                      <div className="flex-1 cursor-pointer" onClick={() => { setEditingLogId(log.id); setEditValue({ grams: log.grams }); }}>
                         {editingLogId === log.id ? (
                           <div className="flex items-center gap-2">
-                            <input autoFocus type="number" className="w-20 bg-zinc-800 rounded-lg p-1 text-sm outline-none border border-emerald-500" value={editValue.grams} onChange={(e) => setEditValue({grams: e.target.value})} onBlur={() => updateLogWeight(log.id, editValue.grams)} />
+                            <input autoFocus type="number" className="w-20 bg-zinc-900 rounded-lg p-1 text-sm outline-none border border-emerald-500 text-white" value={editValue.grams} onChange={(e) => setEditValue({grams: e.target.value})} onBlur={() => updateLogWeight(log.id, editValue.grams)} />
                             <span className="text-xs text-zinc-500">гр</span>
                           </div>
                         ) : (
                           <>
-                            <p className="font-bold text-sm">{foods.find(f => f.id === log.foodId)?.name || 'Удалено'}</p>
-                            <p className="text-[10px] text-zinc-400 font-bold uppercase underline decoration-zinc-700">{log.grams}г <span className="text-[8px] font-normal opacity-50">(нажми для ред.)</span></p>
+                            <p className="font-bold text-sm border-b border-zinc-800/50 inline-block">{foods.find(f => f.id === log.foodId)?.name || 'Удалено'}</p>
+                            <p className="text-[10px] text-zinc-400 font-bold uppercase block mt-1 underline decoration-zinc-800 decoration-dotted">{log.grams}г</p>
                           </>
                         )}
                       </div>
@@ -240,7 +233,6 @@
             ) : (
               <div className="space-y-8">
                 
-                {/* Настройка Целей */}
                 <div className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
                   <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><IconTarget className="w-4 h-4" /> Ваши цели</h2>
                   <div className="grid grid-cols-2 gap-3">
@@ -255,7 +247,6 @@
                   </div>
                 </div>
 
-                {/* Добавление в справочник */}
                 <form onSubmit={(e) => {e.preventDefault(); setFoods([...foods, {id: Date.now().toString(), name: newFoodName, calories: parseFloat(newFoodCals), protein: parseFloat(newFoodProtein)}]); setNewFoodName(''); setNewFoodCals(''); setNewFoodProtein('');}} className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
                   <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Новый продукт</h2>
                   <input type="text" placeholder="Название" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFoodName} onChange={(e) => setNewFoodName(e.target.value)} required />
@@ -266,24 +257,23 @@
                   <button type="submit" className="fast-touch w-full bg-indigo-600 text-white rounded-xl p-4 font-bold active:scale-95 transition-transform">Добавить в список</button>
                 </form>
 
-                {/* Справочник */}
                 <div className="space-y-2">
                   <h2 className="text-[10px] font-bold text-zinc-500 uppercase mb-2">Список ({foods.length})</h2>
                   {foods.map(f => (
                     <div key={f.id} className="bg-[#18181b] rounded-xl p-3 border border-zinc-800/30">
                       {editingFoodId === f.id ? (
                         <div className="space-y-3">
-                           <input autoFocus className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-white" value={editValue.name} onChange={e => setEditValue({...editValue, name: e.target.value})} />
+                           <input autoFocus className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-white border border-indigo-500 outline-none" value={editValue.name} onChange={e => setEditValue({...editValue, name: e.target.value})} />
                            <div className="grid grid-cols-2 gap-2">
-                              <input type="number" className="bg-zinc-900 rounded-lg p-2 text-sm text-emerald-400" value={editValue.calories} onChange={e => setEditValue({...editValue, calories: parseFloat(e.target.value)})} />
-                              <input type="number" className="bg-zinc-900 rounded-lg p-2 text-sm text-indigo-400" value={editValue.protein} onChange={e => setEditValue({...editValue, protein: parseFloat(e.target.value)})} />
+                              <input type="number" className="bg-zinc-900 rounded-lg p-2 text-sm text-emerald-400 outline-none" value={editValue.calories} onChange={e => setEditValue({...editValue, calories: parseFloat(e.target.value)})} />
+                              <input type="number" className="bg-zinc-900 rounded-lg p-2 text-sm text-indigo-400 outline-none" value={editValue.protein} onChange={e => setEditValue({...editValue, protein: parseFloat(e.target.value)})} />
                            </div>
-                           <button onClick={() => updateFoodBase(f.id)} className="w-full bg-emerald-600 p-2 rounded-lg flex justify-center"><IconCheck className="w-5 h-5" /></button>
+                           <button onClick={() => updateFoodBase(f.id)} className="w-full bg-emerald-600 p-2 rounded-lg flex justify-center"><IconCheck className="w-5 h-5 text-white" /></button>
                         </div>
                       ) : (
-                        <div className="flex justify-between items-center" onClick={() => { setEditingFoodId(f.id); setEditValue(f); }}>
+                        <div className="flex justify-between items-center cursor-pointer" onClick={() => { setEditingFoodId(f.id); setEditValue(f); }}>
                           <div className="flex-1">
-                            <span className="text-sm font-medium">{f.name}</span>
+                            <span className="text-sm font-medium border-b border-zinc-800/50">{f.name}</span>
                             <div className="flex gap-2 text-[10px] font-bold uppercase mt-1">
                               <span className="text-emerald-500">{f.calories} ккал</span>
                               <span className="text-indigo-500">{f.protein || 0} г</span>
