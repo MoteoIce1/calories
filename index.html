@@ -23,7 +23,6 @@
     input[type="number"]::-webkit-inner-spin-button, 
     input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     
-    /* Анимация загрузки */
     .loader { border: 3px solid #27272a; border-top: 3px solid #10b981; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
   </style>
@@ -32,7 +31,6 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    // --- НАСТРОЙКА FIREBASE ---
     const firebaseConfig = {
       apiKey: "AIzaSyBg9rVgF6WUjuu9abFvV_1KCHdSW3fZ5uQ",
       authDomain: "my-test-db-de78c.firebaseapp.com",
@@ -43,13 +41,13 @@
       measurementId: "G-KW2YVT1ZJW"
     };
 
-    // Инициализация
-    firebase.initializeApp(firebaseConfig);
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
     const db = firebase.firestore();
-    // Мы будем хранить все данные пользователя в одном документе
     const docRef = db.collection('users').doc('main_profile');
 
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     const IconPlus = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14m-7-7h14"/></svg>;
     const IconBook = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>;
@@ -60,7 +58,6 @@
     const IconTarget = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
     const IconCheck = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
 
-    // ЖЕСТКО ЗАШИТАЯ БАЗА (Загрузится только при первом входе, потом будет в облаке)
     const HARDCODED_FOODS = [
       { id: 'h1', name: 'Котлета (говядина)', calories: 255, protein: 25 },
       { id: 'h2', name: 'Котлеты куриные', calories: 160, protein: 16 },
@@ -104,11 +101,9 @@
 
     function App() {
       const [isLoading, setIsLoading] = useState(true);
-      
       const [goals, setGoals] = useState({ calories: 1800, protein: 150 });
       const [foods, setFoods] = useState([]);
       const [dailyLogs, setDailyLogs] = useState({});
-      
       const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
       const [activeTab, setActiveTab] = useState('diary');
       
@@ -122,7 +117,9 @@
       const [editingFoodId, setEditingFoodId] = useState(null);
       const [editValue, setEditValue] = useState({});
 
-      // Загрузка данных из Firebase
+      // Ссылка на контейнер с контентом для сброса скролла
+      const scrollContainerRef = useRef(null);
+
       useEffect(() => {
         const unsubscribe = docRef.onSnapshot((docSnap) => {
           if (docSnap.exists) {
@@ -131,7 +128,6 @@
             if (data.foods) setFoods(data.foods);
             if (data.dailyLogs) setDailyLogs(data.dailyLogs);
           } else {
-            // Если базы нет (первый вход), создаем её
             setFoods(HARDCODED_FOODS);
             docRef.set({
               goals: { calories: 1800, protein: 150 },
@@ -144,14 +140,19 @@
         return () => unsubscribe();
       }, []);
 
-      // Обновление целей
+      // Исправление бага со скроллом
+      useEffect(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = 0;
+        }
+      }, [activeTab]);
+
       const updateGoals = (field, value) => {
         const updated = { ...goals, [field]: value };
         setGoals(updated);
         docRef.set({ goals: updated }, { merge: true });
       };
 
-      // --- ДНЕВНИК ---
       const handleAddLog = (e) => {
         e.preventDefault();
         const food = foods.find(f => f.id === selectedFoodId);
@@ -196,7 +197,6 @@
         docRef.set({ dailyLogs: updatedLogs }, { merge: true });
       };
 
-      // --- БАЗА ПРОДУКТОВ ---
       const handleAddFood = (e) => {
         e.preventDefault();
         const newFood = {
@@ -215,7 +215,6 @@
         const updatedFoods = foods.map(f => f.id === id ? { ...f, ...editValue } : f);
         setFoods(updatedFoods);
         
-        // Автоматический пересчет калорий в дневнике при изменении продукта
         const updatedLogs = { ...dailyLogs };
         Object.keys(updatedLogs).forEach(date => {
           updatedLogs[date] = updatedLogs[date].map(log => {
@@ -232,7 +231,6 @@
         });
 
         setDailyLogs(updatedLogs);
-        // Отправляем разом в базу и новые продукты, и пересчитанный дневник
         docRef.set({ foods: updatedFoods, dailyLogs: updatedLogs }, { merge: true });
         setEditingFoodId(null);
       };
@@ -244,14 +242,17 @@
         docRef.set({ foods: updatedFoods }, { merge: true });
       };
 
-      // Расчеты для прогресс-бара
       const currentDayLogs = dailyLogs[currentDate] || [];
       const totalCals = currentDayLogs.reduce((sum, log) => sum + log.totalCalories, 0);
       const totalPro = currentDayLogs.reduce((sum, log) => sum + (log.totalProtein || 0), 0);
+      
+      // Вычисление остатков
+      const remainingCals = Math.max(0, goals.calories - totalCals);
+      const remainingPro = Math.max(0, goals.protein - totalPro).toFixed(1);
+
       const progressCals = Math.min(100, (totalCals / goals.calories) * 100);
       const progressPro = Math.min(100, (totalPro / goals.protein) * 100);
 
-      // Экран загрузки
       if (isLoading) {
         return (
           <div className="flex h-[100dvh] items-center justify-center bg-[#09090b] flex-col gap-4">
@@ -269,15 +270,9 @@
               <h1 className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : 'Настройки'}</h1>
               {activeTab === 'diary' && <div className="text-sm text-zinc-500 mt-1">{displayDate(currentDate)}</div>}
             </div>
-            {activeTab === 'diary' && (
-              <div className="flex gap-2 text-[10px] font-bold uppercase tracking-wider bg-[#18181b] p-2 rounded-xl border border-zinc-800/50">
-                <span className="text-emerald-400">{totalCals} ккал</span>
-                <span className="text-indigo-400">{totalPro.toFixed(1)} г</span>
-              </div>
-            )}
           </header>
 
-          <main className="flex-1 overflow-y-auto px-5 pt-2 pb-8">
+          <main ref={scrollContainerRef} className="flex-1 overflow-y-auto px-5 pt-2 pb-8">
             {activeTab === 'diary' ? (
               <div className="space-y-4">
                 
@@ -288,21 +283,32 @@
                 </div>
 
                 <div className="bg-[#18181b] rounded-3xl p-5 shadow-xl border border-zinc-800/50">
-                  <div className="flex justify-between items-end mb-4">
+                  <div className="flex justify-between items-end mb-3">
                     <div>
+                      <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-widest">Калории</p>
                       <div className="flex items-baseline gap-1">
                         <span className="text-4xl font-black">{totalCals}</span>
                         <span className="text-zinc-600 text-sm">/ {goals.calories}</span>
                       </div>
-                      <p className="text-[10px] text-emerald-500 uppercase font-bold mt-1 tracking-widest">Калории</p>
                     </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-black text-indigo-400">{totalPro.toFixed(1)}г</div>
-                      <p className="text-[10px] text-zinc-500 uppercase font-bold mt-1 tracking-widest">Белок (цель {goals.protein}г)</p>
+                    <div className="text-right text-emerald-400">
+                      <span className="text-2xl font-black">{remainingCals}</span>
+                      <p className="text-[10px] uppercase font-bold mt-1 tracking-widest opacity-80">осталось</p>
                     </div>
                   </div>
-                  <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden">
+                  <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-5">
                     <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${progressCals}%` }}></div>
+                  </div>
+                  
+                  <div className="flex justify-between items-end mb-2">
+                    <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Белок</p>
+                    <div className="text-right">
+                      <span className="text-sm font-bold text-indigo-400">{totalPro.toFixed(1)} / {goals.protein}г</span>
+                      <span className="text-[10px] text-indigo-500/80 font-bold uppercase ml-2">({remainingPro}г осталось)</span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
+                    <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${progressPro}%` }}></div>
                   </div>
                 </div>
 
