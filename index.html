@@ -117,7 +117,6 @@
       const [editingFoodId, setEditingFoodId] = useState(null);
       const [editValue, setEditValue] = useState({});
 
-      // Ссылка на контейнер с контентом для сброса скролла
       const scrollContainerRef = useRef(null);
 
       useEffect(() => {
@@ -140,7 +139,6 @@
         return () => unsubscribe();
       }, []);
 
-      // Исправление бага со скроллом
       useEffect(() => {
         if (scrollContainerRef.current) {
           scrollContainerRef.current.scrollTop = 0;
@@ -246,7 +244,6 @@
       const totalCals = currentDayLogs.reduce((sum, log) => sum + log.totalCalories, 0);
       const totalPro = currentDayLogs.reduce((sum, log) => sum + (log.totalProtein || 0), 0);
       
-      // Вычисление остатков
       const remainingCals = Math.max(0, goals.calories - totalCals);
       const remainingPro = Math.max(0, goals.protein - totalPro).toFixed(1);
 
