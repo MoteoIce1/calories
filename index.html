@@ -13,32 +13,19 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
-    /* Убираем все скроллы у окна и ставим черный фон для краев на ПК */
-    body { 
-      background-color: #000; 
-      margin: 0; padding: 0; 
-      overscroll-behavior-y: none; 
-      -webkit-tap-highlight-color: transparent;
-      overflow: hidden; 
-    }
-    
-    /* Скрываем визуальный ползунок скролла, но оставляем возможность листать */
+    body { background-color: #000; margin: 0; padding: 0; overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; overflow: hidden; }
     ::-webkit-scrollbar { width: 0px; background: transparent; }
-
-    /* Безопасный отступ для полоски снизу на iPhone */
-    .safe-pb {
-      padding-bottom: max(16px, env(safe-area-inset-bottom));
-    }
-    
-    /* Мгновенный отклик для кнопок без залипания */
+    .safe-pb { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
     .fast-touch { touch-action: manipulation; }
+    input[type="number"]::-webkit-inner-spin-button, 
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useMemo, useEffect } = React;
+    const { useState, useEffect } = React;
 
     const IconPlus = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14m-7-7h14"/></svg>;
     const IconBook = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>;
@@ -47,6 +34,7 @@
     const IconChevronRight = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>;
     const IconTrash = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></svg>;
     const IconTarget = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
+    const IconCheck = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
 
     const getLocalDateString = (dateObj) => {
       const year = dateObj.getFullYear();
@@ -75,11 +63,18 @@
       const [dailyLogs, setDailyLogs] = useState(() => JSON.parse(localStorage.getItem('logs_v7')) || {});
       const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
       const [activeTab, setActiveTab] = useState('diary');
+      
+      // Состояния форм
       const [selectedFoodId, setSelectedFoodId] = useState('');
       const [gramsInput, setGramsInput] = useState('');
       const [newFoodName, setNewFoodName] = useState('');
       const [newFoodCals, setNewFoodCals] = useState('');
       const [newFoodProtein, setNewFoodProtein] = useState('');
+
+      // Состояния редактирования
+      const [editingLogId, setEditingLogId] = useState(null);
+      const [editingFoodId, setEditingFoodId] = useState(null);
+      const [editValue, setEditValue] = useState({});
 
       useEffect(() => localStorage.setItem('goals_v7', JSON.stringify(goals)), [goals]);
       useEffect(() => localStorage.setItem('foods_v7', JSON.stringify(foods)), [foods]);
@@ -101,6 +96,49 @@
         setSelectedFoodId(''); setGramsInput('');
       };
 
+      const updateLogWeight = (logId, newGrams) => {
+        const grams = parseFloat(newGrams) || 0;
+        setDailyLogs(prev => {
+          const dayLogs = prev[currentDate].map(log => {
+            if (log.id === logId) {
+              const food = foods.find(f => f.id === log.foodId);
+              return {
+                ...log,
+                grams,
+                totalCalories: Math.round((grams / 100) * (food?.calories || 0)),
+                totalProtein: Math.round((grams / 100) * (food?.protein || 0) * 10) / 10
+              };
+            }
+            return log;
+          });
+          return { ...prev, [currentDate]: dayLogs };
+        });
+        setEditingLogId(null);
+      };
+
+      const updateFoodBase = (id) => {
+        setFoods(foods.map(f => f.id === id ? { ...f, ...editValue } : f));
+        // Также обновляем все записи в дневнике с этим продуктом, чтобы Ккал пересчитались
+        setDailyLogs(prev => {
+          const newLogs = { ...prev };
+          Object.keys(newLogs).forEach(date => {
+            newLogs[date] = newLogs[date].map(log => {
+              if (log.foodId === id) {
+                const grams = log.grams;
+                return {
+                  ...log,
+                  totalCalories: Math.round((grams / 100) * editValue.calories),
+                  totalProtein: Math.round((grams / 100) * editValue.protein * 10) / 10
+                };
+              }
+              return log;
+            });
+          });
+          return newLogs;
+        });
+        setEditingFoodId(null);
+      };
+
       const currentDayLogs = dailyLogs[currentDate] || [];
       const totalCals = currentDayLogs.reduce((sum, log) => sum + log.totalCalories, 0);
       const totalPro = currentDayLogs.reduce((sum, log) => sum + (log.totalProtein || 0), 0);
@@ -108,10 +146,8 @@
       const progressPro = Math.min(100, (totalPro / goals.protein) * 100);
 
       return (
-        // ЖЕСТКАЯ СТРУКТУРА: flex-col, высота 100dvh, ширина max-w-md, по центру
         <div className="flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900">
           
-          {/* ШАПКА - Зафиксирована вверху (shrink-0) */}
           <header className="shrink-0 pt-8 px-6 pb-4 bg-[#09090b] border-b border-zinc-800 flex justify-between items-center">
             <h1 className="text-lg font-bold">{activeTab === 'diary' ? 'Дневник' : 'Настройки'}</h1>
             {activeTab === 'diary' && (
@@ -122,8 +158,6 @@
             )}
           </header>
 
-          {/* СКРОЛЛ - Занимает всё свободное место (flex-1 overflow-y-auto) */}
-          {/* Контент НИКОГДА не залезет под навигацию */}
           <main className="flex-1 overflow-y-auto px-5 pt-4 pb-8">
             {activeTab === 'diary' ? (
               <div className="space-y-6">
@@ -163,10 +197,10 @@
                   </div>
                 </div>
 
-                {/* Добавление записи (Исправлено переполнение поля Граммы) */}
+                {/* Добавление записи */}
                 <form onSubmit={handleAddLog} className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
                   <select className="w-full bg-[#27272a] rounded-2xl p-4 outline-none appearance-none text-zinc-200" value={selectedFoodId} onChange={(e) => setSelectedFoodId(e.target.value)} required>
-                    <option value="" disabled className="text-zinc-500">Что съели?</option>
+                    <option value="" disabled>Что съели?</option>
                     {foods.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                   </select>
                   <div className="flex gap-3">
@@ -179,16 +213,25 @@
                 <div className="space-y-3">
                   {currentDayLogs.map(log => (
                     <div key={log.id} className="bg-[#18181b] rounded-2xl p-4 flex justify-between items-center border border-zinc-800/30">
-                      <div>
-                        <p className="font-bold text-sm">{foods.find(f => f.id === log.foodId)?.name || 'Удалено'}</p>
-                        <p className="text-[10px] text-zinc-500 font-bold uppercase">{log.grams}г</p>
+                      <div className="flex-1" onClick={() => { setEditingLogId(log.id); setEditValue({ grams: log.grams }); }}>
+                        {editingLogId === log.id ? (
+                          <div className="flex items-center gap-2">
+                            <input autoFocus type="number" className="w-20 bg-zinc-800 rounded-lg p-1 text-sm outline-none border border-emerald-500" value={editValue.grams} onChange={(e) => setEditValue({grams: e.target.value})} onBlur={() => updateLogWeight(log.id, editValue.grams)} />
+                            <span className="text-xs text-zinc-500">гр</span>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="font-bold text-sm">{foods.find(f => f.id === log.foodId)?.name || 'Удалено'}</p>
+                            <p className="text-[10px] text-zinc-400 font-bold uppercase underline decoration-zinc-700">{log.grams}г <span className="text-[8px] font-normal opacity-50">(нажми для ред.)</span></p>
+                          </>
+                        )}
                       </div>
                       <div className="flex items-center gap-4 text-right">
                         <div>
                           <div className="text-emerald-400 font-bold text-sm">{log.totalCalories}</div>
                           <div className="text-indigo-400 font-bold text-[9px]">{log.totalProtein}г</div>
                         </div>
-                        <button onClick={() => setDailyLogs(prev => ({...prev, [currentDate]: prev[currentDate].filter(l => l.id !== log.id)}))} className="fast-touch text-zinc-700 active:text-red-400 p-1"><IconTrash className="w-5 h-5" /></button>
+                        <button onClick={() => setDailyLogs(prev => ({...prev, [currentDate]: prev[currentDate].filter(l => l.id !== log.id)}))} className="fast-touch text-zinc-800 active:text-red-400 p-1"><IconTrash className="w-5 h-5" /></button>
                       </div>
                     </div>
                   ))}
@@ -197,48 +240,58 @@
             ) : (
               <div className="space-y-8">
                 
-                {/* Настройка Целей (Используем GRID, чтобы ничего не вылезало) */}
+                {/* Настройка Целей */}
                 <div className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
                   <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><IconTarget className="w-4 h-4" /> Ваши цели</h2>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none min-w-0" value={goals.calories} onChange={(e) => setGoals({...goals, calories: e.target.value})} />
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none" value={goals.calories} onChange={(e) => setGoals({...goals, calories: e.target.value})} />
                     </div>
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">БЕЛОК (Г)</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none min-w-0" value={goals.protein} onChange={(e) => setGoals({...goals, protein: e.target.value})} />
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none" value={goals.protein} onChange={(e) => setGoals({...goals, protein: e.target.value})} />
                     </div>
                   </div>
                 </div>
 
-                {/* Добавление в справочник (Используем GRID, чтобы ничего не вылезало) */}
+                {/* Добавление в справочник */}
                 <form onSubmit={(e) => {e.preventDefault(); setFoods([...foods, {id: Date.now().toString(), name: newFoodName, calories: parseFloat(newFoodCals), protein: parseFloat(newFoodProtein)}]); setNewFoodName(''); setNewFoodCals(''); setNewFoodProtein('');}} className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
                   <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Новый продукт</h2>
-                  <input type="text" placeholder="Название" className="w-full bg-[#27272a] rounded-xl p-3 outline-none min-w-0 text-zinc-200" value={newFoodName} onChange={(e) => setNewFoodName(e.target.value)} required />
-                  
-                  {/* ИСПРАВЛЕНИЕ СКРИНШОТА: Используем grid-cols-2 */}
+                  <input type="text" placeholder="Название" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFoodName} onChange={(e) => setNewFoodName(e.target.value)} required />
                   <div className="grid grid-cols-2 gap-3">
-                    <input type="number" placeholder="Ккал" className="w-full bg-[#27272a] rounded-xl p-3 outline-none min-w-0 text-zinc-200" value={newFoodCals} onChange={(e) => setNewFoodCals(e.target.value)} required />
-                    <input type="number" placeholder="Белок" className="w-full bg-[#27272a] rounded-xl p-3 outline-none min-w-0 text-zinc-200" value={newFoodProtein} onChange={(e) => setNewFoodProtein(e.target.value)} required />
+                    <input type="number" placeholder="Ккал" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFoodCals} onChange={(e) => setNewFoodCals(e.target.value)} required />
+                    <input type="number" placeholder="Белок" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFoodProtein} onChange={(e) => setNewFoodProtein(e.target.value)} required />
                   </div>
-                  
-                  <button type="submit" className="fast-touch w-full bg-indigo-600 active:bg-indigo-700 text-white rounded-xl p-4 font-bold transition-transform active:scale-95">Добавить в список</button>
+                  <button type="submit" className="fast-touch w-full bg-indigo-600 text-white rounded-xl p-4 font-bold active:scale-95 transition-transform">Добавить в список</button>
                 </form>
 
                 {/* Справочник */}
                 <div className="space-y-2">
                   <h2 className="text-[10px] font-bold text-zinc-500 uppercase mb-2">Список ({foods.length})</h2>
                   {foods.map(f => (
-                    <div key={f.id} className="bg-[#18181b] rounded-xl p-3 flex justify-between items-center border border-zinc-800/30">
-                      <div className="flex-1">
-                        <span className="text-sm font-medium">{f.name}</span>
-                        <div className="flex gap-2 text-[10px] font-bold uppercase mt-1">
-                          <span className="text-emerald-500">{f.calories} ккал</span>
-                          <span className="text-indigo-500">{f.protein || 0} г</span>
+                    <div key={f.id} className="bg-[#18181b] rounded-xl p-3 border border-zinc-800/30">
+                      {editingFoodId === f.id ? (
+                        <div className="space-y-3">
+                           <input autoFocus className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-white" value={editValue.name} onChange={e => setEditValue({...editValue, name: e.target.value})} />
+                           <div className="grid grid-cols-2 gap-2">
+                              <input type="number" className="bg-zinc-900 rounded-lg p-2 text-sm text-emerald-400" value={editValue.calories} onChange={e => setEditValue({...editValue, calories: parseFloat(e.target.value)})} />
+                              <input type="number" className="bg-zinc-900 rounded-lg p-2 text-sm text-indigo-400" value={editValue.protein} onChange={e => setEditValue({...editValue, protein: parseFloat(e.target.value)})} />
+                           </div>
+                           <button onClick={() => updateFoodBase(f.id)} className="w-full bg-emerald-600 p-2 rounded-lg flex justify-center"><IconCheck className="w-5 h-5" /></button>
                         </div>
-                      </div>
-                      <button onClick={() => setFoods(foods.filter(x => x.id !== f.id))} className="fast-touch text-zinc-800 active:text-red-500 p-2"><IconTrash className="w-5 h-5" /></button>
+                      ) : (
+                        <div className="flex justify-between items-center" onClick={() => { setEditingFoodId(f.id); setEditValue(f); }}>
+                          <div className="flex-1">
+                            <span className="text-sm font-medium">{f.name}</span>
+                            <div className="flex gap-2 text-[10px] font-bold uppercase mt-1">
+                              <span className="text-emerald-500">{f.calories} ккал</span>
+                              <span className="text-indigo-500">{f.protein || 0} г</span>
+                            </div>
+                          </div>
+                          <button onClick={(e) => { e.stopPropagation(); setFoods(foods.filter(x => x.id !== f.id)); }} className="fast-touch text-zinc-800 active:text-red-500 p-2"><IconTrash className="w-5 h-5" /></button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -246,12 +299,11 @@
             )}
           </main>
 
-          {/* НИЖНЯЯ НАВИГАЦИЯ - Твердый блок (shrink-0) в самом низу */}
           <nav className="shrink-0 bg-[#18181b] border-t border-zinc-800 flex justify-around pt-2 safe-pb relative z-40">
-            <button onClick={() => setActiveTab('diary')} className={`fast-touch flex-1 flex flex-col items-center py-2 transition-all ${activeTab === 'diary' ? 'text-emerald-400' : 'text-zinc-600 active:text-zinc-400'}`}>
+            <button onClick={() => setActiveTab('diary')} className={`fast-touch flex-1 flex flex-col items-center py-2 transition-all ${activeTab === 'diary' ? 'text-emerald-400' : 'text-zinc-600'}`}>
               <IconCalendar className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase">Дневник</span>
             </button>
-            <button onClick={() => setActiveTab('directory')} className={`fast-touch flex-1 flex flex-col items-center py-2 transition-all ${activeTab === 'directory' ? 'text-indigo-400' : 'text-zinc-600 active:text-zinc-400'}`}>
+            <button onClick={() => setActiveTab('directory')} className={`fast-touch flex-1 flex flex-col items-center py-2 transition-all ${activeTab === 'directory' ? 'text-indigo-400' : 'text-zinc-600'}`}>
               <IconBook className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase">База</span>
             </button>
           </nav>
