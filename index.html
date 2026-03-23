@@ -3,22 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Трекер</title>
-  
+  <title>Трекер Диеты</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
   <style>
-    body { background-color: #000; margin: 0; padding: 0; overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; overflow: hidden; }
-    ::-webkit-scrollbar { width: 0px; background: transparent; }
+    body { background-color: #000; color: #fff; font-family: -apple-system, system-ui, sans-serif; overflow: hidden; }
     .safe-pb { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
-    .fast-touch { touch-action: manipulation; }
-    input[type="number"]::-webkit-inner-spin-button, 
-    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .glass { background: #18181b; border: 1px solid #27272a; }
   </style>
 </head>
 <body>
@@ -27,277 +21,180 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    const IconPlus = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14m-7-7h14"/></svg>;
-    const IconBook = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>;
-    const IconCalendar = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
-    const IconChevronLeft = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>;
-    const IconChevronRight = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>;
-    const IconTrash = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></svg>;
-    const IconTarget = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
-    const IconCheck = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
+    // Иконки
+    const IconPlus = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>;
+    const IconTrash = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>;
 
-    const getLocalDateString = (dateObj) => {
-      const year = dateObj.getFullYear();
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    };
-
-    const displayDate = (dateString) => {
-      const [year, month, day] = dateString.split('-');
-      const d = new Date(year, month - 1, day);
-      const todayStr = getLocalDateString(new Date());
-      if (dateString === todayStr) return 'Сегодня';
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      if (dateString === getLocalDateString(yesterday)) return 'Вчера';
-      return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-    };
+    // ПРЕДУСТАНОВЛЕННЫЕ ПРОДУКТЫ (Твои данные + диета)
+    const DEFAULT_FOODS = [
+      // Из твоих скриншотов
+      { id: 'c1', name: 'Котлета (говядина)', calories: 255, protein: 25 },
+      { id: 'c2', name: 'Картофельное пюре (на воде)', calories: 75, protein: 2 },
+      { id: 'c3', name: 'Оливковое масло', calories: 884, protein: 0 },
+      { id: 'c4', name: 'Помидор', calories: 19, protein: 1 },
+      { id: 'c5', name: 'Огурец', calories: 15, protein: 1 },
+      { id: 'c6', name: 'Батончик Snaq Fabriq', calories: 454, protein: 20 },
+      { id: 'c7', name: 'Печенье', calories: 278, protein: 35 },
+      { id: 'c8', name: 'Пастеризованные белки', calories: 48, protein: 11 },
+      { id: 'c9', name: 'Гречка вареная', calories: 132, protein: 4.5 },
+      { id: 'c10', name: 'Куриное филе (готовое)', calories: 113, protein: 23.6 },
+      
+      // Базовый диетический набор
+      { id: 'd1', name: 'Творог 5%', calories: 121, protein: 17 },
+      { id: 'd2', name: 'Яйцо вареное (1шт)', calories: 155, protein: 13 },
+      { id: 'd3', name: 'Рис белый вареный', calories: 130, protein: 2.7 },
+      { id: 'd4', name: 'Овсянка на воде', calories: 88, protein: 3 },
+      { id: 'd5', name: 'Яблоко', calories: 52, protein: 0.3 },
+      { id: 'd6', name: 'Миндаль', calories: 579, protein: 21 }
+    ];
 
     function App() {
-      const [goals, setGoals] = useState(() => JSON.parse(localStorage.getItem('goals_v7')) || { calories: 2000, protein: 80 });
-      const [foods, setFoods] = useState(() => JSON.parse(localStorage.getItem('foods_v7')) || [
-        { id: '1', name: 'Куриное филе', calories: 113, protein: 23.6 },
-        { id: '2', name: 'Гречка вареная', calories: 132, protein: 4.5 }
-      ]);
-      const [dailyLogs, setDailyLogs] = useState(() => JSON.parse(localStorage.getItem('logs_v7')) || {});
-      const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
       const [activeTab, setActiveTab] = useState('diary');
-      
-      const [selectedFoodId, setSelectedFoodId] = useState('');
-      const [gramsInput, setGramsInput] = useState('');
-      const [newFoodName, setNewFoodName] = useState('');
-      const [newFoodCals, setNewFoodCals] = useState('');
-      const [newFoodProtein, setNewFoodProtein] = useState('');
+      const [goals, setGoals] = useState(() => JSON.parse(localStorage.getItem('goals')) || { calories: 1800, protein: 150 });
+      const [foods, setFoods] = useState(() => {
+        const saved = JSON.parse(localStorage.getItem('user_foods')) || [];
+        return [...DEFAULT_FOODS, ...saved];
+      });
+      const [logs, setLogs] = useState(() => JSON.parse(localStorage.getItem('logs')) || {});
+      const [selectedFood, setSelectedFood] = useState('');
+      const [weight, setWeight] = useState('');
 
-      const [editingLogId, setEditingLogId] = useState(null);
-      const [editingFoodId, setEditingFoodId] = useState(null);
-      const [editValue, setEditValue] = useState({});
+      const today = new Date().toISOString().split('T')[0];
 
-      useEffect(() => localStorage.setItem('goals_v7', JSON.stringify(goals)), [goals]);
-      useEffect(() => localStorage.setItem('foods_v7', JSON.stringify(foods)), [foods]);
-      useEffect(() => localStorage.setItem('logs_v7', JSON.stringify(dailyLogs)), [dailyLogs]);
+      useEffect(() => localStorage.setItem('goals', JSON.stringify(goals)), [goals]);
+      useEffect(() => localStorage.setItem('logs', JSON.stringify(logs)), [logs]);
+      useEffect(() => {
+        const customOnly = foods.filter(f => !DEFAULT_FOODS.find(df => df.id === f.id));
+        localStorage.setItem('user_foods', JSON.stringify(customOnly));
+      }, [foods]);
 
-      const handleAddLog = (e) => {
-        e.preventDefault();
-        const food = foods.find(f => f.id === selectedFoodId);
-        if (!food || !gramsInput) return;
-        const grams = parseFloat(gramsInput);
-        const newLog = {
-          id: Date.now().toString(),
-          foodId: food.id,
-          grams,
-          totalCalories: Math.round((grams / 100) * food.calories),
-          totalProtein: Math.round((grams / 100) * (food.protein || 0) * 10) / 10
+      const addEntry = () => {
+        if (!selectedFood || !weight) return;
+        const food = foods.find(f => f.id === selectedFood);
+        const entry = {
+          id: Date.now(),
+          name: food.name,
+          cals: Math.round((food.calories * weight) / 100),
+          pro: Math.round((food.protein * weight) / 100 * 10) / 10,
+          weight: weight
         };
-        setDailyLogs(prev => ({ ...prev, [currentDate]: [...(prev[currentDate] || []), newLog] }));
-        setSelectedFoodId(''); setGramsInput('');
+        const dayLogs = logs[today] || [];
+        setLogs({ ...logs, [today]: [...dayLogs, entry] });
+        setWeight('');
       };
 
-      const updateLogWeight = (logId, newGrams) => {
-        const grams = parseFloat(newGrams) || 0;
-        setDailyLogs(prev => {
-          const dayLogs = prev[currentDate].map(log => {
-            if (log.id === logId) {
-              const food = foods.find(f => f.id === log.foodId);
-              return {
-                ...log,
-                grams,
-                totalCalories: Math.round((grams / 100) * (food?.calories || 0)),
-                totalProtein: Math.round((grams / 100) * (food?.protein || 0) * 10) / 10
-              };
-            }
-            return log;
-          });
-          return { ...prev, [currentDate]: dayLogs };
-        });
-        setEditingLogId(null);
+      const deleteLog = (id) => {
+        setLogs({ ...logs, [today]: logs[today].filter(l => l.id !== id) });
       };
 
-      const updateFoodBase = (id) => {
-        setFoods(foods.map(f => f.id === id ? { ...f, ...editValue } : f));
-        setDailyLogs(prev => {
-          const newLogs = { ...prev };
-          Object.keys(newLogs).forEach(date => {
-            newLogs[date] = newLogs[date].map(log => {
-              if (log.foodId === id) {
-                const grams = log.grams;
-                return {
-                  ...log,
-                  totalCalories: Math.round((grams / 100) * editValue.calories),
-                  totalProtein: Math.round((grams / 100) * editValue.protein * 10) / 10
-                };
-              }
-              return log;
-            });
-          });
-          return newLogs;
-        });
-        setEditingFoodId(null);
-      };
-
-      const currentDayLogs = dailyLogs[currentDate] || [];
-      const totalCals = currentDayLogs.reduce((sum, log) => sum + log.totalCalories, 0);
-      const totalPro = currentDayLogs.reduce((sum, log) => sum + (log.totalProtein || 0), 0);
-      const progressCals = Math.min(100, (totalCals / goals.calories) * 100);
-      const progressPro = Math.min(100, (totalPro / goals.protein) * 100);
+      const currentLogs = logs[today] || [];
+      const totalCals = currentLogs.reduce((s, i) => s + i.cals, 0);
+      const totalPro = currentLogs.reduce((s, i) => s + i.pro, 0);
 
       return (
-        <div className="flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900">
-          
-          <header className="shrink-0 pt-8 px-6 pb-4 bg-[#09090b] border-b border-zinc-800 flex justify-between items-center">
-            <h1 className="text-lg font-bold">{activeTab === 'diary' ? 'Дневник' : 'Настройки'}</h1>
-            {activeTab === 'diary' && (
-              <div className="flex gap-2 text-[10px] font-bold uppercase tracking-wider">
-                <span className="text-emerald-400">{totalCals} ккал</span>
-                <span className="text-indigo-400">{totalPro.toFixed(1)} г</span>
-              </div>
-            )}
-          </header>
+        <div className="flex flex-col h-screen max-w-md mx-auto bg-black">
+          {/* Header */}
+          <div className="p-6 pb-2">
+            <h1 className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : 'Настройки'}</h1>
+            <p className="text-zinc-500 text-sm">Сегодня: {new Date().toLocaleDateString('ru-RU')}</p>
+          </div>
 
-          <main className="flex-1 overflow-y-auto px-5 pt-4 pb-8">
+          <div className="flex-1 overflow-y-auto px-4 space-y-4">
             {activeTab === 'diary' ? (
-              <div className="space-y-6">
-                
-                <div className="flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
-                  <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(getLocalDateString(d));}} className="fast-touch p-3 text-zinc-400"><IconChevronLeft className="w-5 h-5" /></button>
-                  <div className="font-bold text-sm text-zinc-200">{displayDate(currentDate)}</div>
-                  <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()+1); setCurrentDate(getLocalDateString(d));}} disabled={currentDate === getLocalDateString(new Date())} className="fast-touch p-3 text-zinc-400 disabled:opacity-20"><IconChevronRight className="w-5 h-5" /></button>
-                </div>
-
-                <div className="bg-[#18181b] rounded-3xl p-5 shadow-xl border border-zinc-800/50">
-                  <div className="flex justify-between items-end mb-4">
+              <>
+                {/* Progress Card */}
+                <div className="glass rounded-3xl p-5">
+                  <div className="flex justify-between mb-4">
                     <div>
-                      <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Калории</p>
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-black">{totalCals}</span>
-                        <span className="text-zinc-600 text-xs">/ {goals.calories}</span>
-                      </div>
+                      <div className="text-3xl font-bold">{totalCals} <span className="text-sm text-zinc-500 font-normal">/ {goals.calories}</span></div>
+                      <div className="text-[10px] uppercase text-emerald-500 font-bold tracking-widest">Калории</div>
                     </div>
-                    <div className="text-right text-emerald-400 font-black">
-                      <span className="text-2xl">{Math.max(0, goals.calories - totalCals)}</span>
-                      <span className="text-[10px] ml-1 uppercase">осталось</span>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-indigo-400">{totalPro.toFixed(1)}г</div>
+                      <div className="text-[10px] uppercase text-zinc-500 font-bold">Белок (цель {goals.protein}г)</div>
                     </div>
                   </div>
-                  <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-5">
-                    <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${progressCals}%` }}></div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-[10px] text-zinc-500 uppercase font-bold">Белок</span>
-                    <span className="text-indigo-400 font-bold text-sm">{totalPro.toFixed(1)} / {goals.protein}г</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${progressPro}%` }}></div>
+                  <div className="w-full bg-zinc-800 h-2 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full transition-all" style={{width: `${Math.min(100, (totalCals/goals.calories)*100)}%`}}></div>
                   </div>
                 </div>
 
-                <form onSubmit={handleAddLog} className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
-                  <select className="w-full bg-[#27272a] rounded-2xl p-4 outline-none appearance-none text-zinc-200" value={selectedFoodId} onChange={(e) => setSelectedFoodId(e.target.value)} required>
-                    <option value="" disabled>Что съели?</option>
+                {/* Quick Add */}
+                <div className="glass rounded-2xl p-4 flex gap-2">
+                  <select 
+                    className="flex-1 bg-zinc-800 rounded-xl px-3 py-3 text-sm outline-none"
+                    value={selectedFood}
+                    onChange={e => setSelectedFood(e.target.value)}
+                  >
+                    <option value="">Выберите продукт</option>
                     {foods.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                   </select>
-                  <div className="flex gap-3">
-                    <input type="number" placeholder="Граммы" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none min-w-0 text-zinc-200" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} required />
-                    <button type="submit" className="w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center fast-touch active:scale-95 transition-transform"><IconPlus className="w-6 h-6 text-white" /></button>
-                  </div>
-                </form>
+                  <input 
+                    type="number" 
+                    placeholder="гр" 
+                    className="w-20 bg-zinc-800 rounded-xl px-3 text-center outline-none"
+                    value={weight}
+                    onChange={e => setWeight(e.target.value)}
+                  />
+                  <button onClick={addEntry} className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center active:scale-90 transition-transform">
+                    <IconPlus />
+                  </button>
+                </div>
 
-                <div className="space-y-3">
-                  {currentDayLogs.map(log => (
-                    <div key={log.id} className="bg-[#18181b] rounded-2xl p-4 flex justify-between items-center border border-zinc-800/30">
-                      <div className="flex-1 cursor-pointer" onClick={() => { setEditingLogId(log.id); setEditValue({ grams: log.grams }); }}>
-                        {editingLogId === log.id ? (
-                          <div className="flex items-center gap-2">
-                            <input autoFocus type="number" className="w-20 bg-zinc-900 rounded-lg p-1 text-sm outline-none border border-emerald-500 text-white" value={editValue.grams} onChange={(e) => setEditValue({grams: e.target.value})} onBlur={() => updateLogWeight(log.id, editValue.grams)} />
-                            <span className="text-xs text-zinc-500">гр</span>
-                          </div>
-                        ) : (
-                          <>
-                            <p className="font-bold text-sm border-b border-zinc-800/50 inline-block">{foods.find(f => f.id === log.foodId)?.name || 'Удалено'}</p>
-                            <p className="text-[10px] text-zinc-400 font-bold uppercase block mt-1 underline decoration-zinc-800 decoration-dotted">{log.grams}г</p>
-                          </>
-                        )}
+                {/* Daily List */}
+                <div className="space-y-2 pb-20">
+                  {currentLogs.map(log => (
+                    <div key={log.id} className="glass rounded-2xl p-4 flex justify-between items-center">
+                      <div>
+                        <div className="font-bold text-sm">{log.name}</div>
+                        <div className="text-xs text-zinc-500">{log.weight}г • <span className="text-emerald-500">{log.cals} ккал</span> • <span className="text-indigo-400">{log.pro}г б</span></div>
                       </div>
-                      <div className="flex items-center gap-4 text-right">
-                        <div>
-                          <div className="text-emerald-400 font-bold text-sm">{log.totalCalories}</div>
-                          <div className="text-indigo-400 font-bold text-[9px]">{log.totalProtein}г</div>
-                        </div>
-                        <button onClick={() => setDailyLogs(prev => ({...prev, [currentDate]: prev[currentDate].filter(l => l.id !== log.id)}))} className="fast-touch text-zinc-800 active:text-red-400 p-1"><IconTrash className="w-5 h-5" /></button>
-                      </div>
+                      <button onClick={() => deleteLog(log.id)} className="text-zinc-700 active:text-red-500 px-2"><IconTrash /></button>
                     </div>
                   ))}
                 </div>
-              </div>
+              </>
             ) : (
-              <div className="space-y-8">
-                
-                <div className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
-                  <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><IconTarget className="w-4 h-4" /> Ваши цели</h2>
-                  <div className="grid grid-cols-2 gap-3">
+              /* Settings Tab */
+              <div className="space-y-6">
+                <div className="glass rounded-2xl p-5 space-y-4">
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Цели дня</h3>
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none" value={goals.calories} onChange={(e) => setGoals({...goals, calories: e.target.value})} />
+                      <label className="text-[10px] text-zinc-500 block mb-1">ККАЛ</label>
+                      <input type="number" className="w-full bg-zinc-800 rounded-xl p-3 font-bold" value={goals.calories} onChange={e => setGoals({...goals, calories: e.target.value})}/>
                     </div>
                     <div>
-                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">БЕЛОК (Г)</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none" value={goals.protein} onChange={(e) => setGoals({...goals, protein: e.target.value})} />
+                      <label className="text-[10px] text-zinc-500 block mb-1">БЕЛОК (Г)</label>
+                      <input type="number" className="w-full bg-zinc-800 rounded-xl p-3 font-bold" value={goals.protein} onChange={e => setGoals({...goals, protein: e.target.value})}/>
                     </div>
                   </div>
                 </div>
 
-                <form onSubmit={(e) => {e.preventDefault(); setFoods([...foods, {id: Date.now().toString(), name: newFoodName, calories: parseFloat(newFoodCals), protein: parseFloat(newFoodProtein)}]); setNewFoodName(''); setNewFoodCals(''); setNewFoodProtein('');}} className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
-                  <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Новый продукт</h2>
-                  <input type="text" placeholder="Название" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFoodName} onChange={(e) => setNewFoodName(e.target.value)} required />
-                  <div className="grid grid-cols-2 gap-3">
-                    <input type="number" placeholder="Ккал" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFoodCals} onChange={(e) => setNewFoodCals(e.target.value)} required />
-                    <input type="number" placeholder="Белок" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFoodProtein} onChange={(e) => setNewFoodProtein(e.target.value)} required />
-                  </div>
-                  <button type="submit" className="fast-touch w-full bg-indigo-600 text-white rounded-xl p-4 font-bold active:scale-95 transition-transform">Добавить в список</button>
-                </form>
-
                 <div className="space-y-2">
-                  <h2 className="text-[10px] font-bold text-zinc-500 uppercase mb-2">Список ({foods.length})</h2>
+                  <h3 className="text-xs font-bold text-zinc-500 uppercase px-1">Ваша база продуктов</h3>
                   {foods.map(f => (
-                    <div key={f.id} className="bg-[#18181b] rounded-xl p-3 border border-zinc-800/30">
-                      {editingFoodId === f.id ? (
-                        <div className="space-y-3">
-                           <input autoFocus className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-white border border-indigo-500 outline-none" value={editValue.name} onChange={e => setEditValue({...editValue, name: e.target.value})} />
-                           <div className="grid grid-cols-2 gap-2">
-                              <input type="number" className="bg-zinc-900 rounded-lg p-2 text-sm text-emerald-400 outline-none" value={editValue.calories} onChange={e => setEditValue({...editValue, calories: parseFloat(e.target.value)})} />
-                              <input type="number" className="bg-zinc-900 rounded-lg p-2 text-sm text-indigo-400 outline-none" value={editValue.protein} onChange={e => setEditValue({...editValue, protein: parseFloat(e.target.value)})} />
-                           </div>
-                           <button onClick={() => updateFoodBase(f.id)} className="w-full bg-emerald-600 p-2 rounded-lg flex justify-center"><IconCheck className="w-5 h-5 text-white" /></button>
-                        </div>
-                      ) : (
-                        <div className="flex justify-between items-center cursor-pointer" onClick={() => { setEditingFoodId(f.id); setEditValue(f); }}>
-                          <div className="flex-1">
-                            <span className="text-sm font-medium border-b border-zinc-800/50">{f.name}</span>
-                            <div className="flex gap-2 text-[10px] font-bold uppercase mt-1">
-                              <span className="text-emerald-500">{f.calories} ккал</span>
-                              <span className="text-indigo-500">{f.protein || 0} г</span>
-                            </div>
-                          </div>
-                          <button onClick={(e) => { e.stopPropagation(); setFoods(foods.filter(x => x.id !== f.id)); }} className="fast-touch text-zinc-800 active:text-red-500 p-2"><IconTrash className="w-5 h-5" /></button>
-                        </div>
-                      )}
+                    <div key={f.id} className="glass rounded-xl p-3 flex justify-between items-center opacity-80">
+                      <div>
+                        <div className="text-sm font-medium">{f.name}</div>
+                        <div className="text-[10px] text-zinc-500 uppercase">{f.calories} ккал / {f.protein}г белка</div>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-          </main>
+          </div>
 
-          <nav className="shrink-0 bg-[#18181b] border-t border-zinc-800 flex justify-around pt-2 safe-pb relative z-40">
-            <button onClick={() => setActiveTab('diary')} className={`fast-touch flex-1 flex flex-col items-center py-2 transition-all ${activeTab === 'diary' ? 'text-emerald-400' : 'text-zinc-600'}`}>
-              <IconCalendar className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase">Дневник</span>
+          {/* Navigation */}
+          <nav className="glass border-t-0 rounded-t-3xl flex justify-around pt-3 safe-pb">
+            <button onClick={() => setActiveTab('diary')} className={`flex flex-col items-center p-3 ${activeTab === 'diary' ? 'text-emerald-500' : 'text-zinc-600'}`}>
+              <div className="text-xs font-bold uppercase tracking-tighter">Дневник</div>
             </button>
-            <button onClick={() => setActiveTab('directory')} className={`fast-touch flex-1 flex flex-col items-center py-2 transition-all ${activeTab === 'directory' ? 'text-indigo-400' : 'text-zinc-600'}`}>
-              <IconBook className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase">База</span>
+            <button onClick={() => setActiveTab('settings')} className={`flex flex-col items-center p-3 ${activeTab === 'settings' ? 'text-indigo-500' : 'text-zinc-600'}`}>
+              <div className="text-xs font-bold uppercase tracking-tighter">База</div>
             </button>
           </nav>
-
         </div>
       );
     }
