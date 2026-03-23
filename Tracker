@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Трекер калорий</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Калории">
+    <link rel="apple-touch-icon" href="icon.png">
+
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --text-color: #333;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            margin: 0;
+            /* Отступ сверху для челки iPhone */
+            padding-top: env(safe-area-inset-top, 40px); 
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        h1 { text-align: center; color: var(--primary-color); }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            box-sizing: border-box;
+            font-size: 16px; /* Важно для iPhone, чтобы не было автозума */
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            transition: background 0.3s;
+            margin-top: 10px;
+        }
+
+        button:active { background-color: #357abd; }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #eef2f7;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .result span {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Норма калорий</h1>
+    
+    <div class="input-group">
+        <label for="weight">Вес (кг):</label>
+        <input type="number" id="weight" placeholder="Например: 70" inputmode="decimal">
+    </div>
+
+    <div class="input-group">
+        <label for="height">Рост (см):</label>
+        <input type="number" id="height" placeholder="Например: 175" inputmode="numeric">
+    </div>
+
+    <div class="input-group">
+        <label for="age">Возраст:</label>
+        <input type="number" id="age" placeholder="Например: 25" inputmode="numeric">
+    </div>
+
+    <div class="input-group">
+        <label for="gender">Пол:</label>
+        <select id="gender">
+            <option value="male">Мужской</option>
+            <option value="female">Женский</option>
+        </select>
+    </div>
+
+    <div class="input-group">
+        <label for="activity">Активность:</label>
+        <select id="activity">
+            <option value="1.2">Минимальная</option>
+            <option value="1.375">Низкая</option>
+            <option value="1.55">Средняя</option>
+            <option value="1.725">Высокая</option>
+        </select>
+    </div>
+
+    <button onclick="calculate()">Рассчитать</button>
+
+    <div id="result" class="result" style="display:none;">
+        Ваша норма калорий: <br>
+        <span id="caloriesValue">0</span> ккал
+    </div>
+</div>
+
+<script>
+    function calculate() {
+        const weight = parseFloat(document.getElementById('weight').value);
+        const height = parseFloat(document.getElementById('height').value);
+        const age = parseInt(document.getElementById('age').value);
+        const gender = document.getElementById('gender').value;
+        const activity = parseFloat(document.getElementById('activity').value);
+
+        if (!weight || !height || !age) {
+            alert("Пожалуйста, заполните все поля");
+            return;
+        }
+
+        let bmr;
+        if (gender === 'male') {
+            bmr = 88.36 + (13.4 * weight) + (4.8 * height) - (5.7 * age);
+        } else {
+            bmr = 447.6 + (9.2 * weight) + (3.1 * height) - (4.3 * age);
+        }
+
+        const totalCalories = Math.round(bmr * activity);
+        
+        document.getElementById('caloriesValue').innerText = totalCalories;
+        document.getElementById('result').style.display = 'block';
+    }
+</script>
+
+</body>
+</html>
