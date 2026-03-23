@@ -1,164 +1,267 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Трекер калорий</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Трекер</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    /* Убираем все скроллы у окна и ставим черный фон для краев на ПК */
+    body { 
+      background-color: #000; 
+      margin: 0; padding: 0; 
+      overscroll-behavior-y: none; 
+      -webkit-tap-highlight-color: transparent;
+      overflow: hidden; 
+    }
     
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Калории">
-    <link rel="apple-touch-icon" href="icon.png">
+    /* Скрываем визуальный ползунок скролла, но оставляем возможность листать */
+    ::-webkit-scrollbar { width: 0px; background: transparent; }
 
-    <style>
-        :root {
-            --primary-color: #4a90e2;
-            --bg-color: #f4f7f6;
-            --card-bg: #ffffff;
-            --text-color: #333;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            display: flex;
-            justify-content: center;
-            padding: 20px;
-            margin: 0;
-            /* Отступ сверху для челки iPhone */
-            padding-top: env(safe-area-inset-top, 40px); 
-        }
-
-        .container {
-            width: 100%;
-            max-width: 500px;
-            background: var(--card-bg);
-            padding: 25px;
-            border-radius: 20px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-        }
-
-        h1 { text-align: center; color: var(--primary-color); }
-
-        .input-group {
-            margin-bottom: 15px;
-        }
-
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-
-        input, select {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 10px;
-            box-sizing: border-box;
-            font-size: 16px; /* Важно для iPhone, чтобы не было автозума */
-        }
-
-        button {
-            width: 100%;
-            padding: 15px;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            font-size: 18px;
-            font-weight: bold;
-            transition: background 0.3s;
-            margin-top: 10px;
-        }
-
-        button:active { background-color: #357abd; }
-
-        .result {
-            margin-top: 20px;
-            padding: 15px;
-            background: #eef2f7;
-            border-radius: 12px;
-            text-align: center;
-        }
-
-        .result span {
-            font-size: 28px;
-            font-weight: bold;
-            color: var(--primary-color);
-        }
-    </style>
+    /* Безопасный отступ для полоски снизу на iPhone */
+    .safe-pb {
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+    
+    /* Мгновенный отклик для кнопок без залипания */
+    .fast-touch { touch-action: manipulation; }
+  </style>
 </head>
 <body>
+  <div id="root"></div>
 
-<div class="container">
-    <h1>Норма калорий</h1>
-    
-    <div class="input-group">
-        <label for="weight">Вес (кг):</label>
-        <input type="number" id="weight" placeholder="Например: 70" inputmode="decimal">
-    </div>
+  <script type="text/babel">
+    const { useState, useMemo, useEffect } = React;
 
-    <div class="input-group">
-        <label for="height">Рост (см):</label>
-        <input type="number" id="height" placeholder="Например: 175" inputmode="numeric">
-    </div>
+    const IconPlus = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14m-7-7h14"/></svg>;
+    const IconBook = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>;
+    const IconCalendar = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
+    const IconChevronLeft = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>;
+    const IconChevronRight = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>;
+    const IconTrash = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></svg>;
+    const IconTarget = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
 
-    <div class="input-group">
-        <label for="age">Возраст:</label>
-        <input type="number" id="age" placeholder="Например: 25" inputmode="numeric">
-    </div>
+    const getLocalDateString = (dateObj) => {
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
 
-    <div class="input-group">
-        <label for="gender">Пол:</label>
-        <select id="gender">
-            <option value="male">Мужской</option>
-            <option value="female">Женский</option>
-        </select>
-    </div>
+    const displayDate = (dateString) => {
+      const [year, month, day] = dateString.split('-');
+      const d = new Date(year, month - 1, day);
+      const todayStr = getLocalDateString(new Date());
+      if (dateString === todayStr) return 'Сегодня';
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (dateString === getLocalDateString(yesterday)) return 'Вчера';
+      return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+    };
 
-    <div class="input-group">
-        <label for="activity">Активность:</label>
-        <select id="activity">
-            <option value="1.2">Минимальная</option>
-            <option value="1.375">Низкая</option>
-            <option value="1.55">Средняя</option>
-            <option value="1.725">Высокая</option>
-        </select>
-    </div>
+    function App() {
+      const [goals, setGoals] = useState(() => JSON.parse(localStorage.getItem('goals_v7')) || { calories: 2000, protein: 80 });
+      const [foods, setFoods] = useState(() => JSON.parse(localStorage.getItem('foods_v7')) || [
+        { id: '1', name: 'Куриное филе', calories: 113, protein: 23.6 },
+        { id: '2', name: 'Гречка вареная', calories: 132, protein: 4.5 }
+      ]);
+      const [dailyLogs, setDailyLogs] = useState(() => JSON.parse(localStorage.getItem('logs_v7')) || {});
+      const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
+      const [activeTab, setActiveTab] = useState('diary');
+      const [selectedFoodId, setSelectedFoodId] = useState('');
+      const [gramsInput, setGramsInput] = useState('');
+      const [newFoodName, setNewFoodName] = useState('');
+      const [newFoodCals, setNewFoodCals] = useState('');
+      const [newFoodProtein, setNewFoodProtein] = useState('');
 
-    <button onclick="calculate()">Рассчитать</button>
+      useEffect(() => localStorage.setItem('goals_v7', JSON.stringify(goals)), [goals]);
+      useEffect(() => localStorage.setItem('foods_v7', JSON.stringify(foods)), [foods]);
+      useEffect(() => localStorage.setItem('logs_v7', JSON.stringify(dailyLogs)), [dailyLogs]);
 
-    <div id="result" class="result" style="display:none;">
-        Ваша норма калорий: <br>
-        <span id="caloriesValue">0</span> ккал
-    </div>
-</div>
+      const handleAddLog = (e) => {
+        e.preventDefault();
+        const food = foods.find(f => f.id === selectedFoodId);
+        if (!food || !gramsInput) return;
+        const grams = parseFloat(gramsInput);
+        const newLog = {
+          id: Date.now().toString(),
+          foodId: food.id,
+          grams,
+          totalCalories: Math.round((grams / 100) * food.calories),
+          totalProtein: Math.round((grams / 100) * (food.protein || 0) * 10) / 10
+        };
+        setDailyLogs(prev => ({ ...prev, [currentDate]: [...(prev[currentDate] || []), newLog] }));
+        setSelectedFoodId(''); setGramsInput('');
+      };
 
-<script>
-    function calculate() {
-        const weight = parseFloat(document.getElementById('weight').value);
-        const height = parseFloat(document.getElementById('height').value);
-        const age = parseInt(document.getElementById('age').value);
-        const gender = document.getElementById('gender').value;
-        const activity = parseFloat(document.getElementById('activity').value);
+      const currentDayLogs = dailyLogs[currentDate] || [];
+      const totalCals = currentDayLogs.reduce((sum, log) => sum + log.totalCalories, 0);
+      const totalPro = currentDayLogs.reduce((sum, log) => sum + (log.totalProtein || 0), 0);
+      const progressCals = Math.min(100, (totalCals / goals.calories) * 100);
+      const progressPro = Math.min(100, (totalPro / goals.protein) * 100);
 
-        if (!weight || !height || !age) {
-            alert("Пожалуйста, заполните все поля");
-            return;
-        }
+      return (
+        // ЖЕСТКАЯ СТРУКТУРА: flex-col, высота 100dvh, ширина max-w-md, по центру
+        <div className="flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900">
+          
+          {/* ШАПКА - Зафиксирована вверху (shrink-0) */}
+          <header className="shrink-0 pt-8 px-6 pb-4 bg-[#09090b] border-b border-zinc-800 flex justify-between items-center">
+            <h1 className="text-lg font-bold">{activeTab === 'diary' ? 'Дневник' : 'Настройки'}</h1>
+            {activeTab === 'diary' && (
+              <div className="flex gap-2 text-[10px] font-bold uppercase tracking-wider">
+                <span className="text-emerald-400">{totalCals} ккал</span>
+                <span className="text-indigo-400">{totalPro.toFixed(1)} г</span>
+              </div>
+            )}
+          </header>
 
-        let bmr;
-        if (gender === 'male') {
-            bmr = 88.36 + (13.4 * weight) + (4.8 * height) - (5.7 * age);
-        } else {
-            bmr = 447.6 + (9.2 * weight) + (3.1 * height) - (4.3 * age);
-        }
+          {/* СКРОЛЛ - Занимает всё свободное место (flex-1 overflow-y-auto) */}
+          {/* Контент НИКОГДА не залезет под навигацию */}
+          <main className="flex-1 overflow-y-auto px-5 pt-4 pb-8">
+            {activeTab === 'diary' ? (
+              <div className="space-y-6">
+                
+                {/* Дата */}
+                <div className="flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
+                  <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(getLocalDateString(d));}} className="fast-touch p-3 text-zinc-400"><IconChevronLeft className="w-5 h-5" /></button>
+                  <div className="font-bold text-sm text-zinc-200">{displayDate(currentDate)}</div>
+                  <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()+1); setCurrentDate(getLocalDateString(d));}} disabled={currentDate === getLocalDateString(new Date())} className="fast-touch p-3 text-zinc-400 disabled:opacity-20"><IconChevronRight className="w-5 h-5" /></button>
+                </div>
 
-        const totalCalories = Math.round(bmr * activity);
-        
-        document.getElementById('caloriesValue').innerText = totalCalories;
-        document.getElementById('result').style.display = 'block';
+                {/* Прогресс */}
+                <div className="bg-[#18181b] rounded-3xl p-5 shadow-xl border border-zinc-800/50">
+                  <div className="flex justify-between items-end mb-4">
+                    <div>
+                      <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1">Калории</p>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-black">{totalCals}</span>
+                        <span className="text-zinc-600 text-xs">/ {goals.calories}</span>
+                      </div>
+                    </div>
+                    <div className="text-right text-emerald-400 font-black">
+                      <span className="text-2xl">{Math.max(0, goals.calories - totalCals)}</span>
+                      <span className="text-[10px] ml-1 uppercase">осталось</span>
+                    </div>
+                  </div>
+                  <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-5">
+                    <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${progressCals}%` }}></div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-[10px] text-zinc-500 uppercase font-bold">Белок</span>
+                    <span className="text-indigo-400 font-bold text-sm">{totalPro.toFixed(1)} / {goals.protein}г</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
+                    <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${progressPro}%` }}></div>
+                  </div>
+                </div>
+
+                {/* Добавление записи (Исправлено переполнение поля Граммы) */}
+                <form onSubmit={handleAddLog} className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
+                  <select className="w-full bg-[#27272a] rounded-2xl p-4 outline-none appearance-none text-zinc-200" value={selectedFoodId} onChange={(e) => setSelectedFoodId(e.target.value)} required>
+                    <option value="" disabled className="text-zinc-500">Что съели?</option>
+                    {foods.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                  <div className="flex gap-3">
+                    <input type="number" placeholder="Граммы" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none min-w-0 text-zinc-200" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} required />
+                    <button type="submit" className="w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center fast-touch active:scale-95 transition-transform"><IconPlus className="w-6 h-6 text-white" /></button>
+                  </div>
+                </form>
+
+                {/* Список записей */}
+                <div className="space-y-3">
+                  {currentDayLogs.map(log => (
+                    <div key={log.id} className="bg-[#18181b] rounded-2xl p-4 flex justify-between items-center border border-zinc-800/30">
+                      <div>
+                        <p className="font-bold text-sm">{foods.find(f => f.id === log.foodId)?.name || 'Удалено'}</p>
+                        <p className="text-[10px] text-zinc-500 font-bold uppercase">{log.grams}г</p>
+                      </div>
+                      <div className="flex items-center gap-4 text-right">
+                        <div>
+                          <div className="text-emerald-400 font-bold text-sm">{log.totalCalories}</div>
+                          <div className="text-indigo-400 font-bold text-[9px]">{log.totalProtein}г</div>
+                        </div>
+                        <button onClick={() => setDailyLogs(prev => ({...prev, [currentDate]: prev[currentDate].filter(l => l.id !== log.id)}))} className="fast-touch text-zinc-700 active:text-red-400 p-1"><IconTrash className="w-5 h-5" /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                
+                {/* Настройка Целей (Используем GRID, чтобы ничего не вылезало) */}
+                <div className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
+                  <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><IconTarget className="w-4 h-4" /> Ваши цели</h2>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ</span>
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none min-w-0" value={goals.calories} onChange={(e) => setGoals({...goals, calories: e.target.value})} />
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">БЕЛОК (Г)</span>
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none min-w-0" value={goals.protein} onChange={(e) => setGoals({...goals, protein: e.target.value})} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Добавление в справочник (Используем GRID, чтобы ничего не вылезало) */}
+                <form onSubmit={(e) => {e.preventDefault(); setFoods([...foods, {id: Date.now().toString(), name: newFoodName, calories: parseFloat(newFoodCals), protein: parseFloat(newFoodProtein)}]); setNewFoodName(''); setNewFoodCals(''); setNewFoodProtein('');}} className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
+                  <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Новый продукт</h2>
+                  <input type="text" placeholder="Название" className="w-full bg-[#27272a] rounded-xl p-3 outline-none min-w-0 text-zinc-200" value={newFoodName} onChange={(e) => setNewFoodName(e.target.value)} required />
+                  
+                  {/* ИСПРАВЛЕНИЕ СКРИНШОТА: Используем grid-cols-2 */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <input type="number" placeholder="Ккал" className="w-full bg-[#27272a] rounded-xl p-3 outline-none min-w-0 text-zinc-200" value={newFoodCals} onChange={(e) => setNewFoodCals(e.target.value)} required />
+                    <input type="number" placeholder="Белок" className="w-full bg-[#27272a] rounded-xl p-3 outline-none min-w-0 text-zinc-200" value={newFoodProtein} onChange={(e) => setNewFoodProtein(e.target.value)} required />
+                  </div>
+                  
+                  <button type="submit" className="fast-touch w-full bg-indigo-600 active:bg-indigo-700 text-white rounded-xl p-4 font-bold transition-transform active:scale-95">Добавить в список</button>
+                </form>
+
+                {/* Справочник */}
+                <div className="space-y-2">
+                  <h2 className="text-[10px] font-bold text-zinc-500 uppercase mb-2">Список ({foods.length})</h2>
+                  {foods.map(f => (
+                    <div key={f.id} className="bg-[#18181b] rounded-xl p-3 flex justify-between items-center border border-zinc-800/30">
+                      <div className="flex-1">
+                        <span className="text-sm font-medium">{f.name}</span>
+                        <div className="flex gap-2 text-[10px] font-bold uppercase mt-1">
+                          <span className="text-emerald-500">{f.calories} ккал</span>
+                          <span className="text-indigo-500">{f.protein || 0} г</span>
+                        </div>
+                      </div>
+                      <button onClick={() => setFoods(foods.filter(x => x.id !== f.id))} className="fast-touch text-zinc-800 active:text-red-500 p-2"><IconTrash className="w-5 h-5" /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </main>
+
+          {/* НИЖНЯЯ НАВИГАЦИЯ - Твердый блок (shrink-0) в самом низу */}
+          <nav className="shrink-0 bg-[#18181b] border-t border-zinc-800 flex justify-around pt-2 safe-pb relative z-40">
+            <button onClick={() => setActiveTab('diary')} className={`fast-touch flex-1 flex flex-col items-center py-2 transition-all ${activeTab === 'diary' ? 'text-emerald-400' : 'text-zinc-600 active:text-zinc-400'}`}>
+              <IconCalendar className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase">Дневник</span>
+            </button>
+            <button onClick={() => setActiveTab('directory')} className={`fast-touch flex-1 flex flex-col items-center py-2 transition-all ${activeTab === 'directory' ? 'text-indigo-400' : 'text-zinc-600 active:text-zinc-400'}`}>
+              <IconBook className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase">База</span>
+            </button>
+          </nav>
+
+        </div>
+      );
     }
-</script>
 
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
 </body>
 </html>
