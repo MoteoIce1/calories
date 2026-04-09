@@ -250,7 +250,6 @@
       const progressCals = Math.min(100, (totalCals / goals.calories) * 100);
       const progressPro = Math.min(100, (totalPro / goals.protein) * 100);
 
-      // Сортируем базу продуктов по алфавиту
       const sortedFoods = [...foods].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
 
       if (isLoading) {
@@ -279,7 +278,6 @@
                 <div className="flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
                   <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(getLocalDateString(d));}} className="fast-touch p-3 text-zinc-400"><IconChevronLeft className="w-5 h-5" /></button>
                   
-                  {/* Контейнер с выбором даты через стандартный календарь */}
                   <div className="relative font-bold text-sm text-zinc-200 flex items-center justify-center cursor-pointer">
                     {displayDate(currentDate)}
                     <input 
@@ -327,7 +325,6 @@
                 <form onSubmit={handleAddLog} className="bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex gap-2">
                   <select className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none appearance-none text-zinc-200 text-sm font-medium truncate" value={selectedFoodId} onChange={(e) => setSelectedFoodId(e.target.value)} required>
                     <option value="" disabled>Выберите продукт</option>
-                    {/* Используем отсортированный массив */}
                     {sortedFoods.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                   </select>
                   <input type="number" placeholder="гр" className="w-20 bg-[#27272a] rounded-2xl p-4 outline-none text-center text-zinc-200" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} required />
@@ -344,16 +341,18 @@
                             <span className="text-xs text-zinc-500">гр</span>
                           </div>
                         ) : (
-                          <>
-                            <div className="flex items-center gap-2">
-                              <p className="font-bold text-sm border-b border-zinc-800/50 inline-block">{foods.find(f => f.id === log.foodId)?.name || 'Удалено'}</p>
-                              {/* Отображение времени, преобразованного из timestamp (id) */}
-                              <span className="text-[10px] text-zinc-500 font-normal">
-                                {new Date(parseInt(log.id)).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-zinc-400 font-bold uppercase block mt-1 underline decoration-zinc-800 decoration-dotted">{log.grams}г</p>
-                          </>
+                          <div className="flex flex-col">
+                            {/* Время в левом углу над названием */}
+                            <span className="text-[10px] text-zinc-500 font-medium mb-0.5">
+                              {new Date(parseInt(log.id)).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            <p className="font-bold text-sm text-zinc-200 leading-tight">
+                              {foods.find(f => f.id === log.foodId)?.name || 'Удалено'}
+                            </p>
+                            <p className="text-[10px] text-zinc-400 font-bold uppercase block mt-1">
+                              {log.grams}г
+                            </p>
+                          </div>
                         )}
                       </div>
                       <div className="flex items-center gap-4 text-right">
@@ -397,7 +396,6 @@
 
                 <div className="space-y-2">
                   <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-1">База продуктов ({foods.length})</h2>
-                  {/* Используем отсортированный массив */}
                   {sortedFoods.map(f => (
                     <div key={f.id} className="bg-[#18181b] rounded-xl p-3 border border-zinc-800/30">
                       {editingFoodId === f.id ? (
