@@ -267,7 +267,6 @@
           <header className="shrink-0 pt-8 px-6 pb-4 bg-[#09090b] flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : 'Настройки'}</h1>
-              {activeTab === 'diary' && <div className="text-sm text-zinc-500 mt-1">{displayDate(currentDate)}</div>}
             </div>
           </header>
 
@@ -334,7 +333,6 @@
                 <div className="space-y-3 pt-2">
                   {currentDayLogs.map(log => (
                     <div key={log.id} className="bg-[#18181b] rounded-2xl p-4 flex justify-between items-center border border-zinc-800/30">
-                      {/* flex-1 и pr-4 дают место для переноса текста */}
                       <div className="flex-1 cursor-pointer pr-4 overflow-hidden" onClick={() => { setEditingLogId(log.id); setEditValue({ grams: log.grams }); }}>
                         {editingLogId === log.id ? (
                           <div className="flex items-center gap-2">
@@ -346,7 +344,6 @@
                             <span className="text-[10px] text-zinc-500 font-medium mb-0.5">
                               {new Date(parseInt(log.id)).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                             </span>
-                            {/* break-words позволяет тексту переноситься на новую строку */}
                             <p className="font-bold text-sm text-zinc-200 leading-tight break-words">
                               {foods.find(f => f.id === log.foodId)?.name || 'Удалено'}
                             </p>
@@ -356,7 +353,6 @@
                           </div>
                         )}
                       </div>
-                      {/* shrink-0 фиксирует блок с цифрами, не давая ему сжиматься */}
                       <div className="flex items-center gap-4 text-right shrink-0">
                         <div>
                           <div className="text-emerald-400 font-bold text-sm">{log.totalCalories}</div>
