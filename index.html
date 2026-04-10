@@ -284,7 +284,6 @@
         });
       };
 
-      // Расчеты шагов и калорий
       const baseStepsGoal = goals.baseSteps || 6000;
       const todaySteps = dailySteps[currentDate] !== undefined ? dailySteps[currentDate] : baseStepsGoal;
       const extraCalories = todaySteps > baseStepsGoal ? Math.round((todaySteps - baseStepsGoal) * 0.04) : 0;
@@ -371,6 +370,7 @@
                       className="w-24 bg-zinc-800 rounded-xl p-2 text-center text-sm font-bold outline-none text-zinc-200"
                       value={todaySteps}
                       onChange={(e) => handleUpdateSteps(e.target.value)}
+                      onFocus={(e) => e.target.select()}
                     />
                   </div>
                   
@@ -387,7 +387,7 @@
                     {sortedFoods.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                   </select>
                   <div className="flex gap-2">
-                    <input type="number" placeholder="Вес (готового, без костей)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-sm" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} required />
+                    <input type="number" placeholder="Вес (готового, без костей)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-sm" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => e.target.select()} required />
                     <button type="submit" className="w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center fast-touch active:scale-95 transition-transform"><IconPlus className="w-6 h-6 text-white" /></button>
                   </div>
                 </form>
@@ -398,7 +398,7 @@
                       <div className="flex-1 cursor-pointer pr-4 overflow-hidden" onClick={() => { setEditingLogId(log.id); setEditValue({ grams: log.grams }); }}>
                         {editingLogId === log.id ? (
                           <div className="flex items-center gap-2">
-                            <input autoFocus type="number" className="w-20 bg-zinc-900 rounded-lg p-2 text-sm outline-none border border-emerald-500 text-white" value={editValue.grams} onChange={(e) => setEditValue({grams: e.target.value})} onBlur={() => updateLogWeight(log.id, editValue.grams)} />
+                            <input autoFocus type="number" className="w-20 bg-zinc-900 rounded-lg p-2 text-sm outline-none border border-emerald-500 text-white" value={editValue.grams} onChange={(e) => setEditValue({grams: e.target.value})} onFocus={(e) => e.target.select()} onBlur={() => updateLogWeight(log.id, editValue.grams)} />
                             <span className="text-xs text-zinc-500">гр</span>
                           </div>
                         ) : (
@@ -437,25 +437,25 @@
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none" value={goals.calories} onChange={(e) => updateGoals('calories', e.target.value === '' ? '' : parseFloat(e.target.value))} />
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none" value={goals.calories} onChange={(e) => updateGoals('calories', e.target.value === '' ? '' : parseFloat(e.target.value))} onFocus={(e) => e.target.select()} />
                     </div>
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">ШАГИ (БАЗА)</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-300 font-bold outline-none" value={goals.baseSteps || 6000} onChange={(e) => updateGoals('baseSteps', e.target.value === '' ? '' : parseInt(e.target.value))} />
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-300 font-bold outline-none" value={goals.baseSteps || 6000} onChange={(e) => updateGoals('baseSteps', e.target.value === '' ? '' : parseInt(e.target.value))} onFocus={(e) => e.target.select()} />
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">БЕЛОК (Г)</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none" value={goals.protein} onChange={(e) => updateGoals('protein', e.target.value === '' ? '' : parseFloat(e.target.value))} />
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none" value={goals.protein} onChange={(e) => updateGoals('protein', e.target.value === '' ? '' : parseFloat(e.target.value))} onFocus={(e) => e.target.select()} />
                     </div>
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">ЖИРЫ (Г)</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none" value={goals.fats} onChange={(e) => updateGoals('fats', e.target.value === '' ? '' : parseFloat(e.target.value))} />
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none" value={goals.fats} onChange={(e) => updateGoals('fats', e.target.value === '' ? '' : parseFloat(e.target.value))} onFocus={(e) => e.target.select()} />
                     </div>
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">УГЛЕВОДЫ (Г)</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none" value={goals.carbs} onChange={(e) => updateGoals('carbs', e.target.value === '' ? '' : parseFloat(e.target.value))} />
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none" value={goals.carbs} onChange={(e) => updateGoals('carbs', e.target.value === '' ? '' : parseFloat(e.target.value))} onFocus={(e) => e.target.select()} />
                     </div>
                   </div>
                 </div>
@@ -464,10 +464,10 @@
                   <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Новый продукт в базу (на 100г)</h2>
                   <input type="text" placeholder="Название" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFood.name} onChange={(e) => setNewFood({...newFood, name: e.target.value})} required />
                   <div className="grid grid-cols-2 gap-3">
-                    <input type="number" placeholder="Ккал" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFood.cals} onChange={(e) => setNewFood({...newFood, cals: e.target.value})} required />
-                    <input type="number" placeholder="Белок" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFood.pro} onChange={(e) => setNewFood({...newFood, pro: e.target.value})} required />
-                    <input type="number" placeholder="Жиры" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFood.fat} onChange={(e) => setNewFood({...newFood, fat: e.target.value})} required />
-                    <input type="number" placeholder="Углеводы" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFood.carb} onChange={(e) => setNewFood({...newFood, carb: e.target.value})} required />
+                    <input type="number" placeholder="Ккал" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFood.cals} onChange={(e) => setNewFood({...newFood, cals: e.target.value})} onFocus={(e) => e.target.select()} required />
+                    <input type="number" placeholder="Белок" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFood.pro} onChange={(e) => setNewFood({...newFood, pro: e.target.value})} onFocus={(e) => e.target.select()} required />
+                    <input type="number" placeholder="Жиры" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFood.fat} onChange={(e) => setNewFood({...newFood, fat: e.target.value})} onFocus={(e) => e.target.select()} required />
+                    <input type="number" placeholder="Углеводы" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFood.carb} onChange={(e) => setNewFood({...newFood, carb: e.target.value})} onFocus={(e) => e.target.select()} required />
                   </div>
                   <button type="submit" className="fast-touch w-full bg-emerald-600 text-white rounded-xl p-4 font-bold active:scale-95 transition-transform">Добавить в список</button>
                 </form>
@@ -480,10 +480,10 @@
                         <div className="space-y-3">
                            <input autoFocus className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-white border border-indigo-500 outline-none" value={editValue.name} onChange={e => setEditValue({...editValue, name: e.target.value})} />
                            <div className="grid grid-cols-4 gap-2">
-                              <input type="number" placeholder="Ккал" className="bg-zinc-900 rounded-lg p-2 text-xs text-emerald-400 outline-none text-center" value={editValue.calories} onChange={e => setEditValue({...editValue, calories: parseFloat(e.target.value)})} />
-                              <input type="number" placeholder="Б" className="bg-zinc-900 rounded-lg p-2 text-xs text-indigo-400 outline-none text-center" value={editValue.protein} onChange={e => setEditValue({...editValue, protein: parseFloat(e.target.value)})} />
-                              <input type="number" placeholder="Ж" className="bg-zinc-900 rounded-lg p-2 text-xs text-amber-400 outline-none text-center" value={editValue.fats} onChange={e => setEditValue({...editValue, fats: parseFloat(e.target.value)})} />
-                              <input type="number" placeholder="У" className="bg-zinc-900 rounded-lg p-2 text-xs text-blue-400 outline-none text-center" value={editValue.carbs} onChange={e => setEditValue({...editValue, carbs: parseFloat(e.target.value)})} />
+                              <input type="number" placeholder="Ккал" className="bg-zinc-900 rounded-lg p-2 text-xs text-emerald-400 outline-none text-center" value={editValue.calories} onChange={e => setEditValue({...editValue, calories: parseFloat(e.target.value)})} onFocus={(e) => e.target.select()} />
+                              <input type="number" placeholder="Б" className="bg-zinc-900 rounded-lg p-2 text-xs text-indigo-400 outline-none text-center" value={editValue.protein} onChange={e => setEditValue({...editValue, protein: parseFloat(e.target.value)})} onFocus={(e) => e.target.select()} />
+                              <input type="number" placeholder="Ж" className="bg-zinc-900 rounded-lg p-2 text-xs text-amber-400 outline-none text-center" value={editValue.fats} onChange={e => setEditValue({...editValue, fats: parseFloat(e.target.value)})} onFocus={(e) => e.target.select()} />
+                              <input type="number" placeholder="У" className="bg-zinc-900 rounded-lg p-2 text-xs text-blue-400 outline-none text-center" value={editValue.carbs} onChange={e => setEditValue({...editValue, carbs: parseFloat(e.target.value)})} onFocus={(e) => e.target.select()} />
                            </div>
                            <button onClick={() => updateFoodBase(f.id)} className="w-full bg-emerald-600 p-2 rounded-lg flex justify-center"><IconCheck className="w-5 h-5 text-white" /></button>
                         </div>
