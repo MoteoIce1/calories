@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Трекер Диеты</title>
+  <title>Трекер Диеты КБЖУ</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -14,6 +14,8 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
   <style>
     body { background-color: #000; margin: 0; padding: 0; overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
@@ -49,6 +51,7 @@
 
     const { useState, useEffect, useRef } = React;
 
+    // Иконки
     const IconPlus = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14m-7-7h14"/></svg>;
     const IconBook = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>;
     const IconCalendar = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
@@ -57,35 +60,37 @@
     const IconTrash = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></svg>;
     const IconTarget = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
     const IconCheck = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
+    const IconDownload = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5 5 5-5m-5 5V3"/></svg>;
 
-    const HARDCODED_FOODS = [
-      { id: 'h1', name: 'Котлета (говядина)', calories: 255, protein: 25 },
-      { id: 'h2', name: 'Котлеты куриные', calories: 160, protein: 16 },
-      { id: 'h3', name: 'Рыбные котлеты', calories: 140, protein: 14 },
-      { id: 'h4', name: 'Куриное филе (сырое)', calories: 113, protein: 23.6 },
-      { id: 'h5', name: 'Семга (филе слабосоленая)', calories: 200, protein: 20 },
-      { id: 'h6', name: 'Пастеризованные белки', calories: 48, protein: 11 },
-      { id: 'h7', name: 'Гречка вареная', calories: 132, protein: 4.5 },
-      { id: 'h8', name: 'Картофельное пюре (на воде)', calories: 75, protein: 2 },
-      { id: 'h9', name: 'Рис белый вареный', calories: 130, protein: 2.7 },
-      { id: 'h10', name: 'Макароны отварные', calories: 112, protein: 4 },
-      { id: 'h11', name: 'Оливковое масло', calories: 884, protein: 0 },
-      { id: 'h12', name: 'Лук репчатый', calories: 41, protein: 1.4 },
-      { id: 'h13', name: 'Помидор', calories: 19, protein: 1 },
-      { id: 'h14', name: 'Огурец', calories: 15, protein: 1 },
-      { id: 'h15', name: 'Батончик Snaq Fabriq', calories: 454, protein: 20 },
-      { id: 'h16', name: 'Печенье', calories: 278, protein: 35 },
-      { id: 'h17', name: 'Творог 5%', calories: 121, protein: 17 },
-      { id: 'h18', name: 'Яйцо куриное (на 100г)', calories: 155, protein: 13 },
-      { id: 'h19', name: 'Индейка (филе сырое)', calories: 115, protein: 24 },
-      { id: 'h20', name: 'Говядина постная', calories: 187, protein: 29 }
-    ];
+    // Компонент для прогресс-баров макросов
+    const MacroBar = ({ label, current, goal, colorClass, bgClass }) => {
+      const progress = Math.min(100, (current / (goal || 1)) * 100);
+      const remaining = Math.max(0, goal - current).toFixed(1);
+      return (
+        <div className="flex-1">
+          <div className="flex justify-between items-end mb-1">
+            <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">{label}</p>
+            <span className={`text-[10px] font-bold ${colorClass}`}>{current.toFixed(1)} / {goal}</span>
+          </div>
+          <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden mb-1">
+            <div className={`h-full transition-all duration-500 ${bgClass}`} style={{ width: `${progress}%` }}></div>
+          </div>
+          <p className="text-[8px] text-zinc-500 font-bold uppercase text-right opacity-80">Ост: {remaining}</p>
+        </div>
+      );
+    };
 
     const getLocalDateString = (dateObj) => {
       const year = dateObj.getFullYear();
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
       const day = String(dateObj.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
+    };
+
+    const getDefaultStartDate = () => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 1);
+      return getLocalDateString(d);
     };
 
     const displayDate = (dateString) => {
@@ -101,7 +106,7 @@
 
     function App() {
       const [isLoading, setIsLoading] = useState(true);
-      const [goals, setGoals] = useState({ calories: 1800, protein: 150 });
+      const [goals, setGoals] = useState({ calories: 1800, protein: 150, fats: 60, carbs: 150 });
       const [foods, setFoods] = useState([]);
       const [dailyLogs, setDailyLogs] = useState({});
       const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
@@ -109,13 +114,16 @@
       
       const [selectedFoodId, setSelectedFoodId] = useState('');
       const [gramsInput, setGramsInput] = useState('');
-      const [newFoodName, setNewFoodName] = useState('');
-      const [newFoodCals, setNewFoodCals] = useState('');
-      const [newFoodProtein, setNewFoodProtein] = useState('');
+      
+      const [newFood, setNewFood] = useState({ name: '', cals: '', pro: '', fat: '', carb: '' });
 
       const [editingLogId, setEditingLogId] = useState(null);
       const [editingFoodId, setEditingFoodId] = useState(null);
       const [editValue, setEditValue] = useState({});
+
+      const [showExportModal, setShowExportModal] = useState(false);
+      const [exportStart, setExportStart] = useState(getDefaultStartDate());
+      const [exportEnd, setExportEnd] = useState(getLocalDateString(new Date()));
 
       const scrollContainerRef = useRef(null);
 
@@ -123,16 +131,9 @@
         const unsubscribe = docRef.onSnapshot((docSnap) => {
           if (docSnap.exists) {
             const data = docSnap.data();
-            if (data.goals) setGoals(data.goals);
+            if (data.goals) setGoals({...goals, ...data.goals});
             if (data.foods) setFoods(data.foods);
             if (data.dailyLogs) setDailyLogs(data.dailyLogs);
-          } else {
-            setFoods(HARDCODED_FOODS);
-            docRef.set({
-              goals: { calories: 1800, protein: 150 },
-              foods: HARDCODED_FOODS,
-              dailyLogs: {}
-            });
           }
           setIsLoading(false);
         });
@@ -140,9 +141,7 @@
       }, []);
 
       useEffect(() => {
-        if (scrollContainerRef.current) {
-          scrollContainerRef.current.scrollTop = 0;
-        }
+        if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
       }, [activeTab]);
 
       const updateGoals = (field, value) => {
@@ -160,8 +159,10 @@
           id: Date.now().toString(),
           foodId: food.id,
           grams,
-          totalCalories: Math.round((grams / 100) * food.calories),
-          totalProtein: Math.round((grams / 100) * (food.protein || 0) * 10) / 10
+          totalCalories: Math.round((grams / 100) * (food.calories || 0)),
+          totalProtein: Math.round((grams / 100) * (food.protein || 0) * 10) / 10,
+          totalFats: Math.round((grams / 100) * (food.fats || 0) * 10) / 10,
+          totalCarbs: Math.round((grams / 100) * (food.carbs || 0) * 10) / 10
         };
         const updatedLogs = { ...dailyLogs, [currentDate]: [...(dailyLogs[currentDate] || []), newLog] };
         setDailyLogs(updatedLogs);
@@ -175,10 +176,11 @@
           if (log.id === logId) {
             const food = foods.find(f => f.id === log.foodId);
             return {
-              ...log,
-              grams,
+              ...log, grams,
               totalCalories: Math.round((grams / 100) * (food?.calories || 0)),
-              totalProtein: Math.round((grams / 100) * (food?.protein || 0) * 10) / 10
+              totalProtein: Math.round((grams / 100) * (food?.protein || 0) * 10) / 10,
+              totalFats: Math.round((grams / 100) * (food?.fats || 0) * 10) / 10,
+              totalCarbs: Math.round((grams / 100) * (food?.carbs || 0) * 10) / 10
             };
           }
           return log;
@@ -197,16 +199,18 @@
 
       const handleAddFood = (e) => {
         e.preventDefault();
-        const newFood = {
+        const foodItem = {
           id: Date.now().toString(),
-          name: newFoodName,
-          calories: parseFloat(newFoodCals),
-          protein: parseFloat(newFoodProtein)
+          name: newFood.name,
+          calories: parseFloat(newFood.cals || 0),
+          protein: parseFloat(newFood.pro || 0),
+          fats: parseFloat(newFood.fat || 0),
+          carbs: parseFloat(newFood.carb || 0)
         };
-        const updatedFoods = [newFood, ...foods];
+        const updatedFoods = [foodItem, ...foods];
         setFoods(updatedFoods);
         docRef.set({ foods: updatedFoods }, { merge: true });
-        setNewFoodName(''); setNewFoodCals(''); setNewFoodProtein('');
+        setNewFood({ name: '', cals: '', pro: '', fat: '', carb: '' });
       };
 
       const updateFoodBase = (id) => {
@@ -220,8 +224,10 @@
               const grams = log.grams;
               return {
                 ...log,
-                totalCalories: Math.round((grams / 100) * editValue.calories),
-                totalProtein: Math.round((grams / 100) * editValue.protein * 10) / 10
+                totalCalories: Math.round((grams / 100) * (editValue.calories || 0)),
+                totalProtein: Math.round((grams / 100) * (editValue.protein || 0) * 10) / 10,
+                totalFats: Math.round((grams / 100) * (editValue.fats || 0) * 10) / 10,
+                totalCarbs: Math.round((grams / 100) * (editValue.carbs || 0) * 10) / 10
               };
             }
             return log;
@@ -240,17 +246,38 @@
         docRef.set({ foods: updatedFoods }, { merge: true });
       };
 
+      const generatePDF = () => {
+        const element = document.getElementById('pdf-export-container');
+        element.style.display = 'block'; // Показываем скрытый контейнер для рендера
+        
+        const opt = {
+          margin:       10,
+          filename:     `Дневник_Питания_${exportStart}_${exportEnd}.pdf`,
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2, useCORS: true },
+          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        html2pdf().set(opt).from(element).save().then(() => {
+          element.style.display = 'none'; // Скрываем обратно
+          setShowExportModal(false);
+        });
+      };
+
       const currentDayLogs = dailyLogs[currentDate] || [];
       const totalCals = currentDayLogs.reduce((sum, log) => sum + log.totalCalories, 0);
       const totalPro = currentDayLogs.reduce((sum, log) => sum + (log.totalProtein || 0), 0);
+      const totalFats = currentDayLogs.reduce((sum, log) => sum + (log.totalFats || 0), 0);
+      const totalCarbs = currentDayLogs.reduce((sum, log) => sum + (log.totalCarbs || 0), 0);
       
       const remainingCals = Math.max(0, goals.calories - totalCals);
-      const remainingPro = Math.max(0, goals.protein - totalPro).toFixed(1);
-
       const progressCals = Math.min(100, (totalCals / goals.calories) * 100);
-      const progressPro = Math.min(100, (totalPro / goals.protein) * 100);
-
       const sortedFoods = [...foods].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+
+      // Фильтруем данные для PDF
+      const filteredDatesForPdf = Object.keys(dailyLogs)
+        .filter(date => date >= exportStart && date <= exportEnd)
+        .sort((a, b) => new Date(a) - new Date(b));
 
       if (isLoading) {
         return (
@@ -262,12 +289,17 @@
       }
 
       return (
-        <div className="flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900">
+        <div className="flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900 relative">
           
-          <header className="shrink-0 pt-8 px-6 pb-4 bg-[#09090b] flex justify-between items-center">
+          <header className="shrink-0 pt-8 px-6 pb-4 bg-[#09090b] flex justify-between items-center z-10">
             <div>
               <h1 className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : 'Настройки'}</h1>
             </div>
+            {activeTab === 'diary' && (
+              <button onClick={() => setShowExportModal(true)} className="fast-touch p-2 bg-zinc-800 rounded-xl text-zinc-300 active:scale-95 transition-transform">
+                <IconDownload className="w-5 h-5" />
+              </button>
+            )}
           </header>
 
           <main ref={scrollContainerRef} className="flex-1 overflow-y-auto px-5 pt-2 pb-8">
@@ -276,18 +308,10 @@
                 
                 <div className="flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
                   <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(getLocalDateString(d));}} className="fast-touch p-3 text-zinc-400"><IconChevronLeft className="w-5 h-5" /></button>
-                  
                   <div className="relative font-bold text-sm text-zinc-200 flex items-center justify-center cursor-pointer">
                     {displayDate(currentDate)}
-                    <input 
-                      type="date" 
-                      className="absolute opacity-0 top-0 left-0 w-full h-full cursor-pointer"
-                      value={currentDate}
-                      max={getLocalDateString(new Date())}
-                      onChange={(e) => { if(e.target.value) setCurrentDate(e.target.value); }}
-                    />
+                    <input type="date" className="absolute opacity-0 top-0 left-0 w-full h-full cursor-pointer" value={currentDate} max={getLocalDateString(new Date())} onChange={(e) => { if(e.target.value) setCurrentDate(e.target.value); }} />
                   </div>
-
                   <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()+1); setCurrentDate(getLocalDateString(d));}} disabled={currentDate === getLocalDateString(new Date())} className="fast-touch p-3 text-zinc-400 disabled:opacity-20"><IconChevronRight className="w-5 h-5" /></button>
                 </div>
 
@@ -305,29 +329,26 @@
                       <p className="text-[10px] uppercase font-bold mt-1 tracking-widest opacity-80">осталось</p>
                     </div>
                   </div>
-                  <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-5">
+                  <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-6">
                     <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${progressCals}%` }}></div>
                   </div>
                   
-                  <div className="flex justify-between items-end mb-2">
-                    <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Белок</p>
-                    <div className="text-right">
-                      <span className="text-sm font-bold text-indigo-400">{totalPro.toFixed(1)} / {goals.protein}г</span>
-                      <span className="text-[10px] text-indigo-500/80 font-bold uppercase ml-2">({remainingPro}г осталось)</span>
-                    </div>
-                  </div>
-                  <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${progressPro}%` }}></div>
+                  <div className="flex gap-4">
+                    <MacroBar label="Белок" current={totalPro} goal={goals.protein} colorClass="text-indigo-400" bgClass="bg-indigo-500" />
+                    <MacroBar label="Жиры" current={totalFats} goal={goals.fats} colorClass="text-amber-400" bgClass="bg-amber-500" />
+                    <MacroBar label="Углев" current={totalCarbs} goal={goals.carbs} colorClass="text-blue-400" bgClass="bg-blue-500" />
                   </div>
                 </div>
 
-                <form onSubmit={handleAddLog} className="bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex gap-2">
-                  <select className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none appearance-none text-zinc-200 text-sm font-medium truncate" value={selectedFoodId} onChange={(e) => setSelectedFoodId(e.target.value)} required>
+                <form onSubmit={handleAddLog} className="bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-2">
+                  <select className="bg-[#27272a] rounded-2xl p-4 outline-none appearance-none text-zinc-200 text-sm font-medium truncate w-full" value={selectedFoodId} onChange={(e) => setSelectedFoodId(e.target.value)} required>
                     <option value="" disabled>Выберите продукт</option>
                     {sortedFoods.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                   </select>
-                  <input type="number" placeholder="гр" className="w-20 bg-[#27272a] rounded-2xl p-4 outline-none text-center text-zinc-200" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} required />
-                  <button type="submit" className="w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center fast-touch active:scale-95 transition-transform"><IconPlus className="w-6 h-6 text-white" /></button>
+                  <div className="flex gap-2">
+                    <input type="number" placeholder="Вес (готового, без костей)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-sm" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} required />
+                    <button type="submit" className="w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center fast-touch active:scale-95 transition-transform"><IconPlus className="w-6 h-6 text-white" /></button>
+                  </div>
                 </form>
 
                 <div className="space-y-3 pt-2">
@@ -353,10 +374,14 @@
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-4 text-right shrink-0">
+                      <div className="flex items-center gap-3 text-right shrink-0">
                         <div>
                           <div className="text-emerald-400 font-bold text-sm">{log.totalCalories}</div>
-                          <div className="text-indigo-400 font-bold text-[9px]">{log.totalProtein}г</div>
+                          <div className="text-[9px] font-bold mt-0.5 space-x-1">
+                            <span className="text-indigo-400">Б:{log.totalProtein}</span>
+                            <span className="text-amber-400">Ж:{log.totalFats}</span>
+                            <span className="text-blue-400">У:{log.totalCarbs}</span>
+                          </div>
                         </div>
                         <button onClick={() => deleteLog(log.id)} className="fast-touch text-zinc-700 active:text-red-500 p-2"><IconTrash className="w-5 h-5" /></button>
                       </div>
@@ -370,24 +395,36 @@
                 
                 <div className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
                   <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><IconTarget className="w-4 h-4" /> Ваши цели</h2>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3 mb-3">
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none" value={goals.calories} onChange={(e) => updateGoals('calories', e.target.value)} />
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none" value={goals.calories} onChange={(e) => updateGoals('calories', parseFloat(e.target.value) || 0)} />
                     </div>
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">БЕЛОК (Г)</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none" value={goals.protein} onChange={(e) => updateGoals('protein', e.target.value)} />
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none" value={goals.protein} onChange={(e) => updateGoals('protein', parseFloat(e.target.value) || 0)} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ЖИРЫ (Г)</span>
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none" value={goals.fats} onChange={(e) => updateGoals('fats', parseFloat(e.target.value) || 0)} />
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">УГЛЕВОДЫ (Г)</span>
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none" value={goals.carbs} onChange={(e) => updateGoals('carbs', parseFloat(e.target.value) || 0)} />
                     </div>
                   </div>
                 </div>
 
                 <form onSubmit={handleAddFood} className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
-                  <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Новый продукт в базу</h2>
-                  <input type="text" placeholder="Название" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFoodName} onChange={(e) => setNewFoodName(e.target.value)} required />
+                  <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Новый продукт в базу (на 100г)</h2>
+                  <input type="text" placeholder="Название" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFood.name} onChange={(e) => setNewFood({...newFood, name: e.target.value})} required />
                   <div className="grid grid-cols-2 gap-3">
-                    <input type="number" placeholder="Ккал на 100г" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFoodCals} onChange={(e) => setNewFoodCals(e.target.value)} required />
-                    <input type="number" placeholder="Белок на 100г" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFoodProtein} onChange={(e) => setNewFoodProtein(e.target.value)} required />
+                    <input type="number" placeholder="Ккал" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFood.cals} onChange={(e) => setNewFood({...newFood, cals: e.target.value})} required />
+                    <input type="number" placeholder="Белок" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFood.pro} onChange={(e) => setNewFood({...newFood, pro: e.target.value})} required />
+                    <input type="number" placeholder="Жиры" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFood.fat} onChange={(e) => setNewFood({...newFood, fat: e.target.value})} required />
+                    <input type="number" placeholder="Углеводы" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={newFood.carb} onChange={(e) => setNewFood({...newFood, carb: e.target.value})} required />
                   </div>
                   <button type="submit" className="fast-touch w-full bg-emerald-600 text-white rounded-xl p-4 font-bold active:scale-95 transition-transform">Добавить в список</button>
                 </form>
@@ -399,19 +436,23 @@
                       {editingFoodId === f.id ? (
                         <div className="space-y-3">
                            <input autoFocus className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-white border border-indigo-500 outline-none" value={editValue.name} onChange={e => setEditValue({...editValue, name: e.target.value})} />
-                           <div className="grid grid-cols-2 gap-2">
-                              <input type="number" className="bg-zinc-900 rounded-lg p-2 text-sm text-emerald-400 outline-none" value={editValue.calories} onChange={e => setEditValue({...editValue, calories: parseFloat(e.target.value)})} />
-                              <input type="number" className="bg-zinc-900 rounded-lg p-2 text-sm text-indigo-400 outline-none" value={editValue.protein} onChange={e => setEditValue({...editValue, protein: parseFloat(e.target.value)})} />
+                           <div className="grid grid-cols-4 gap-2">
+                              <input type="number" placeholder="Ккал" className="bg-zinc-900 rounded-lg p-2 text-xs text-emerald-400 outline-none text-center" value={editValue.calories} onChange={e => setEditValue({...editValue, calories: parseFloat(e.target.value)})} />
+                              <input type="number" placeholder="Б" className="bg-zinc-900 rounded-lg p-2 text-xs text-indigo-400 outline-none text-center" value={editValue.protein} onChange={e => setEditValue({...editValue, protein: parseFloat(e.target.value)})} />
+                              <input type="number" placeholder="Ж" className="bg-zinc-900 rounded-lg p-2 text-xs text-amber-400 outline-none text-center" value={editValue.fats} onChange={e => setEditValue({...editValue, fats: parseFloat(e.target.value)})} />
+                              <input type="number" placeholder="У" className="bg-zinc-900 rounded-lg p-2 text-xs text-blue-400 outline-none text-center" value={editValue.carbs} onChange={e => setEditValue({...editValue, carbs: parseFloat(e.target.value)})} />
                            </div>
                            <button onClick={() => updateFoodBase(f.id)} className="w-full bg-emerald-600 p-2 rounded-lg flex justify-center"><IconCheck className="w-5 h-5 text-white" /></button>
                         </div>
                       ) : (
-                        <div className="flex justify-between items-center cursor-pointer" onClick={() => { setEditingFoodId(f.id); setEditValue(f); }}>
+                        <div className="flex justify-between items-center cursor-pointer" onClick={() => { setEditingFoodId(f.id); setEditValue({ ...f, fats: f.fats || 0, carbs: f.carbs || 0 }); }}>
                           <div className="flex-1">
-                            <span className="text-sm font-medium border-b border-zinc-800/50">{f.name}</span>
-                            <div className="flex gap-2 text-[10px] font-bold uppercase mt-1">
+                            <span className="text-sm font-medium border-b border-zinc-800/50 pb-0.5">{f.name}</span>
+                            <div className="flex gap-3 text-[10px] font-bold uppercase mt-1.5">
                               <span className="text-emerald-500">{f.calories} ккал</span>
-                              <span className="text-indigo-500">{f.protein || 0} г</span>
+                              <span className="text-indigo-500">Б: {f.protein || 0}</span>
+                              <span className="text-amber-500">Ж: {f.fats || 0}</span>
+                              <span className="text-blue-500">У: {f.carbs || 0}</span>
                             </div>
                           </div>
                           <button onClick={(e) => deleteFood(e, f.id)} className="fast-touch text-zinc-800 active:text-red-500 p-2"><IconTrash className="w-5 h-5" /></button>
@@ -433,6 +474,77 @@
             </button>
           </nav>
 
+          {/* Модальное окно для экспорта PDF */}
+          {showExportModal && (
+            <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm">
+                <h3 className="text-lg font-bold mb-4">Выгрузка в PDF</h3>
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">Начало периода</label>
+                    <input type="date" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={exportStart} onChange={(e) => setExportStart(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">Конец периода</label>
+                    <input type="date" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={exportEnd} onChange={(e) => setExportEnd(e.target.value)} />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowExportModal(false)} className="flex-1 p-3 rounded-xl bg-zinc-800 font-bold text-zinc-300 active:scale-95 transition-transform">Отмена</button>
+                  <button onClick={generatePDF} className="flex-1 p-3 rounded-xl bg-emerald-600 font-bold text-white active:scale-95 transition-transform">Скачать</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Скрытый контейнер для генерации PDF (белый фон для нормального чтения документа) */}
+          <div id="pdf-export-container" style={{ display: 'none', background: 'white', color: 'black', padding: '20px', width: '800px', fontFamily: 'sans-serif' }}>
+            <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px', textAlign: 'center' }}>Отчет по питанию ({exportStart} — {exportEnd})</h1>
+            {filteredDatesForPdf.length === 0 ? (
+              <p>За выбранный период нет данных.</p>
+            ) : (
+              filteredDatesForPdf.map(date => {
+                const dayLogs = dailyLogs[date];
+                const dayCals = dayLogs.reduce((s, l) => s + l.totalCalories, 0);
+                const dayPro = dayLogs.reduce((s, l) => s + (l.totalProtein || 0), 0);
+                const dayFat = dayLogs.reduce((s, l) => s + (l.totalFats || 0), 0);
+                const dayCarb = dayLogs.reduce((s, l) => s + (l.totalCarbs || 0), 0);
+
+                return (
+                  <div key={date} style={{ marginBottom: '30px' }}>
+                    <h2 style={{ fontSize: '18px', fontWeight: 'bold', borderBottom: '2px solid #10b981', paddingBottom: '5px', marginBottom: '10px' }}>
+                      {date} (Ккал: {dayCals}, Б: {dayPro.toFixed(1)}г, Ж: {dayFat.toFixed(1)}г, У: {dayCarb.toFixed(1)}г)
+                    </h2>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f4f4f5', textAlign: 'left' }}>
+                          <th style={{ padding: '8px', border: '1px solid #e4e4e7' }}>Продукт</th>
+                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '80px' }}>Вес (г)</th>
+                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '80px' }}>Ккал</th>
+                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '60px' }}>Белки</th>
+                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '60px' }}>Жиры</th>
+                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '60px' }}>Углев</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dayLogs.map((log, i) => (
+                          <tr key={i}>
+                            <td style={{ padding: '8px', border: '1px solid #e4e4e7' }}>{foods.find(f => f.id === log.foodId)?.name || 'Удаленный продукт'}</td>
+                            <td style={{ padding: '8px', border: '1px solid #e4e4e7' }}>{log.grams}</td>
+                            <td style={{ padding: '8px', border: '1px solid #e4e4e7' }}>{log.totalCalories}</td>
+                            <td style={{ padding: '8px', border: '1px solid #e4e4e7' }}>{log.totalProtein}</td>
+                            <td style={{ padding: '8px', border: '1px solid #e4e4e7' }}>{log.totalFats}</td>
+                            <td style={{ padding: '8px', border: '1px solid #e4e4e7' }}>{log.totalCarbs}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          
         </div>
       );
     }
