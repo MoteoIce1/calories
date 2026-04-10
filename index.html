@@ -128,6 +128,50 @@
 
       const scrollContainerRef = useRef(null);
 
+      // ВРЕМЕННАЯ ФУНКЦИЯ ДЛЯ ОБНОВЛЕНИЯ БАЗЫ ПРОДУКТОВ
+      const forceUpdateFoods = () => {
+        const standardFoods = [
+          { "id": "1775754422570", "name": "Суп с тефтелями", "calories": 60, "protein": 4.0, "fats": 3.0, "carbs": 4.0 },
+          { "id": "1775754139999", "name": "Мандарин", "calories": 43, "protein": 0.8, "fats": 0.2, "carbs": 9.0 },
+          { "id": "1775734940297", "name": "Сливочное масло 82%", "calories": 748, "protein": 0.6, "fats": 82.5, "carbs": 0.8 },
+          { "id": "1775721412002", "name": "Сыр классический", "calories": 350, "protein": 26.0, "fats": 26.0, "carbs": 0.0 },
+          { "id": "1775679015244", "name": "Грецкие орехи", "calories": 654, "protein": 15.0, "fats": 65.0, "carbs": 14.0 },
+          { "id": "1775674896705", "name": "Кетчуп", "calories": 100, "protein": 1.0, "fats": 0.2, "carbs": 24.0 },
+          { "id": "1775663180861", "name": "Протеин(порция)", "calories": 370, "protein": 85.0, "fats": 1.5, "carbs": 3.0 },
+          { "id": "1775663136712", "name": "Картофельное пюре(на молоке)", "calories": 90, "protein": 2.5, "fats": 3.0, "carbs": 14.0 },
+          { "id": "1774356852914", "name": "Пирожок (мясной)", "calories": 300, "protein": 10.0, "fats": 15.0, "carbs": 31.0 },
+          { "id": "h1", "name": "Котлета (говядина)", "calories": 250, "protein": 20.0, "fats": 17.0, "carbs": 5.0 },
+          { "id": "h2", "name": "Котлеты куриные", "calories": 160, "protein": 16.0, "fats": 8.0, "carbs": 6.0 },
+          { "id": "h3", "name": "Рыбные котлеты", "calories": 140, "protein": 14.0, "fats": 6.0, "carbs": 7.0 },
+          { "id": "h4", "name": "Куриное филе (сырое)", "calories": 113, "protein": 23.6, "fats": 1.9, "carbs": 0.0 },
+          { "id": "h5", "name": "Семга стейк жареный без масла", "calories": 206, "protein": 22.0, "fats": 13.0, "carbs": 0.0 },
+          { "id": "h6", "name": "Пастеризованные белки", "calories": 48, "protein": 11.0, "fats": 0.0, "carbs": 1.0 },
+          { "id": "h7", "name": "Гречка вареная", "calories": 110, "protein": 4.2, "fats": 1.1, "carbs": 21.3 },
+          { "id": "h8", "name": "Картофельное пюре (на воде)", "calories": 75, "protein": 2.0, "fats": 0.5, "carbs": 16.0 },
+          { "id": "h9", "name": "Рис белый вареный", "calories": 130, "protein": 2.7, "fats": 0.3, "carbs": 28.0 },
+          { "id": "h10", "name": "Макароны отварные", "calories": 140, "protein": 5.0, "fats": 1.0, "carbs": 28.0 },
+          { "id": "h11", "name": "Оливковое масло", "calories": 884, "protein": 0.0, "fats": 100.0, "carbs": 0.0 },
+          { "id": "h12", "name": "Лук репчатый", "calories": 41, "protein": 1.4, "fats": 0.2, "carbs": 8.2 },
+          { "id": "h13", "name": "Помидор", "calories": 20, "protein": 1.0, "fats": 0.2, "carbs": 4.0 },
+          { "id": "h14", "name": "Огурец", "calories": 15, "protein": 1.0, "fats": 0.1, "carbs": 3.0 },
+          { "id": "h15", "name": "Батончик Snaq Fabriq", "calories": 454, "protein": 20.0, "fats": 34.0, "carbs": 10.0 },
+          { "id": "h16", "name": "Печенье (протеиновое)", "calories": 271, "protein": 35.0, "fats": 11.0, "carbs": 6.0 },
+          { "id": "h17", "name": "Творог 5%", "calories": 121, "protein": 17.0, "fats": 5.0, "carbs": 2.0 },
+          { "id": "h18", "name": "Яйцо куриное (на 100г)", "calories": 155, "protein": 13.0, "fats": 11.0, "carbs": 1.0 },
+          { "id": "h19", "name": "Индейка (филе сырое)", "calories": 115, "protein": 24.0, "fats": 1.5, "carbs": 0.0 },
+          { "id": "h20", "name": "Говядина постная", "calories": 250, "protein": 26.0, "fats": 16.0, "carbs": 0.0 }
+        ];
+
+        docRef.set({ foods: standardFoods }, { merge: true })
+          .then(() => {
+            alert("✅ База продуктов успешно обновлена! Жиры и углеводы прописаны.");
+            setFoods(standardFoods);
+          })
+          .catch((error) => {
+            alert("❌ Ошибка при обновлении: " + error);
+          });
+      };
+
       useEffect(() => {
         const unsubscribe = docRef.onSnapshot((docSnap) => {
           if (docSnap.exists) {
@@ -295,6 +339,12 @@
             <div>
               <h1 className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : 'Настройки'}</h1>
             </div>
+
+            {/* ВРЕМЕННАЯ КНОПКА */}
+            <button onClick={forceUpdateFoods} className="bg-amber-500 text-black px-3 py-1 rounded-lg text-xs font-bold mx-2 active:scale-95 transition-transform">
+              ОБНОВИТЬ БАЗУ
+            </button>
+
             {activeTab === 'diary' && (
               <button onClick={() => setShowExportModal(true)} className="fast-touch p-2 bg-zinc-800 rounded-xl text-zinc-300 active:scale-95 transition-transform">
                 <IconDownload className="w-5 h-5" />
@@ -398,7 +448,6 @@
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ</span>
-                      {/* Изменено onChange для поддержки пустой строки */}
                       <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none" value={goals.calories} onChange={(e) => updateGoals('calories', e.target.value === '' ? '' : parseFloat(e.target.value))} />
                     </div>
                     <div>
