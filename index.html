@@ -480,14 +480,33 @@
               <div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm">
                 <h3 className="text-lg font-bold mb-4">Выгрузка в PDF</h3>
                 <div className="space-y-4 mb-6">
+                  
                   <div>
-                    <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">Начало периода</label>
-                    <input type="date" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={exportStart} onChange={(e) => setExportStart(e.target.value)} />
+                    <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-2">Начало периода</label>
+                    <div className="relative w-full bg-[#27272a] rounded-xl p-3 flex items-center justify-center text-zinc-200">
+                      <span className="text-sm font-medium">{displayDate(exportStart)}</span>
+                      <input 
+                        type="date" 
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                        value={exportStart} 
+                        onChange={(e) => setExportStart(e.target.value)} 
+                      />
+                    </div>
                   </div>
+
                   <div>
-                    <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">Конец периода</label>
-                    <input type="date" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={exportEnd} onChange={(e) => setExportEnd(e.target.value)} />
+                    <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-2">Конец периода</label>
+                    <div className="relative w-full bg-[#27272a] rounded-xl p-3 flex items-center justify-center text-zinc-200">
+                      <span className="text-sm font-medium">{displayDate(exportEnd)}</span>
+                      <input 
+                        type="date" 
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                        value={exportEnd} 
+                        onChange={(e) => setExportEnd(e.target.value)} 
+                      />
+                    </div>
                   </div>
+
                 </div>
                 <div className="flex gap-3">
                   <button onClick={() => setShowExportModal(false)} className="flex-1 p-3 rounded-xl bg-zinc-800 font-bold text-zinc-300 active:scale-95 transition-transform">Отмена</button>
