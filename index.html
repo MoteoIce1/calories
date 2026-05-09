@@ -185,12 +185,11 @@
         let updatedDailyGoals = { ...dailyGoals };
 
         if (mode === 'all') {
-            updatedDailyGoals = {}; // Очищаем ежедневные цели, теперь для всей истории работает новая глобальная
+            updatedDailyGoals = {}; 
         } else if (mode === 'today') {
             const allDates = new Set([...Object.keys(dailyLogs), ...Object.keys(dailySteps)]);
             const todayStr = getLocalDateString(new Date());
             
-            // Замораживаем старые цели для всех прошлых дней
             allDates.forEach(date => {
                 if (date < todayStr && !updatedDailyGoals[date]) {
                     updatedDailyGoals[date] = { ...goals };
@@ -347,8 +346,8 @@
       const baseMaintenance = activeGoals.maintenance || 2300;
       
       const todaySteps = dailySteps[currentDate] !== undefined ? dailySteps[currentDate] : baseStepsGoal;
-      const extraCalories = todaySteps > baseStepsGoal ? Math.round((todaySteps - baseStepsGoal) * 0.04) : 0;
-      const targetCalories = (Number(activeGoals.calories) || 0) + extraCalories;
+      const extraCalories = Math.round((todaySteps - baseStepsGoal) * 0.04);
+      const targetCalories = Math.max(0, (Number(activeGoals.calories) || 0) + extraCalories);
 
       const currentDayLogs = dailyLogs[currentDate] || [];
       const totalCals = currentDayLogs.reduce((sum, log) => sum + (log.totalCalories || 0), 0);
@@ -385,7 +384,7 @@
           const dayLogs = dailyLogs[date] || [];
           const dayCals = dayLogs.reduce((s, l) => s + (l.totalCalories || 0), 0);
           const daySteps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
-          const extraCals = daySteps > bSteps ? Math.round((daySteps - bSteps) * 0.04) : 0;
+          const extraCals = Math.round((daySteps - bSteps) * 0.04);
           const dayBurned = bMaint + extraCals;
 
           totalPeriodCals += dayCals;
@@ -469,7 +468,11 @@
                       <span className="text-xl">👟</span>
                       <div className="flex flex-col">
                         <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">Шаги</span>
-                        {extraCalories > 0 && <span className="text-[9px] text-emerald-400 font-bold mt-0.5">+{extraCalories} ккал к цели</span>}
+                        {extraCalories !== 0 && (
+                           <span className={`text-[9px] font-bold mt-0.5 ${extraCalories > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                             {extraCalories > 0 ? `+${extraCalories}` : extraCalories} ккал {extraCalories > 0 ? 'к цели' : 'от цели'}
+                           </span>
+                        )}
                       </div>
                     </div>
                     <input
@@ -711,7 +714,7 @@
                 const dayCarb = dayLogs.reduce((s, l) => s + (l.totalCarbs || 0), 0);
 
                 const daySteps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
-                const extraCals = daySteps > bSteps ? Math.round((daySteps - bSteps) * 0.04) : 0;
+                const extraCals = Math.round((daySteps - bSteps) * 0.04);
                 const dayBurned = bMaint + extraCals;
                 const dayDeficit = dayBurned - dayCals;
                 const dayDefText = dayDeficit > 0 ? `Дефицит: +${dayDeficit} ккал 🔥` : `Профицит: ${Math.abs(dayDeficit)} ккал 📈`;
