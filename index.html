@@ -333,7 +333,6 @@
         .filter(date => date >= exportStart && date <= exportEnd)
         .sort((a, b) => new Date(a) - new Date(b));
 
-      // Расчет итогов для PDF
       let totalPeriodCals = 0;
       let totalPeriodBurned = 0;
       let totalPeriodSteps = 0;
@@ -501,11 +500,11 @@
                   <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><IconTarget className="w-4 h-4" /> Ваши цели</h2>
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     <div>
-                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ (ЦЕЛЬ)</span>
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ</span>
                       <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none" value={goals.calories} onChange={(e) => updateGoals('calories', e.target.value === '' ? '' : parseFloat(e.target.value))} onFocus={(e) => e.target.select()} />
                     </div>
                     <div>
-                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">БАЗА ШАГОВ</span>
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ШАГИ (БАЗА)</span>
                       <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-300 font-bold outline-none" value={goals.baseSteps || 6000} onChange={(e) => updateGoals('baseSteps', e.target.value === '' ? '' : parseInt(e.target.value))} onFocus={(e) => e.target.select()} />
                     </div>
                     <div className="col-span-2">
@@ -596,11 +595,17 @@
                 <div className="space-y-4 mb-6">
                   <div>
                     <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">Начало периода</label>
-                    <input type="date" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={exportStart} onChange={(e) => setExportStart(e.target.value)} />
+                    <div className="relative w-full bg-[#27272a] rounded-xl p-3 flex items-center justify-center cursor-pointer">
+                      <span className="text-zinc-200 font-bold">{displayDate(exportStart)}</span>
+                      <input type="date" className="absolute opacity-0 top-0 left-0 w-full h-full cursor-pointer" value={exportStart} onChange={(e) => { if(e.target.value) setExportStart(e.target.value); }} />
+                    </div>
                   </div>
                   <div>
                     <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">Конец периода</label>
-                    <input type="date" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200" value={exportEnd} onChange={(e) => setExportEnd(e.target.value)} />
+                    <div className="relative w-full bg-[#27272a] rounded-xl p-3 flex items-center justify-center cursor-pointer">
+                      <span className="text-zinc-200 font-bold">{displayDate(exportEnd)}</span>
+                      <input type="date" className="absolute opacity-0 top-0 left-0 w-full h-full cursor-pointer" value={exportEnd} onChange={(e) => { if(e.target.value) setExportEnd(e.target.value); }} />
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-3">
