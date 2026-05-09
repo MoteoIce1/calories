@@ -45,6 +45,10 @@
 
     if (!firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
+      // Включаем офлайн кэширование для мгновенной загрузки
+      firebase.firestore().enablePersistence().catch((err) => {
+        console.warn("Firebase persistence error:", err.code);
+      });
     }
     const db = firebase.firestore();
     const docRef = db.collection('users').doc('main_profile');
@@ -150,6 +154,9 @@
             setFoods(HARDCODED_FOODS);
           }
           setIsLoading(false);
+        }, (error) => {
+           console.log("Firebase error", error);
+           setIsLoading(false);
         });
         return () => unsubscribe();
       }, []);
@@ -329,7 +336,7 @@
         return (
           <div className="flex h-[100dvh] items-center justify-center bg-[#09090b] flex-col gap-4">
             <div className="loader"></div>
-            <p className="text-zinc-500 font-bold text-sm tracking-widest uppercase">Синхронизация...</p>
+            <p className="text-zinc-500 font-bold text-sm tracking-widest uppercase">Загрузка...</p>
           </div>
         );
       }
