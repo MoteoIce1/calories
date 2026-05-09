@@ -308,7 +308,11 @@
       const totalFats = currentDayLogs.reduce((sum, log) => sum + (log.totalFats || 0), 0);
       const totalCarbs = currentDayLogs.reduce((sum, log) => sum + (log.totalCarbs || 0), 0);
       
-      const remainingCals = Math.max(0, targetCalories - totalCals);
+      const isOver = totalCals > targetCalories;
+      const displayCals = isOver ? (totalCals - targetCalories) : (targetCalories - totalCals);
+      const calsColorClass = isOver ? "text-red-500" : "text-emerald-400";
+      const calsLabel = isOver ? "перебор" : "осталось";
+      
       const progressCals = Math.min(100, (totalCals / (targetCalories || 1)) * 100);
       
       const sortedFoods = [...foods].sort((a, b) => {
@@ -340,9 +344,11 @@
               </h1>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={forceRefreshApp} className="fast-touch p-2 bg-zinc-800 rounded-xl text-zinc-300 active:scale-95 transition-transform" title="Обновить код">
-                <IconRefresh className="w-5 h-5" />
-              </button>
+              {activeTab === 'directory' && (
+                <button onClick={forceRefreshApp} className="fast-touch p-2 bg-zinc-800 rounded-xl text-zinc-300 active:scale-95 transition-transform" title="Обновить код">
+                  <IconRefresh className="w-5 h-5" />
+                </button>
+              )}
               
               {activeTab === 'diary' && (
                 <button onClick={() => setShowExportModal(true)} className="fast-touch p-2 bg-zinc-800 rounded-xl text-zinc-300 active:scale-95 transition-transform">
@@ -375,13 +381,13 @@
                         <span className="text-zinc-600 text-sm">/ {targetCalories}</span>
                       </div>
                     </div>
-                    <div className="text-right text-emerald-400">
-                      <span className="text-2xl font-black">{remainingCals}</span>
-                      <p className="text-[10px] uppercase font-bold mt-1 tracking-widest opacity-80">осталось</p>
+                    <div className={`text-right ${calsColorClass}`}>
+                      <span className="text-2xl font-black">{displayCals}</span>
+                      <p className="text-[10px] uppercase font-bold mt-1 tracking-widest opacity-80">{calsLabel}</p>
                     </div>
                   </div>
                   <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-5">
-                    <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${progressCals}%` }}></div>
+                    <div className={`h-full transition-all duration-500 ${isOver ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${progressCals}%` }}></div>
                   </div>
 
                   <div className="mt-4 mb-4 flex items-center justify-between bg-zinc-900/40 p-3 rounded-2xl border border-zinc-800/40">
