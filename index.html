@@ -14,7 +14,6 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-  
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
   <style>
@@ -72,7 +71,6 @@
       { id: 'h18', name: 'Яйцо куриное (на 100г)', calories: 155, protein: 13, fats: 11, carbs: 1 },
     ];
 
-    // Утилиты для безопасной кодировки Base64 (с поддержкой кириллицы)
     const utf8ToBase64 = (str) => window.btoa(unescape(encodeURIComponent(str)));
     const base64ToUtf8 = (str) => decodeURIComponent(escape(window.atob(str)));
 
@@ -101,6 +99,23 @@
       return `${year}-${month}-${day}`;
     };
 
+    const getDefaultStartDate = () => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 1);
+      return getLocalDateString(d);
+    };
+
+    const displayDate = (dateString) => {
+      const [year, month, day] = dateString.split('-');
+      const d = new Date(year, month - 1, day);
+      const todayStr = getLocalDateString(new Date());
+      if (dateString === todayStr) return 'Сегодня';
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (dateString === getLocalDateString(yesterday)) return 'Вчера';
+      return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    };
+
     function App() {
       const [isLoading, setIsLoading] = useState(true);
       const [goals, setGoals] = useState({ calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: 6000 });
@@ -108,7 +123,7 @@
       const [dailyLogs, setDailyLogs] = useState({});
       const [dailySteps, setDailySteps] = useState({});
       const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
-      const [activeTab, setActiveTab] = useState('diary'); // diary, directory, code
+      const [activeTab, setActiveTab] = useState('diary');
       
       const [selectedFoodId, setSelectedFoodId] = useState('');
       const [gramsInput, setGramsInput] = useState('');
@@ -119,19 +134,32 @@
       const [editValue, setEditValue] = useState({});
 
       const [showExportModal, setShowExportModal] = useState(false);
-      const [exportStart, setExportStart] = useState(getLocalDateString(new Date(Date.now() - 30*24*60*60*1000)));
+      const [exportStart, setExportStart] = useState(getDefaultStartDate());
       const [exportEnd, setExportEnd] = useState(getLocalDateString(new Date()));
 
-      // Состояния для вкладки "Код"
-      const [ghToken, setGhToken] = useState(localStorage.getItem('gh_token') || '');
-      const [ghRepo, setGhRepo] = useState(localStorage.getItem('gh_repo') || 'oice1/oice1.github.io');
-      const [ghPath, setGhPath] = useState(localStorage.getItem('gh_path') || 'index.html');
+      const [ghToken, setGhToken] = useState('');
+      const [ghRepo, setGhRepo] = useState('oice1/oice1.github.io');
+      const [ghPath, setGhPath] = useState('index.html');
       const [ghSha, setGhSha] = useState('');
       const [appCode, setAppCode] = useState('');
       const [isFetchingCode, setIsFetchingCode] = useState(false);
       const [previewMode, setPreviewMode] = useState(false);
 
       const scrollContainerRef = useRef(null);
+
+      // Безопасная загрузка настроек GitHub
+      useEffect(() => {
+        try {
+          const t = localStorage.getItem('gh_token');
+          const r = localStorage.getItem('gh_repo');
+          const p = localStorage.getItem('gh_path');
+          if (t) setGhToken(t);
+          if (r) setGhRepo(r);
+          if (p) setGhPath(p);
+        } catch (e) {
+          console.error('Ошибка доступа к localStorage');
+        }
+      }, []);
 
       useEffect(() => {
         const unsubscribe = docRef.onSnapshot((docSnap) => {
@@ -153,11 +181,12 @@
         if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
       }, [activeTab]);
 
-      // --- Функции для работы с GitHub ---
       const saveGhSettings = (token, repo, path) => {
-        localStorage.setItem('gh_token', token);
-        localStorage.setItem('gh_repo', repo);
-        localStorage.setItem('gh_path', path);
+        try {
+          localStorage.setItem('gh_token', token);
+          localStorage.setItem('gh_repo', repo);
+          localStorage.setItem('gh_path', path);
+        } catch(e) {}
         setGhToken(token); setGhRepo(repo); setGhPath(path);
       };
 
@@ -203,7 +232,6 @@
           
           if (res.ok) {
             alert('Код успешно отправлен! Перезагружаю приложение...');
-            // Сбрасываем кэш PWA добавляя параметр ко времени
             window.location.href = window.location.pathname + '?v=' + Date.now();
           } else {
             const data = await res.json();
@@ -215,7 +243,6 @@
         setIsFetchingCode(false);
       };
 
-      // --- Остальные функции трекера ---
       const updateGoals = (field, value) => {
         const updated = { ...goals, [field]: value };
         setGoals(updated);
@@ -377,7 +404,7 @@
           <header className="shrink-0 pt-8 px-6 pb-4 bg-[#09090b] flex justify-between items-center z-10">
             <div>
               <h1 className="text-2xl font-bold">
-                {activeTab === 'diary' ? 'Дневник' : activeTab === 'directory' ? 'Настройки' : 'Редактор кода'}
+                {activeTab === 'diary' ? 'Дневник' : activeTab === 'directory' ? 'Настройки' : 'Редактор'}
               </h1>
             </div>
             {activeTab === 'diary' && (
@@ -388,6 +415,8 @@
           </header>
 
           <main ref={scrollContainerRef} className="flex-1 overflow-y-auto px-5 pt-2 pb-8">
+            
+            {/* ВКЛАДКА "ДНЕВНИК" */}
             {activeTab === 'diary' && (
               <div className="space-y-4">
                 
@@ -492,6 +521,7 @@
               </div>
             )}
 
+            {/* ВКЛАДКА "БАЗА И НАСТРОЙКИ" */}
             {activeTab === 'directory' && (
               <div className="space-y-6">
                 
