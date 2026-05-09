@@ -120,10 +120,16 @@
 
     function App() {
       const [isLoading, setIsLoading] = useState(true);
-      const [goals, setGoals] = useState({ calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: 6000, maintenance: 2300 });
+      
+      const defaultGoals = { calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: 6000, maintenance: 2300 };
+      const [goals, setGoals] = useState(defaultGoals);
+      const [draftGoals, setDraftGoals] = useState(defaultGoals);
+      const [dailyGoals, setDailyGoals] = useState({});
+      
       const [foods, setFoods] = useState([]);
       const [dailyLogs, setDailyLogs] = useState({});
       const [dailySteps, setDailySteps] = useState({});
+      
       const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
       const [activeTab, setActiveTab] = useState('diary');
       
@@ -136,6 +142,7 @@
       const [editValue, setEditValue] = useState({});
 
       const [showExportModal, setShowExportModal] = useState(false);
+      const [showGoalModal, setShowGoalModal] = useState(false);
       const [exportStart, setExportStart] = useState(getDefaultStartDate());
       const [exportEnd, setExportEnd] = useState(getLocalDateString(new Date()));
 
@@ -145,7 +152,11 @@
         const unsubscribe = docRef.onSnapshot((docSnap) => {
           if (docSnap.exists) {
             const data = docSnap.data();
-            if (data.goals) setGoals({...goals, ...data.goals});
+            if (data.goals) {
+                setGoals({...goals, ...data.goals});
+                if (isLoading) setDraftGoals({...goals, ...data.goals});
+            }
+            if (data.dailyGoals) setDailyGoals(data.dailyGoals);
             if (data.foods) setFoods(data.foods);
             if (data.dailyLogs) setDailyLogs(data.dailyLogs);
             if (data.dailySteps) setDailySteps(data.dailySteps);
@@ -164,10 +175,37 @@
         if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
       }, [activeTab]);
 
-      const updateGoals = (field, value) => {
-        const updated = { ...goals, [field]: value };
-        setGoals(updated);
-        docRef.set({ goals: updated }, { merge: true });
+      const handleDraftGoalChange = (field, val) => {
+        setDraftGoals({ ...draftGoals, [field]: val });
+      };
+
+      const confirmGoalSave = (mode) => {
+        if (!confirm('Вы уверены, что хотите применить новые настройки?')) return;
+        
+        let updatedDailyGoals = { ...dailyGoals };
+
+        if (mode === 'all') {
+            updatedDailyGoals = {}; // Очищаем ежедневные цели, теперь для всей истории работает новая глобальная
+        } else if (mode === 'today') {
+            const allDates = new Set([...Object.keys(dailyLogs), ...Object.keys(dailySteps)]);
+            const todayStr = getLocalDateString(new Date());
+            
+            // Замораживаем старые цели для всех прошлых дней
+            allDates.forEach(date => {
+                if (date < todayStr && !updatedDailyGoals[date]) {
+                    updatedDailyGoals[date] = { ...goals };
+                }
+            });
+        }
+
+        docRef.set({ goals: draftGoals, dailyGoals: updatedDailyGoals }, { merge: true });
+        setGoals(draftGoals);
+        setDailyGoals(updatedDailyGoals);
+        setShowGoalModal(false);
+      };
+
+      const getEffectiveGoals = (date) => {
+          return dailyGoals[date] || goals;
       };
 
       const handleUpdateSteps = (val) => {
@@ -303,12 +341,14 @@
         window.location.href = window.location.pathname + '?v=' + Date.now();
       };
 
-      const baseStepsGoal = goals.baseSteps || 6000;
-      const baseMaintenance = goals.maintenance || 2300;
+      // Определяем цели для текущего просматриваемого дня
+      const activeGoals = getEffectiveGoals(currentDate);
+      const baseStepsGoal = activeGoals.baseSteps || 6000;
+      const baseMaintenance = activeGoals.maintenance || 2300;
       
       const todaySteps = dailySteps[currentDate] !== undefined ? dailySteps[currentDate] : baseStepsGoal;
       const extraCalories = todaySteps > baseStepsGoal ? Math.round((todaySteps - baseStepsGoal) * 0.04) : 0;
-      const targetCalories = (Number(goals.calories) || 0) + extraCalories;
+      const targetCalories = (Number(activeGoals.calories) || 0) + extraCalories;
 
       const currentDayLogs = dailyLogs[currentDate] || [];
       const totalCals = currentDayLogs.reduce((sum, log) => sum + (log.totalCalories || 0), 0);
@@ -338,11 +378,15 @@
       let totalPeriodSteps = 0;
 
       filteredDatesForPdf.forEach(date => {
+          const dayActiveGoals = getEffectiveGoals(date);
+          const bSteps = dayActiveGoals.baseSteps || 6000;
+          const bMaint = dayActiveGoals.maintenance || 2300;
+
           const dayLogs = dailyLogs[date] || [];
           const dayCals = dayLogs.reduce((s, l) => s + (l.totalCalories || 0), 0);
-          const daySteps = dailySteps[date] !== undefined ? dailySteps[date] : baseStepsGoal;
-          const extraCals = daySteps > baseStepsGoal ? Math.round((daySteps - baseStepsGoal) * 0.04) : 0;
-          const dayBurned = baseMaintenance + extraCals;
+          const daySteps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
+          const extraCals = daySteps > bSteps ? Math.round((daySteps - bSteps) * 0.04) : 0;
+          const dayBurned = bMaint + extraCals;
 
           totalPeriodCals += dayCals;
           totalPeriodBurned += dayBurned;
@@ -352,6 +396,8 @@
       const periodDeficit = totalPeriodBurned - totalPeriodCals;
       const avgDeficit = filteredDatesForPdf.length ? Math.round(periodDeficit / filteredDatesForPdf.length) : 0;
       const periodDefText = periodDeficit > 0 ? `Дефицит: +${periodDeficit} ккал 🔥` : `Профицит: ${Math.abs(periodDeficit)} ккал 📈`;
+
+      const hasUnsavedGoals = JSON.stringify(goals) !== JSON.stringify(draftGoals);
 
       if (isLoading) {
         return (
@@ -436,9 +482,9 @@
                   </div>
                   
                   <div className="flex flex-col gap-3 mt-4 border-t border-zinc-800/50 pt-4">
-                    <MacroBar label="Белок" current={totalPro} goal={goals.protein} colorClass="text-indigo-400" bgClass="bg-indigo-500" />
-                    <MacroBar label="Жиры" current={totalFats} goal={goals.fats} colorClass="text-amber-400" bgClass="bg-amber-500" />
-                    <MacroBar label="Углеводы" current={totalCarbs} goal={goals.carbs} colorClass="text-blue-400" bgClass="bg-blue-500" />
+                    <MacroBar label="Белок" current={totalPro} goal={activeGoals.protein} colorClass="text-indigo-400" bgClass="bg-indigo-500" />
+                    <MacroBar label="Жиры" current={totalFats} goal={activeGoals.fats} colorClass="text-amber-400" bgClass="bg-amber-500" />
+                    <MacroBar label="Углеводы" current={totalCarbs} goal={activeGoals.carbs} colorClass="text-blue-400" bgClass="bg-blue-500" />
                   </div>
                 </div>
 
@@ -500,30 +546,35 @@
                   <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><IconTarget className="w-4 h-4" /> Ваши цели</h2>
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     <div>
-                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none" value={goals.calories} onChange={(e) => updateGoals('calories', e.target.value === '' ? '' : parseFloat(e.target.value))} onFocus={(e) => e.target.select()} />
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ (ЦЕЛЬ)</span>
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none" value={draftGoals.calories} onChange={(e) => handleDraftGoalChange('calories', e.target.value === '' ? '' : parseFloat(e.target.value))} onFocus={(e) => e.target.select()} />
                     </div>
                     <div>
-                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ШАГИ (БАЗА)</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-300 font-bold outline-none" value={goals.baseSteps || 6000} onChange={(e) => updateGoals('baseSteps', e.target.value === '' ? '' : parseInt(e.target.value))} onFocus={(e) => e.target.select()} />
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">БАЗА ШАГОВ</span>
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-300 font-bold outline-none" value={draftGoals.baseSteps} onChange={(e) => handleDraftGoalChange('baseSteps', e.target.value === '' ? '' : parseInt(e.target.value))} onFocus={(e) => e.target.select()} />
                     </div>
                     <div className="col-span-2">
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">НОРМА (БЕЗ ДЕФИЦИТА)</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-white font-bold outline-none" value={goals.maintenance || 2300} onChange={(e) => updateGoals('maintenance', e.target.value === '' ? '' : parseInt(e.target.value))} onFocus={(e) => e.target.select()} />
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-white font-bold outline-none" value={draftGoals.maintenance} onChange={(e) => handleDraftGoalChange('maintenance', e.target.value === '' ? '' : parseInt(e.target.value))} onFocus={(e) => e.target.select()} />
                     </div>
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">БЕЛОК (Г)</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none" value={goals.protein} onChange={(e) => updateGoals('protein', e.target.value === '' ? '' : parseFloat(e.target.value))} onFocus={(e) => e.target.select()} />
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none" value={draftGoals.protein} onChange={(e) => handleDraftGoalChange('protein', e.target.value === '' ? '' : parseFloat(e.target.value))} onFocus={(e) => e.target.select()} />
                     </div>
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">ЖИРЫ (Г)</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none" value={goals.fats} onChange={(e) => updateGoals('fats', e.target.value === '' ? '' : parseFloat(e.target.value))} onFocus={(e) => e.target.select()} />
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none" value={draftGoals.fats} onChange={(e) => handleDraftGoalChange('fats', e.target.value === '' ? '' : parseFloat(e.target.value))} onFocus={(e) => e.target.select()} />
                     </div>
                     <div className="col-span-2">
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">УГЛЕВОДЫ (Г)</span>
-                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none" value={goals.carbs} onChange={(e) => updateGoals('carbs', e.target.value === '' ? '' : parseFloat(e.target.value))} onFocus={(e) => e.target.select()} />
+                      <input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none" value={draftGoals.carbs} onChange={(e) => handleDraftGoalChange('carbs', e.target.value === '' ? '' : parseFloat(e.target.value))} onFocus={(e) => e.target.select()} />
                     </div>
                   </div>
+                  {hasUnsavedGoals && (
+                    <button onClick={() => setShowGoalModal(true)} className="w-full bg-indigo-600 text-white p-4 rounded-xl font-bold active:scale-95 mt-4 transition-transform shadow-lg shadow-indigo-500/20">
+                      💾 Сохранить новые цели
+                    </button>
+                  )}
                 </div>
 
                 <form onSubmit={handleAddFood} className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
@@ -588,6 +639,22 @@
             </button>
           </nav>
 
+          {/* Модальное окно настройки целей */}
+          {showGoalModal && (
+            <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm">
+                <h3 className="text-lg font-bold mb-2">Сохранение целей</h3>
+                <p className="text-sm text-zinc-400 mb-6">Как применить новые значения (Ккал, Шаги, БЖУ)?</p>
+                <div className="flex flex-col gap-3">
+                  <button onClick={() => confirmGoalSave('all')} className="p-4 rounded-xl bg-indigo-600 font-bold text-white active:scale-95 transition-transform text-sm">Ко всей истории (пересчитать всё)</button>
+                  <button onClick={() => confirmGoalSave('today')} className="p-4 rounded-xl bg-emerald-600 font-bold text-white active:scale-95 transition-transform text-sm">Только с сегодня (заморозить старое)</button>
+                  <button onClick={() => setShowGoalModal(false)} className="p-4 rounded-xl bg-zinc-800 font-bold text-zinc-300 active:scale-95 transition-transform text-sm mt-2">Отмена</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Модальное окно выгрузки PDF */}
           {showExportModal && (
             <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm">
@@ -595,22 +662,22 @@
                 <div className="space-y-4 mb-6">
                   <div>
                     <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">Начало периода</label>
-                    <div className="relative w-full bg-[#27272a] rounded-xl p-3 flex items-center justify-center cursor-pointer">
+                    <div className="relative w-full bg-[#27272a] rounded-xl p-4 flex items-center justify-center cursor-pointer border border-zinc-700/50">
                       <span className="text-zinc-200 font-bold">{displayDate(exportStart)}</span>
                       <input type="date" className="absolute opacity-0 top-0 left-0 w-full h-full cursor-pointer" value={exportStart} onChange={(e) => { if(e.target.value) setExportStart(e.target.value); }} />
                     </div>
                   </div>
                   <div>
                     <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">Конец периода</label>
-                    <div className="relative w-full bg-[#27272a] rounded-xl p-3 flex items-center justify-center cursor-pointer">
+                    <div className="relative w-full bg-[#27272a] rounded-xl p-4 flex items-center justify-center cursor-pointer border border-zinc-700/50">
                       <span className="text-zinc-200 font-bold">{displayDate(exportEnd)}</span>
                       <input type="date" className="absolute opacity-0 top-0 left-0 w-full h-full cursor-pointer" value={exportEnd} onChange={(e) => { if(e.target.value) setExportEnd(e.target.value); }} />
                     </div>
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setShowExportModal(false)} className="flex-1 p-3 rounded-xl bg-zinc-800 font-bold text-zinc-300 active:scale-95 transition-transform">Отмена</button>
-                  <button onClick={generatePDF} className="flex-1 p-3 rounded-xl bg-emerald-600 font-bold text-white active:scale-95 transition-transform">Скачать</button>
+                  <button onClick={() => setShowExportModal(false)} className="flex-1 p-4 rounded-xl bg-zinc-800 font-bold text-zinc-300 active:scale-95 transition-transform">Отмена</button>
+                  <button onClick={generatePDF} className="flex-1 p-4 rounded-xl bg-emerald-600 font-bold text-white active:scale-95 transition-transform">Скачать</button>
                 </div>
               </div>
             </div>
@@ -633,15 +700,19 @@
               <p>За выбранный период нет данных.</p>
             ) : (
               filteredDatesForPdf.map(date => {
+                const dayActiveGoals = getEffectiveGoals(date);
+                const bSteps = dayActiveGoals.baseSteps || 6000;
+                const bMaint = dayActiveGoals.maintenance || 2300;
+
                 const dayLogs = dailyLogs[date] || [];
                 const dayCals = dayLogs.reduce((s, l) => s + (l.totalCalories || 0), 0);
                 const dayPro = dayLogs.reduce((s, l) => s + (l.totalProtein || 0), 0);
                 const dayFat = dayLogs.reduce((s, l) => s + (l.totalFats || 0), 0);
                 const dayCarb = dayLogs.reduce((s, l) => s + (l.totalCarbs || 0), 0);
 
-                const daySteps = dailySteps[date] !== undefined ? dailySteps[date] : baseStepsGoal;
-                const extraCals = daySteps > baseStepsGoal ? Math.round((daySteps - baseStepsGoal) * 0.04) : 0;
-                const dayBurned = baseMaintenance + extraCals;
+                const daySteps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
+                const extraCals = daySteps > bSteps ? Math.round((daySteps - bSteps) * 0.04) : 0;
+                const dayBurned = bMaint + extraCals;
                 const dayDeficit = dayBurned - dayCals;
                 const dayDefText = dayDeficit > 0 ? `Дефицит: +${dayDeficit} ккал 🔥` : `Профицит: ${Math.abs(dayDeficit)} ккал 📈`;
 
