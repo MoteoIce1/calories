@@ -14,6 +14,7 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
   <style>
@@ -60,15 +61,17 @@
     const IconCheck = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
     const IconDownload = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5 5 5-5m-5 5V3"/></svg>;
     const IconCode = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>;
+    const IconStar = ({className, fill="none"}) => <svg className={className} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>;
+    const IconRefresh = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>;
 
     const HARDCODED_FOODS = [
-      { id: 'h1', name: 'Котлета (говядина)', calories: 255, protein: 25, fats: 17, carbs: 0 },
-      { id: 'h2', name: 'Котлеты куриные', calories: 160, protein: 16, fats: 9, carbs: 4 },
-      { id: 'h4', name: 'Куриное филе (сырое)', calories: 113, protein: 23.6, fats: 1.9, carbs: 0 },
-      { id: 'h7', name: 'Гречка вареная', calories: 132, protein: 4.5, fats: 1.1, carbs: 26 },
-      { id: 'h13', name: 'Помидор', calories: 19, protein: 1, fats: 0.2, carbs: 4 },
-      { id: 'h14', name: 'Огурец', calories: 15, protein: 1, fats: 0.1, carbs: 3 },
-      { id: 'h18', name: 'Яйцо куриное (на 100г)', calories: 155, protein: 13, fats: 11, carbs: 1 },
+      { id: 'h1', name: 'Котлета (говядина)', calories: 255, protein: 25, fats: 17, carbs: 0, isFavorite: false },
+      { id: 'h2', name: 'Котлеты куриные', calories: 160, protein: 16, fats: 9, carbs: 4, isFavorite: false },
+      { id: 'h4', name: 'Куриное филе (сырое)', calories: 113, protein: 23.6, fats: 1.9, carbs: 0, isFavorite: false },
+      { id: 'h7', name: 'Гречка вареная', calories: 132, protein: 4.5, fats: 1.1, carbs: 26, isFavorite: false },
+      { id: 'h13', name: 'Помидор', calories: 19, protein: 1, fats: 0.2, carbs: 4, isFavorite: false },
+      { id: 'h14', name: 'Огурец', calories: 15, protein: 1, fats: 0.1, carbs: 3, isFavorite: false },
+      { id: 'h18', name: 'Яйцо куриное (на 100г)', calories: 155, protein: 13, fats: 11, carbs: 1, isFavorite: false },
     ];
 
     const utf8ToBase64 = (str) => window.btoa(unescape(encodeURIComponent(str)));
@@ -147,7 +150,6 @@
 
       const scrollContainerRef = useRef(null);
 
-      // Безопасная загрузка настроек GitHub
       useEffect(() => {
         try {
           const t = localStorage.getItem('gh_token');
@@ -156,9 +158,7 @@
           if (t) setGhToken(t);
           if (r) setGhRepo(r);
           if (p) setGhPath(p);
-        } catch (e) {
-          console.error('Ошибка доступа к localStorage');
-        }
+        } catch (e) {}
       }, []);
 
       useEffect(() => {
@@ -311,7 +311,8 @@
           calories: parseFloat(newFood.cals || 0),
           protein: parseFloat(newFood.pro || 0),
           fats: parseFloat(newFood.fat || 0),
-          carbs: parseFloat(newFood.carb || 0)
+          carbs: parseFloat(newFood.carb || 0),
+          isFavorite: false
         };
         const updatedFoods = [foodItem, ...foods];
         setFoods(updatedFoods);
@@ -352,6 +353,13 @@
         docRef.set({ foods: updatedFoods }, { merge: true });
       };
 
+      const toggleFavorite = (e, id, currentStatus) => {
+        e.stopPropagation();
+        const updatedFoods = foods.map(f => f.id === id ? { ...f, isFavorite: !currentStatus } : f);
+        setFoods(updatedFoods);
+        docRef.set({ foods: updatedFoods }, { merge: true });
+      };
+
       const generatePDF = () => {
         const element = document.getElementById('pdf-export-container');
         element.style.display = 'block';
@@ -370,6 +378,10 @@
         });
       };
 
+      const forceRefreshApp = () => {
+        window.location.href = window.location.pathname + '?v=' + Date.now();
+      };
+
       const baseStepsGoal = goals.baseSteps || 6000;
       const todaySteps = dailySteps[currentDate] !== undefined ? dailySteps[currentDate] : baseStepsGoal;
       const extraCalories = todaySteps > baseStepsGoal ? Math.round((todaySteps - baseStepsGoal) * 0.04) : 0;
@@ -383,7 +395,13 @@
       
       const remainingCals = Math.max(0, targetCalories - totalCals);
       const progressCals = Math.min(100, (totalCals / (targetCalories || 1)) * 100);
-      const sortedFoods = [...foods].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+      
+      // Сортировка: сначала избранные, потом по алфавиту
+      const sortedFoods = [...foods].sort((a, b) => {
+        if (a.isFavorite && !b.isFavorite) return -1;
+        if (!a.isFavorite && b.isFavorite) return 1;
+        return a.name.localeCompare(b.name, 'ru');
+      });
 
       const filteredDatesForPdf = Object.keys(dailyLogs)
         .filter(date => date >= exportStart && date <= exportEnd)
@@ -404,14 +422,32 @@
           <header className="shrink-0 pt-8 px-6 pb-4 bg-[#09090b] flex justify-between items-center z-10">
             <div>
               <h1 className="text-2xl font-bold">
-                {activeTab === 'diary' ? 'Дневник' : activeTab === 'directory' ? 'Настройки' : 'Редактор'}
+                {activeTab === 'diary' ? 'Дневник' : activeTab === 'directory' ? 'База' : 'Редактор'}
               </h1>
             </div>
-            {activeTab === 'diary' && (
-              <button onClick={() => setShowExportModal(true)} className="fast-touch p-2 bg-zinc-800 rounded-xl text-zinc-300 active:scale-95 transition-transform">
-                <IconDownload className="w-5 h-5" />
+            <div className="flex items-center gap-2">
+              <button onClick={forceRefreshApp} className="fast-touch p-2 bg-zinc-800 rounded-xl text-zinc-300 active:scale-95 transition-transform">
+                <IconRefresh className="w-5 h-5" />
               </button>
-            )}
+              
+              {activeTab === 'diary' && (
+                <button onClick={() => setShowExportModal(true)} className="fast-touch p-2 bg-zinc-800 rounded-xl text-zinc-300 active:scale-95 transition-transform">
+                  <IconDownload className="w-5 h-5" />
+                </button>
+              )}
+              
+              {activeTab === 'directory' && (
+                <button onClick={() => setActiveTab('code')} className="fast-touch p-2 bg-zinc-800 rounded-xl text-zinc-300 active:scale-95 transition-transform">
+                  <IconCode className="w-5 h-5" />
+                </button>
+              )}
+
+              {activeTab === 'code' && (
+                <button onClick={() => setActiveTab('directory')} className="fast-touch p-2 bg-zinc-800 rounded-xl text-zinc-300 active:scale-95 transition-transform">
+                  <IconChevronLeft className="w-5 h-5" />
+                </button>
+              )}
+            </div>
           </header>
 
           <main ref={scrollContainerRef} className="flex-1 overflow-y-auto px-5 pt-2 pb-8">
@@ -474,7 +510,7 @@
                 <form onSubmit={handleAddLog} className="bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-2">
                   <select className="bg-[#27272a] rounded-2xl p-4 outline-none appearance-none text-zinc-200 text-sm font-medium truncate w-full" value={selectedFoodId} onChange={(e) => setSelectedFoodId(e.target.value)} required>
                     <option value="" disabled>Выберите продукт</option>
-                    {sortedFoods.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    {sortedFoods.map(f => <option key={f.id} value={f.id}>{f.isFavorite ? '⭐️ ' : ''}{f.name}</option>)}
                   </select>
                   <div className="flex gap-2">
                     <input type="number" placeholder="Вес (готового, без костей)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-sm" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => e.target.select()} required />
@@ -581,8 +617,12 @@
                            <button onClick={() => updateFoodBase(f.id)} className="w-full bg-emerald-600 p-2 rounded-lg flex justify-center"><IconCheck className="w-5 h-5 text-white" /></button>
                         </div>
                       ) : (
-                        <div className="flex justify-between items-center cursor-pointer" onClick={() => { setEditingFoodId(f.id); setEditValue({ ...f, fats: f.fats || 0, carbs: f.carbs || 0 }); }}>
-                          <div className="flex-1">
+                        <div className="flex justify-between items-center cursor-pointer">
+                          <button onClick={(e) => toggleFavorite(e, f.id, f.isFavorite)} className={`fast-touch p-2 pl-0 ${f.isFavorite ? 'text-amber-400' : 'text-zinc-700'}`}>
+                            <IconStar className="w-6 h-6" fill={f.isFavorite ? "currentColor" : "none"} />
+                          </button>
+                          
+                          <div className="flex-1" onClick={() => { setEditingFoodId(f.id); setEditValue({ ...f, fats: f.fats || 0, carbs: f.carbs || 0 }); }}>
                             <span className="text-sm font-medium border-b border-zinc-800/50 pb-0.5">{f.name}</span>
                             <div className="flex gap-3 text-[10px] font-bold uppercase mt-1.5">
                               <span className="text-emerald-500">{f.calories || 0} ккал</span>
@@ -591,6 +631,7 @@
                               <span className="text-blue-500">У: {f.carbs || 0}</span>
                             </div>
                           </div>
+                          
                           <button onClick={(e) => deleteFood(e, f.id)} className="fast-touch text-zinc-800 active:text-red-500 p-2"><IconTrash className="w-5 h-5" /></button>
                         </div>
                       )}
@@ -646,14 +687,11 @@
           </main>
 
           <nav className="shrink-0 bg-[#09090b] flex justify-around pb-2 pt-2 safe-pb relative z-40 border-t border-zinc-900">
-            <button onClick={() => setActiveTab('diary')} className={`fast-touch w-24 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'diary' ? 'text-emerald-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
+            <button onClick={() => setActiveTab('diary')} className={`fast-touch w-32 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'diary' ? 'text-emerald-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
               <IconCalendar className="w-6 h-6" /><span className="text-[10px] font-bold mt-1 uppercase tracking-widest">Дневник</span>
             </button>
-            <button onClick={() => setActiveTab('directory')} className={`fast-touch w-24 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'directory' ? 'text-indigo-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
+            <button onClick={() => setActiveTab('directory')} className={`fast-touch w-32 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'directory' ? 'text-indigo-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
               <IconBook className="w-6 h-6" /><span className="text-[10px] font-bold mt-1 uppercase tracking-widest">База</span>
-            </button>
-            <button onClick={() => setActiveTab('code')} className={`fast-touch w-24 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'code' ? 'text-amber-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
-              <IconCode className="w-6 h-6" /><span className="text-[10px] font-bold mt-1 uppercase tracking-widest">Код</span>
             </button>
           </nav>
 
