@@ -129,6 +129,7 @@
       const [foods, setFoods] = useState([]);
       const [dailyLogs, setDailyLogs] = useState({});
       const [dailySteps, setDailySteps] = useState({});
+      const [dailyMetrics, setDailyMetrics] = useState({});
       
       const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
       const [activeTab, setActiveTab] = useState('diary');
@@ -160,6 +161,7 @@
             if (data.foods) setFoods(data.foods);
             if (data.dailyLogs) setDailyLogs(data.dailyLogs);
             if (data.dailySteps) setDailySteps(data.dailySteps);
+            if (data.dailyMetrics) setDailyMetrics(data.dailyMetrics);
           } else {
             setFoods(HARDCODED_FOODS);
           }
@@ -212,6 +214,15 @@
         const updated = { ...dailySteps, [currentDate]: isNaN(num) ? '' : num };
         setDailySteps(updated);
         docRef.set({ dailySteps: updated }, { merge: true });
+      };
+
+      const handleUpdateMetrics = (field, val) => {
+        const num = parseFloat(val);
+        const currentDayMetrics = dailyMetrics[currentDate] || {};
+        const updatedDay = { ...currentDayMetrics, [field]: isNaN(num) ? '' : num };
+        const updated = { ...dailyMetrics, [currentDate]: updatedDay };
+        setDailyMetrics(updated);
+        docRef.set({ dailyMetrics: updated }, { merge: true });
       };
 
       const handleAddLog = (e) => {
@@ -340,14 +351,13 @@
         window.location.href = window.location.pathname + '?v=' + Date.now();
       };
 
-      // Определяем цели для текущего просматриваемого дня
       const activeGoals = getEffectiveGoals(currentDate);
       const baseStepsGoal = activeGoals.baseSteps || 6000;
       const baseMaintenance = activeGoals.maintenance || 2300;
       
       const todaySteps = dailySteps[currentDate] !== undefined ? dailySteps[currentDate] : baseStepsGoal;
-      const extraCalories = Math.round((todaySteps - baseStepsGoal) * 0.04);
-      const targetCalories = Math.max(0, (Number(activeGoals.calories) || 0) + extraCalories);
+      const extraCalories = todaySteps > baseStepsGoal ? Math.round((todaySteps - baseStepsGoal) * 0.04) : 0;
+      const targetCalories = (Number(activeGoals.calories) || 0) + extraCalories;
 
       const currentDayLogs = dailyLogs[currentDate] || [];
       const totalCals = currentDayLogs.reduce((sum, log) => sum + (log.totalCalories || 0), 0);
@@ -384,7 +394,7 @@
           const dayLogs = dailyLogs[date] || [];
           const dayCals = dayLogs.reduce((s, l) => s + (l.totalCalories || 0), 0);
           const daySteps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
-          const extraCals = Math.round((daySteps - bSteps) * 0.04);
+          const extraCals = daySteps > bSteps ? Math.round((daySteps - bSteps) * 0.04) : 0;
           const dayBurned = bMaint + extraCals;
 
           totalPeriodCals += dayCals;
@@ -468,11 +478,7 @@
                       <span className="text-xl">👟</span>
                       <div className="flex flex-col">
                         <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">Шаги</span>
-                        {extraCalories !== 0 && (
-                           <span className={`text-[9px] font-bold mt-0.5 ${extraCalories > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                             {extraCalories > 0 ? `+${extraCalories}` : extraCalories} ккал {extraCalories > 0 ? 'к цели' : 'от цели'}
-                           </span>
-                        )}
+                        {extraCalories > 0 && <span className="text-[9px] text-emerald-400 font-bold mt-0.5">+{extraCalories} ккал к цели</span>}
                       </div>
                     </div>
                     <input
@@ -482,6 +488,21 @@
                       onChange={(e) => handleUpdateSteps(e.target.value)}
                       onFocus={(e) => e.target.select()}
                     />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    <div className="bg-[#27272a] rounded-2xl p-3 flex flex-col items-center border border-zinc-700/50">
+                      <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-widest mb-1">Вес (кг)</span>
+                      <input type="number" step="0.1" className="w-full bg-transparent text-center text-base font-bold text-zinc-200 outline-none" value={dailyMetrics[currentDate]?.weight || ''} onChange={(e) => handleUpdateMetrics('weight', e.target.value)} onFocus={(e) => e.target.select()} />
+                    </div>
+                    <div className="bg-[#27272a] rounded-2xl p-3 flex flex-col items-center border border-zinc-700/50">
+                      <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-widest mb-1">Жир (%)</span>
+                      <input type="number" step="0.1" className="w-full bg-transparent text-center text-base font-bold text-zinc-200 outline-none" value={dailyMetrics[currentDate]?.fat || ''} onChange={(e) => handleUpdateMetrics('fat', e.target.value)} onFocus={(e) => e.target.select()} />
+                    </div>
+                    <div className="bg-[#27272a] rounded-2xl p-3 flex flex-col items-center border border-zinc-700/50">
+                      <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-widest mb-1">Мышцы (%)</span>
+                      <input type="number" step="0.1" className="w-full bg-transparent text-center text-base font-bold text-zinc-200 outline-none" value={dailyMetrics[currentDate]?.muscle || ''} onChange={(e) => handleUpdateMetrics('muscle', e.target.value)} onFocus={(e) => e.target.select()} />
+                    </div>
                   </div>
                   
                   <div className="flex flex-col gap-3 mt-4 border-t border-zinc-800/50 pt-4">
@@ -714,10 +735,17 @@
                 const dayCarb = dayLogs.reduce((s, l) => s + (l.totalCarbs || 0), 0);
 
                 const daySteps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
-                const extraCals = Math.round((daySteps - bSteps) * 0.04);
+                const extraCals = daySteps > bSteps ? Math.round((daySteps - bSteps) * 0.04) : 0;
                 const dayBurned = bMaint + extraCals;
                 const dayDeficit = dayBurned - dayCals;
                 const dayDefText = dayDeficit > 0 ? `Дефицит: +${dayDeficit} ккал 🔥` : `Профицит: ${Math.abs(dayDeficit)} ккал 📈`;
+
+                const m = dailyMetrics[date] || {};
+                const mText = [
+                  m.weight ? `Вес: ${m.weight} кг` : '',
+                  m.fat ? `Жир: ${m.fat}%` : '',
+                  m.muscle ? `Мышцы: ${m.muscle}%` : ''
+                ].filter(Boolean).join(' | ');
 
                 return (
                   <div key={date} style={{ marginBottom: '30px' }}>
@@ -729,6 +757,7 @@
                       <span style={{ fontSize: '14px', color: '#000' }}><strong>Итог дня:</strong> {dayDefText}</span><br/>
                       Б: {dayPro.toFixed(1)}г | Ж: {dayFat.toFixed(1)}г | У: {dayCarb.toFixed(1)}г
                     </p>
+                    {mText && <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#005f73' }}><strong>Тело:</strong> {mText}</p>}
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                       <thead>
                         <tr style={{ backgroundColor: '#f4f4f5', textAlign: 'left' }}>
