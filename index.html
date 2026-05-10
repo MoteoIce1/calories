@@ -385,7 +385,7 @@
         const element = document.getElementById('pdf-export-container');
         element.style.display = 'block';
         
-        // Даем браузеру 500мс, чтобы он 100% успел нарисовать графики и текст до скриншота
+        // Увеличили паузу до 1000мс для надежной отрисовки таблиц графиков
         setTimeout(() => {
           const opt = {
             margin:       10,
@@ -403,7 +403,7 @@
             element.style.display = 'none';
             setShowExportModal(false);
           });
-        }, 500); 
+        }, 1000); 
       };
 
       const forceRefreshApp = () => {
@@ -843,7 +843,7 @@
             {chartDates.length > 1 && (
                <div style={{ marginBottom: '40px' }}>
                   <h2 style={{ fontSize: '22px', fontWeight: 'bold', borderBottom: '3px solid #10b981', paddingBottom: '10px', marginBottom: '20px' }}>Динамика прогресса</h2>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <div style={{ textAlign: 'center' }}>
                      <ProgressChart title="Вес (кг)" data={chartWeight} dates={chartDates} color="#3b82f6" />
                      <ProgressChart title="Процент жира (%)" data={chartFat} dates={chartDates} color="#ef4444" />
                      <ProgressChart title="Безжировая масса (кг)" data={chartLean} dates={chartDates} color="#8b5cf6" />
