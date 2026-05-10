@@ -340,10 +340,10 @@
         const element = document.getElementById('pdf-export-container');
         element.style.display = 'block';
         
-        // Даем 500мс для рендера таблицы, после чего сохраняем PDF
+        // Даем браузеру секунду, чтобы отрендерить таблицы, сдвигаем поля и расширяем область видимости до 820px
         setTimeout(() => {
           const opt = {
-            margin:       [10, 5, 10, 5], // Уменьшили боковые отступы на листе А4
+            margin:       [10, 5, 10, 5], 
             filename:     `Отчет_${exportStart}_${exportEnd}.pdf`,
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 820 },
@@ -358,7 +358,7 @@
             element.style.display = 'none';
             setShowExportModal(false);
           });
-        }, 500); 
+        }, 1000); 
       };
 
       const forceRefreshApp = () => {
@@ -400,7 +400,6 @@
       let totalPeriodBurned = 0;
       let totalPeriodSteps = 0;
 
-      // Массивы для общей таблицы прогресса
       const chartWeight = [];
       const chartFat = [];
       const chartLean = [];
@@ -434,7 +433,6 @@
       const avgDeficit = filteredDatesForPdf.length ? Math.round(periodDeficit / filteredDatesForPdf.length) : 0;
       const periodDefText = periodDeficit > 0 ? `Дефицит: +${periodDeficit} ккал 🔥` : `Профицит: ${Math.abs(periodDeficit)} ккал 📈`;
 
-      // Расчет первого и последнего значения для таблицы прогресса
       const getFirstValid = (arr) => arr.find(v => v !== null && v !== undefined && !isNaN(v));
       const getLastValid = (arr) => [...arr].reverse().find(v => v !== null && v !== undefined && !isNaN(v));
 
@@ -445,7 +443,14 @@
 
       const hasBodyData = wStart !== undefined || fStart !== undefined || lStart !== undefined || fmStart !== undefined;
 
-      const datesWithMetrics = filteredDatesForPdf.filter(date => {
+      // Получаем все даты для которых есть данные весов, чтобы нарисовать таблицу по дням
+      // (даже если в этот день не ели калории, но есть данные весов в диапазоне PDF)
+      const allDatesInRange = new Set([
+         ...filteredDatesForPdf, 
+         ...Object.keys(dailyMetrics).filter(d => d >= exportStart && d <= exportEnd)
+      ]);
+      
+      const datesWithMetrics = Array.from(allDatesInRange).sort().filter(date => {
          const m = dailyMetrics[date];
          return m && (m.weight || m.fatPercent || m.leanMass || m.fatMass);
       });
@@ -756,7 +761,7 @@
           )}
 
           {/* КОНТЕЙНЕР ДЛЯ ЭКСПОРТА PDF */}
-          <div id="pdf-export-container" style={{ display: 'none', background: 'white', color: 'black', padding: '15px', width: '750px', boxSizing: 'border-box', fontFamily: 'sans-serif' }}>
+          <div id="pdf-export-container" style={{ display: 'none', background: 'white', color: 'black', padding: '15px 25px', width: '820px', boxSizing: 'border-box', fontFamily: 'sans-serif' }}>
             <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '20px', textAlign: 'center' }}>Отчет по питанию ({exportStart} — {exportEnd})</h1>
             
             {filteredDatesForPdf.length > 0 && (
