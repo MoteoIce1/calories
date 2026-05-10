@@ -898,8 +898,8 @@
                 ].filter(Boolean).join(' | ');
 
                 return (
-                  <div key={date} style={{ marginBottom: '30px', pageBreakInside: 'avoid' }}>
-                    <h2 style={{ fontSize: '18px', fontWeight: 'bold', borderBottom: '2px solid #10b981', paddingBottom: '5px', margin: '0 0 8px 0' }}>
+                  <div key={date} style={{ marginBottom: '30px' }}>
+                    <h2 style={{ fontSize: '18px', fontWeight: 'bold', borderBottom: '2px solid #10b981', paddingBottom: '5px', margin: '0 0 8px 0', pageBreakAfter: 'avoid' }}>
                       {date}
                     </h2>
                     <p style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#444', lineHeight: '1.6' }}>
