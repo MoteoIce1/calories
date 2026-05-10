@@ -400,11 +400,6 @@
       let totalPeriodBurned = 0;
       let totalPeriodSteps = 0;
 
-      const chartWeight = [];
-      const chartFat = [];
-      const chartLean = [];
-      const chartFatMass = [];
-      
       filteredDatesForPdf.forEach(date => {
           const dayActiveGoals = getEffectiveGoals(date);
           const bSteps = dayActiveGoals.baseSteps || 6000;
@@ -419,32 +414,13 @@
           totalPeriodCals += dayCals;
           totalPeriodBurned += dayBurned;
           totalPeriodSteps += daySteps;
-
-          const m = dailyMetrics[date];
-          if (m) {
-             chartWeight.push(m.weight);
-             chartFat.push(m.fatPercent);
-             chartLean.push(m.leanMass);
-             chartFatMass.push(m.fatMass);
-          }
       });
 
       const periodDeficit = totalPeriodBurned - totalPeriodCals;
       const avgDeficit = filteredDatesForPdf.length ? Math.round(periodDeficit / filteredDatesForPdf.length) : 0;
       const periodDefText = periodDeficit > 0 ? `Дефицит: +${periodDeficit} ккал 🔥` : `Профицит: ${Math.abs(periodDeficit)} ккал 📈`;
 
-      const getFirstValid = (arr) => arr.find(v => v !== null && v !== undefined && !isNaN(v));
-      const getLastValid = (arr) => [...arr].reverse().find(v => v !== null && v !== undefined && !isNaN(v));
-
-      const wStart = getFirstValid(chartWeight), wEnd = getLastValid(chartWeight);
-      const fStart = getFirstValid(chartFat), fEnd = getLastValid(chartFat);
-      const lStart = getFirstValid(chartLean), lEnd = getLastValid(chartLean);
-      const fmStart = getFirstValid(chartFatMass), fmEnd = getLastValid(chartFatMass);
-
-      const hasBodyData = wStart !== undefined || fStart !== undefined || lStart !== undefined || fmStart !== undefined;
-
-      // Получаем все даты для которых есть данные весов, чтобы нарисовать таблицу по дням
-      // (даже если в этот день не ели калории, но есть данные весов в диапазоне PDF)
+      // Получаем все даты для которых есть данные весов (независимо от того, заполнялась ли еда)
       const allDatesInRange = new Set([
          ...filteredDatesForPdf, 
          ...Object.keys(dailyMetrics).filter(d => d >= exportStart && d <= exportEnd)
@@ -454,6 +430,22 @@
          const m = dailyMetrics[date];
          return m && (m.weight || m.fatPercent || m.leanMass || m.fatMass);
       });
+
+      // Массивы для общей таблицы прогресса (теперь берутся из всех дней с замерами!)
+      const allWeight = datesWithMetrics.map(d => dailyMetrics[d]?.weight);
+      const allFat = datesWithMetrics.map(d => dailyMetrics[d]?.fatPercent);
+      const allLean = datesWithMetrics.map(d => dailyMetrics[d]?.leanMass);
+      const allFatMass = datesWithMetrics.map(d => dailyMetrics[d]?.fatMass);
+
+      const getFirstValid = (arr) => arr.find(v => v !== null && v !== undefined && !isNaN(v));
+      const getLastValid = (arr) => [...arr].reverse().find(v => v !== null && v !== undefined && !isNaN(v));
+
+      const wStart = getFirstValid(allWeight), wEnd = getLastValid(allWeight);
+      const fStart = getFirstValid(allFat), fEnd = getLastValid(allFat);
+      const lStart = getFirstValid(allLean), lEnd = getLastValid(allLean);
+      const fmStart = getFirstValid(allFatMass), fmEnd = getLastValid(allFatMass);
+
+      const hasBodyData = wStart !== undefined || fStart !== undefined || lStart !== undefined || fmStart !== undefined;
 
       const hasUnsavedGoals = JSON.stringify(goals) !== JSON.stringify(draftGoals);
 
