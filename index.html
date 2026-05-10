@@ -94,11 +94,11 @@
       );
     };
 
-    // Компонент безопасного графика для PDF
+    // Компонент безопасного графика для PDF (без использования ломающего SVG)
     const ProgressChart = ({ title, data, dates, color }) => {
       if (!data || data.length < 2) return null;
       
-      // Ищем только валидные числа (защита от пустот, undefined и NaN)
+      // Ищем только валидные числа
       const validData = data.filter(d => d !== null && d !== undefined && !isNaN(d));
       if (validData.length < 2) return null;
 
@@ -109,33 +109,21 @@
       const chartMin = min - padding;
       const chartMax = max + padding;
       
-      const width = 360;
-      const height = 120;
-      
-      const points = data.map((val, i) => {
-        if (val === null || val === undefined || isNaN(val)) return '';
-        const x = (i / (data.length - 1)) * width;
-        const y = height - ((val - chartMin) / (chartMax - chartMin)) * height;
-        return `${x},${y}`;
-      }).filter(Boolean).join(' ');
-
       return (
-        <div style={{ width: '360px', display: 'inline-block', margin: '10px 15px 30px 15px' }}>
+        <div style={{ width: '360px', display: 'inline-block', margin: '10px 15px 30px 15px', verticalAlign: 'top' }}>
           <h4 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '8px', textAlign: 'center', color: '#333' }}>{title}</h4>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${width} ${height}`} width={width} height={height} style={{ width: '100%', height: '120px', borderBottom: '2px solid #cbd5e1', borderLeft: '2px solid #cbd5e1', overflow: 'visible' }}>
-            <polyline points={points} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: '120px', borderBottom: '2px solid #cbd5e1', borderLeft: '2px solid #cbd5e1', padding: '10px 5px 0 5px', boxSizing: 'border-box' }}>
             {data.map((val, i) => {
-               if (val === null || val === undefined || isNaN(val)) return null;
-               const x = (i / (data.length - 1)) * width;
-               const y = height - ((val - chartMin) / (chartMax - chartMin)) * height;
+               if (val === null || val === undefined || isNaN(val)) return <div key={i} style={{ flex: 1 }}></div>;
+               const heightPct = Math.max(2, ((val - chartMin) / (chartMax - chartMin)) * 100);
                return (
-                 <g key={i}>
-                   <circle cx={x} cy={y} r="4" fill="#fff" stroke={color} strokeWidth="2" />
-                   <text x={x} y={y - 10} fontSize="10" fill="#666" textAnchor="middle">{val}</text>
-                 </g>
+                 <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, height: '100%', justifyContent: 'flex-end' }}>
+                   <span style={{ fontSize: '10px', color: '#666', marginBottom: '4px' }}>{val}</span>
+                   <div style={{ width: '12px', height: `${heightPct}%`, backgroundColor: color, borderRadius: '4px 4px 0 0' }}></div>
+                 </div>
                );
             })}
-          </svg>
+          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#888', marginTop: '8px', fontWeight: 'bold' }}>
             <span>{dates[0]}</span>
             <span>{dates[dates.length - 1]}</span>
@@ -390,21 +378,25 @@
         const element = document.getElementById('pdf-export-container');
         element.style.display = 'block';
         
-        // Задержка 300мс, чтобы браузер (особенно Safari) успел отрендерить DOM и SVG графики
+        // Даем браузеру 500мс, чтобы он 100% успел нарисовать графики и текст до скриншота
         setTimeout(() => {
           const opt = {
             margin:       10,
             filename:     `Отчет_${exportStart}_${exportEnd}.pdf`,
             image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true },
+            html2canvas:  { scale: 2, useCORS: true, logging: false },
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
           };
 
           html2pdf().set(opt).from(element).save().then(() => {
             element.style.display = 'none';
             setShowExportModal(false);
+          }).catch((err) => {
+            console.error("Ошибка генерации PDF:", err);
+            element.style.display = 'none';
+            setShowExportModal(false);
           });
-        }, 300);
+        }, 500); 
       };
 
       const forceRefreshApp = () => {
