@@ -340,7 +340,7 @@
         const element = document.getElementById('pdf-export-container');
         element.style.display = 'block';
         
-        // Задержка 500мс для надежной отрисовки DOM
+        // Даем 500мс для рендера таблицы, после чего сохраняем PDF
         setTimeout(() => {
           const opt = {
             margin:       10,
@@ -400,6 +400,7 @@
       let totalPeriodBurned = 0;
       let totalPeriodSteps = 0;
 
+      // Массивы для общей таблицы прогресса
       const chartWeight = [];
       const chartFat = [];
       const chartLean = [];
@@ -433,6 +434,7 @@
       const avgDeficit = filteredDatesForPdf.length ? Math.round(periodDeficit / filteredDatesForPdf.length) : 0;
       const periodDefText = periodDeficit > 0 ? `Дефицит: +${periodDeficit} ккал 🔥` : `Профицит: ${Math.abs(periodDeficit)} ккал 📈`;
 
+      // Расчет первого и последнего значения для таблицы прогресса
       const getFirstValid = (arr) => arr.find(v => v !== null && v !== undefined && !isNaN(v));
       const getLastValid = (arr) => [...arr].reverse().find(v => v !== null && v !== undefined && !isNaN(v));
 
@@ -440,6 +442,8 @@
       const fStart = getFirstValid(chartFat), fEnd = getLastValid(chartFat);
       const lStart = getFirstValid(chartLean), lEnd = getLastValid(chartLean);
       const fmStart = getFirstValid(chartFatMass), fmEnd = getLastValid(chartFatMass);
+
+      const hasBodyData = wStart !== undefined || fStart !== undefined || lStart !== undefined || fmStart !== undefined;
 
       const datesWithMetrics = filteredDatesForPdf.filter(date => {
          const m = dailyMetrics[date];
@@ -897,7 +901,7 @@
                       Шаги: {daySteps} | Съедено: {dayCals} ккал | Потрачено: {dayBurned} ккал<br/>
                       <span style={{ fontSize: '15px', color: '#000' }}><strong>Итог дня:</strong> {dayDefText}</span><br/>
                       Б: {Math.round(dayPro)}г | Ж: {Math.round(dayFat)}г | У: {Math.round(dayCarb)}г
-                      {mText && <><br/><span style={{ color: '#005f73' }}><strong>Тело:</strong> {mText}</span></>}
+                      {mText && <span><br/><span style={{ color: '#005f73' }}><strong>Тело:</strong> {mText}</span></span>}
                     </p>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                       <thead>
