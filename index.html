@@ -340,7 +340,6 @@
         const element = document.getElementById('pdf-export-container');
         element.style.display = 'block';
         
-        // Пауза 1 сек. Установлен scale: 1.2, чтобы избежать белого экрана при длинных выгрузках
         setTimeout(() => {
           const opt = {
             margin:       [10, 5, 10, 5], 
@@ -392,20 +391,16 @@
         return a.name.localeCompare(b.name, 'ru');
       });
 
-      // СОБИРАЕМ ВСЕ ДАТЫ: и еда, и шаги, и весы, которые попадают в выбранный период
-      const allDatesSet = new Set([
-         ...Object.keys(dailyLogs).filter(d => d >= exportStart && d <= exportEnd),
-         ...Object.keys(dailyMetrics).filter(d => d >= exportStart && d <= exportEnd),
-         ...Object.keys(dailySteps).filter(d => d >= exportStart && d <= exportEnd)
-      ]);
-      const allExportDates = Array.from(allDatesSet).sort((a, b) => new Date(a) - new Date(b));
+      // 1. Дни с едой (только они идут в детальный список и математику дефицита)
+      const filteredDatesForPdf = Object.keys(dailyLogs)
+        .filter(date => date >= exportStart && date <= exportEnd && dailyLogs[date].length > 0)
+        .sort((a, b) => new Date(a) - new Date(b));
 
       let totalPeriodCals = 0;
       let totalPeriodBurned = 0;
       let totalPeriodSteps = 0;
 
-      // Считаем итоги калорий и шагов
-      allExportDates.forEach(date => {
+      filteredDatesForPdf.forEach(date => {
           const dayActiveGoals = getEffectiveGoals(date);
           const bSteps = dayActiveGoals.baseSteps || 6000;
           const bMaint = dayActiveGoals.maintenance || 2300;
@@ -422,23 +417,28 @@
       });
 
       const periodDeficit = totalPeriodBurned - totalPeriodCals;
-      const avgDeficit = allExportDates.length ? Math.round(periodDeficit / allExportDates.length) : 0;
+      const avgDeficit = filteredDatesForPdf.length ? Math.round(periodDeficit / filteredDatesForPdf.length) : 0;
       const periodDefText = periodDeficit > 0 ? `Дефицит: +${periodDeficit} ккал 🔥` : `Профицит: ${Math.abs(periodDeficit)} ккал 📈`;
 
-      // Фильтруем дни, в которые были замеры веса/жира
-      const datesWithMetrics = allExportDates.filter(date => {
+      // 2. Дни с замерами (для таблиц по телу берутся за весь период, независимо от еды)
+      const allDatesInRange = new Set([
+         ...filteredDatesForPdf, 
+         ...Object.keys(dailyMetrics).filter(d => d >= exportStart && d <= exportEnd)
+      ]);
+      
+      const datesWithMetrics = Array.from(allDatesInRange).sort().filter(date => {
          const m = dailyMetrics[date];
          return m && (m.weight || m.fatPercent || m.leanMass || m.fatMass);
       });
 
-      // Массивы для таблицы прогресса (берутся из всех доступных дней)
+      // Массивы для таблицы прогресса
       const allWeight = datesWithMetrics.map(d => dailyMetrics[d]?.weight);
       const allFat = datesWithMetrics.map(d => dailyMetrics[d]?.fatPercent);
       const allLean = datesWithMetrics.map(d => dailyMetrics[d]?.leanMass);
       const allFatMass = datesWithMetrics.map(d => dailyMetrics[d]?.fatMass);
 
-      const getFirstValid = (arr) => arr.find(v => v !== null && v !== undefined && !isNaN(v));
-      const getLastValid = (arr) => [...arr].reverse().find(v => v !== null && v !== undefined && !isNaN(v));
+      const getFirstValid = (arr) => arr.find(v => v !== null && v !== undefined && !isNaN(v) && v !== '');
+      const getLastValid = (arr) => [...arr].reverse().find(v => v !== null && v !== undefined && !isNaN(v) && v !== '');
 
       const wStart = getFirstValid(allWeight), wEnd = getLastValid(allWeight);
       const fStart = getFirstValid(allFat), fEnd = getLastValid(allFat);
@@ -756,7 +756,7 @@
           <div id="pdf-export-container" style={{ display: 'none', background: 'white', color: 'black', padding: '20px 10px', width: '800px', margin: '0 auto', boxSizing: 'border-box', fontFamily: 'sans-serif' }}>
             <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '20px', textAlign: 'center' }}>Отчет по питанию ({exportStart} — {exportEnd})</h1>
             
-            {allExportDates.length > 0 && (
+            {filteredDatesForPdf.length > 0 && (
               <div style={{ backgroundColor: '#f4f4f5', padding: '20px', borderRadius: '12px', marginBottom: '30px', fontSize: '16px' }}>
                 <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 15px 0' }}>Итоги за период:</h2>
                 
@@ -861,10 +861,10 @@
                </div>
             )}
 
-            {allExportDates.length === 0 ? (
-              <p>За выбранный период нет данных.</p>
+            {filteredDatesForPdf.length === 0 ? (
+              <p>За выбранный период нет данных о питании.</p>
             ) : (
-              allExportDates.map(date => {
+              filteredDatesForPdf.map(date => {
                 const dayActiveGoals = getEffectiveGoals(date);
                 const bSteps = dayActiveGoals.baseSteps || 6000;
                 const bMaint = dayActiveGoals.maintenance || 2300;
@@ -897,40 +897,33 @@
                     <p style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#444', lineHeight: '1.6' }}>
                       Шаги: {daySteps} | Съедено: {dayCals} ккал | Потрачено: {dayBurned} ккал<br/>
                       <span style={{ fontSize: '15px', color: '#000' }}><strong>Итог дня:</strong> {dayDefText}</span><br/>
-                      {dayLogs.length > 0 && (
-                        <span>Б: {Math.round(dayPro)}г | Ж: {Math.round(dayFat)}г | У: {Math.round(dayCarb)}г</span>
-                      )}
+                      Б: {Math.round(dayPro)}г | Ж: {Math.round(dayFat)}г | У: {Math.round(dayCarb)}г
                       {mText && <span><br/><span style={{ color: '#005f73' }}><strong>Тело:</strong> {mText}</span></span>}
                     </p>
-
-                    {dayLogs.length > 0 ? (
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', tableLayout: 'fixed', wordWrap: 'break-word' }}>
-                        <thead>
-                          <tr style={{ backgroundColor: '#f4f4f5', textAlign: 'left' }}>
-                            <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '35%' }}>Продукт</th>
-                            <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Вес (г)</th>
-                            <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Ккал</th>
-                            <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Белки</th>
-                            <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Жиры</th>
-                            <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Углеводы</th>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', tableLayout: 'fixed', wordWrap: 'break-word' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f4f4f5', textAlign: 'left' }}>
+                          <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '35%' }}>Продукт</th>
+                          <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Вес (г)</th>
+                          <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Ккал</th>
+                          <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Белки</th>
+                          <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Жиры</th>
+                          <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Углеводы</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dayLogs.map((log, i) => (
+                          <tr key={i}>
+                            <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{foods.find(f => f.id === log.foodId)?.name || 'Удаленный продукт'}</td>
+                            <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{log.grams}</td>
+                            <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{Math.round(log.totalCalories || 0)}</td>
+                            <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{Math.round(log.totalProtein || 0)}</td>
+                            <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{Math.round(log.totalFats || 0)}</td>
+                            <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{Math.round(log.totalCarbs || 0)}</td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {dayLogs.map((log, i) => (
-                            <tr key={i}>
-                              <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{foods.find(f => f.id === log.foodId)?.name || 'Удаленный продукт'}</td>
-                              <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{log.grams}</td>
-                              <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{Math.round(log.totalCalories || 0)}</td>
-                              <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{Math.round(log.totalProtein || 0)}</td>
-                              <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{Math.round(log.totalFats || 0)}</td>
-                              <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{Math.round(log.totalCarbs || 0)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <p style={{ fontSize: '13px', color: '#888', fontStyle: 'italic' }}>В этот день дневник питания не заполнялся.</p>
-                    )}
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 );
               })
