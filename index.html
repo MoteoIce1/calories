@@ -343,10 +343,10 @@
         // Даем 500мс для рендера таблицы, после чего сохраняем PDF
         setTimeout(() => {
           const opt = {
-            margin:       10,
+            margin:       [10, 5, 10, 5], // Уменьшили боковые отступы на листе А4
             filename:     `Отчет_${exportStart}_${exportEnd}.pdf`,
             image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 750 },
+            html2canvas:  { scale: 2, useCORS: true, logging: false, windowWidth: 820 },
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
           };
 
@@ -756,7 +756,7 @@
           )}
 
           {/* КОНТЕЙНЕР ДЛЯ ЭКСПОРТА PDF */}
-          <div id="pdf-export-container" style={{ display: 'none', background: 'white', color: 'black', padding: '20px', width: '750px', boxSizing: 'border-box', fontFamily: 'sans-serif' }}>
+          <div id="pdf-export-container" style={{ display: 'none', background: 'white', color: 'black', padding: '15px 25px', width: '820px', boxSizing: 'border-box', fontFamily: 'sans-serif' }}>
             <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '20px', textAlign: 'center' }}>Отчет по питанию ({exportStart} — {exportEnd})</h1>
             
             {filteredDatesForPdf.length > 0 && (
@@ -906,12 +906,12 @@
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                       <thead>
                         <tr style={{ backgroundColor: '#f4f4f5', textAlign: 'left' }}>
-                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '45%' }}>Продукт</th>
-                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '11%' }}>Вес (г)</th>
-                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '11%' }}>Ккал</th>
-                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '11%' }}>Белки</th>
-                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '11%' }}>Жиры</th>
-                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '11%' }}>Углев</th>
+                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '35%' }}>Продукт</th>
+                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '13%' }}>Вес (г)</th>
+                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '13%' }}>Ккал</th>
+                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '13%' }}>Белки</th>
+                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '13%' }}>Жиры</th>
+                          <th style={{ padding: '8px', border: '1px solid #e4e4e7', width: '13%' }}>Углеводы</th>
                         </tr>
                       </thead>
                       <tbody>
