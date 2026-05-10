@@ -490,18 +490,22 @@
                     />
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3 mb-4">
-                    <div className="bg-[#27272a] rounded-2xl p-3 flex flex-col items-center border border-zinc-700/50">
-                      <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-widest mb-1">Вес (кг)</span>
-                      <input type="number" step="0.1" className="w-full bg-transparent text-center text-base font-bold text-zinc-200 outline-none" value={dailyMetrics[currentDate]?.weight || ''} onChange={(e) => handleUpdateMetrics('weight', e.target.value)} onFocus={(e) => e.target.select()} />
+                  <div className="grid grid-cols-4 gap-2 mb-4">
+                    <div className="bg-[#27272a] rounded-xl p-2 flex flex-col items-center border border-zinc-700/50">
+                      <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest mb-1 text-center">Вес (кг)</span>
+                      <input type="number" step="0.1" className="w-full bg-transparent text-center text-sm font-bold text-zinc-200 outline-none" value={dailyMetrics[currentDate]?.weight || ''} onChange={(e) => handleUpdateMetrics('weight', e.target.value)} onFocus={(e) => e.target.select()} />
                     </div>
-                    <div className="bg-[#27272a] rounded-2xl p-3 flex flex-col items-center border border-zinc-700/50">
-                      <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-widest mb-1">Жир (%)</span>
-                      <input type="number" step="0.1" className="w-full bg-transparent text-center text-base font-bold text-zinc-200 outline-none" value={dailyMetrics[currentDate]?.fat || ''} onChange={(e) => handleUpdateMetrics('fat', e.target.value)} onFocus={(e) => e.target.select()} />
+                    <div className="bg-[#27272a] rounded-xl p-2 flex flex-col items-center border border-zinc-700/50">
+                      <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest mb-1 text-center">Жир (%)</span>
+                      <input type="number" step="0.1" className="w-full bg-transparent text-center text-sm font-bold text-zinc-200 outline-none" value={dailyMetrics[currentDate]?.fatPercent || ''} onChange={(e) => handleUpdateMetrics('fatPercent', e.target.value)} onFocus={(e) => e.target.select()} />
                     </div>
-                    <div className="bg-[#27272a] rounded-2xl p-3 flex flex-col items-center border border-zinc-700/50">
-                      <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-widest mb-1">Мышцы (%)</span>
-                      <input type="number" step="0.1" className="w-full bg-transparent text-center text-base font-bold text-zinc-200 outline-none" value={dailyMetrics[currentDate]?.muscle || ''} onChange={(e) => handleUpdateMetrics('muscle', e.target.value)} onFocus={(e) => e.target.select()} />
+                    <div className="bg-[#27272a] rounded-xl p-2 flex flex-col items-center border border-zinc-700/50">
+                      <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest mb-1 text-center">БЖМ (кг)</span>
+                      <input type="number" step="0.1" className="w-full bg-transparent text-center text-sm font-bold text-zinc-200 outline-none" value={dailyMetrics[currentDate]?.leanMass || ''} onChange={(e) => handleUpdateMetrics('leanMass', e.target.value)} onFocus={(e) => e.target.select()} />
+                    </div>
+                    <div className="bg-[#27272a] rounded-xl p-2 flex flex-col items-center border border-zinc-700/50">
+                      <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest mb-1 text-center">Жир (кг)</span>
+                      <input type="number" step="0.1" className="w-full bg-transparent text-center text-sm font-bold text-zinc-200 outline-none" value={dailyMetrics[currentDate]?.fatMass || ''} onChange={(e) => handleUpdateMetrics('fatMass', e.target.value)} onFocus={(e) => e.target.select()} />
                     </div>
                   </div>
                   
@@ -743,8 +747,9 @@
                 const m = dailyMetrics[date] || {};
                 const mText = [
                   m.weight ? `Вес: ${m.weight} кг` : '',
-                  m.fat ? `Жир: ${m.fat}%` : '',
-                  m.muscle ? `Мышцы: ${m.muscle}%` : ''
+                  m.fatPercent ? `Жир: ${m.fatPercent}%` : '',
+                  m.leanMass ? `БЖМ: ${m.leanMass} кг` : '',
+                  m.fatMass ? `Вес жира: ${m.fatMass} кг` : ''
                 ].filter(Boolean).join(' | ');
 
                 return (
