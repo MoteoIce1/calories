@@ -94,51 +94,6 @@
       );
     };
 
-    // Компонент железобетонного графика для PDF (на таблицах без Flexbox)
-    const ProgressChart = ({ title, data, dates, color }) => {
-      if (!data || data.length < 2) return null;
-      
-      const validData = data.filter(d => d !== null && d !== undefined && !isNaN(d));
-      if (validData.length < 2) return null;
-
-      const min = Math.min(...validData);
-      const max = Math.max(...validData);
-      const range = max - min === 0 ? 1 : max - min;
-      const padding = range * 0.15;
-      const chartMin = min - padding;
-      const chartMax = max + padding;
-      
-      return (
-        <div style={{ width: '340px', display: 'inline-block', margin: '15px 20px', verticalAlign: 'top', fontFamily: 'sans-serif' }}>
-          <h4 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '10px', textAlign: 'center', color: '#333' }}>{title}</h4>
-          <table style={{ width: '100%', height: '120px', borderBottom: '2px solid #cbd5e1', borderSpacing: 0, tableLayout: 'fixed' }}>
-            <tbody>
-              <tr>
-                {data.map((val, i) => {
-                   if (val === null || val === undefined || isNaN(val)) {
-                     return <td key={i} style={{ padding: 0 }}></td>;
-                   }
-                   // Высчитываем точную высоту в пикселях
-                   const pxHeight = Math.max(5, ((val - chartMin) / (chartMax - chartMin)) * 90);
-                   return (
-                     <td key={i} style={{ verticalAlign: 'bottom', padding: '0 2px', textAlign: 'center' }}>
-                       <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: 'bold' }}>{val}</div>
-                       <div style={{ height: `${pxHeight}px`, backgroundColor: color, borderRadius: '4px 4px 0 0', width: '100%', maxWidth: '24px', margin: '0 auto' }}></div>
-                     </td>
-                   );
-                })}
-              </tr>
-            </tbody>
-          </table>
-          <div style={{ fontSize: '12px', color: '#888', marginTop: '8px', fontWeight: 'bold' }}>
-            <span style={{ float: 'left' }}>{dates[0]}</span>
-            <span style={{ float: 'right' }}>{dates[dates.length - 1]}</span>
-            <div style={{ clear: 'both' }}></div>
-          </div>
-        </div>
-      );
-    };
-
     const getLocalDateString = (dateObj) => {
       const year = dateObj.getFullYear();
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -385,7 +340,7 @@
         const element = document.getElementById('pdf-export-container');
         element.style.display = 'block';
         
-        // Увеличили паузу до 1000мс для надежной отрисовки таблиц графиков
+        // Даем 500мс для рендера таблицы, после чего сохраняем PDF
         setTimeout(() => {
           const opt = {
             margin:       10,
@@ -403,7 +358,7 @@
             element.style.display = 'none';
             setShowExportModal(false);
           });
-        }, 1000); 
+        }, 500); 
       };
 
       const forceRefreshApp = () => {
@@ -445,15 +400,12 @@
       let totalPeriodBurned = 0;
       let totalPeriodSteps = 0;
 
-      // Данные для графиков
-      const chartDates = [];
+      // Массивы для общей таблицы прогресса
       const chartWeight = [];
       const chartFat = [];
       const chartLean = [];
       const chartFatMass = [];
       
-      let lastW = null, lastF = null, lastL = null, lastFM = null;
-
       filteredDatesForPdf.forEach(date => {
           const dayActiveGoals = getEffectiveGoals(date);
           const bSteps = dayActiveGoals.baseSteps || 6000;
@@ -470,17 +422,11 @@
           totalPeriodSteps += daySteps;
 
           const m = dailyMetrics[date];
-          if (m && m.weight) lastW = m.weight;
-          if (m && m.fatPercent) lastF = m.fatPercent;
-          if (m && m.leanMass) lastL = m.leanMass;
-          if (m && m.fatMass) lastFM = m.fatMass;
-
-          if (lastW || lastF || lastL || lastFM) {
-             chartDates.push(date.slice(5)); // Оставляем только месяц-день
-             chartWeight.push(lastW);
-             chartFat.push(lastF);
-             chartLean.push(lastL);
-             chartFatMass.push(lastFM);
+          if (m) {
+             chartWeight.push(m.weight);
+             chartFat.push(m.fatPercent);
+             chartLean.push(m.leanMass);
+             chartFatMass.push(m.fatMass);
           }
       });
 
@@ -488,26 +434,16 @@
       const avgDeficit = filteredDatesForPdf.length ? Math.round(periodDeficit / filteredDatesForPdf.length) : 0;
       const periodDefText = periodDeficit > 0 ? `Дефицит: +${periodDeficit} ккал 🔥` : `Профицит: ${Math.abs(periodDeficit)} ккал 📈`;
 
-      // Безопасный расчет итогов тела
-      let bodyDiffText = "";
-      const getDiff = (arr) => {
-         const valid = arr.filter(v => v !== null && v !== undefined && !isNaN(v));
-         if (valid.length >= 2) return (valid[valid.length - 1] - valid[0]).toFixed(1);
-         return null;
-      };
+      // Расчет первого и последнего значения для таблицы прогресса
+      const getFirstValid = (arr) => arr.find(v => v !== null && v !== undefined && !isNaN(v));
+      const getLastValid = (arr) => [...arr].reverse().find(v => v !== null && v !== undefined && !isNaN(v));
 
-      const wDiff = getDiff(chartWeight);
-      const fDiff = getDiff(chartFat);
-      const lmDiff = getDiff(chartLean);
-      const fmDiff = getDiff(chartFatMass);
-      
-      const diffParts = [];
-      if (wDiff !== null) diffParts.push(`Вес: ${wDiff > 0 ? '+'+wDiff : wDiff} кг`);
-      if (fDiff !== null) diffParts.push(`Жир: ${fDiff > 0 ? '+'+fDiff : fDiff}%`);
-      if (lmDiff !== null) diffParts.push(`БЖМ: ${lmDiff > 0 ? '+'+lmDiff : lmDiff} кг`);
-      if (fmDiff !== null) diffParts.push(`Масса жира: ${fmDiff > 0 ? '+'+fmDiff : fmDiff} кг`);
+      const wStart = getFirstValid(chartWeight), wEnd = getLastValid(chartWeight);
+      const fStart = getFirstValid(chartFat), fEnd = getLastValid(chartFat);
+      const lStart = getFirstValid(chartLean), lEnd = getLastValid(chartLean);
+      const fmStart = getFirstValid(chartFatMass), fmEnd = getLastValid(chartFatMass);
 
-      if (diffParts.length > 0) bodyDiffText = diffParts.join(' | ');
+      const hasBodyData = wStart !== undefined || fStart !== undefined || lStart !== undefined || fmStart !== undefined;
 
       const hasUnsavedGoals = JSON.stringify(goals) !== JSON.stringify(draftGoals);
 
@@ -821,35 +757,75 @@
             {filteredDatesForPdf.length > 0 && (
               <div style={{ backgroundColor: '#f4f4f5', padding: '20px', borderRadius: '12px', marginBottom: '30px', fontSize: '16px' }}>
                 <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 15px 0' }}>Итоги за период:</h2>
-                <div style={{ display: 'flex', gap: '40px' }}>
-                   <div>
-                      <p style={{ margin: '6px 0' }}><strong>Суммарно съедено:</strong> {totalPeriodCals} ккал</p>
-                      <p style={{ margin: '6px 0' }}><strong>Суммарно потрачено:</strong> {totalPeriodBurned} ккал</p>
-                      <p style={{ margin: '6px 0' }}><strong>Пройдено шагов:</strong> {totalPeriodSteps}</p>
-                   </div>
-                   <div>
-                      <p style={{ margin: '6px 0' }}><strong>Баланс ККАЛ:</strong> {periodDefText}</p>
-                      <p style={{ margin: '6px 0', fontSize: '14px', color: '#555' }}><em>(В среднем {avgDeficit} ккал/день)</em></p>
-                   </div>
+                
+                <div style={{ display: 'inline-block', width: '48%', verticalAlign: 'top' }}>
+                   <p style={{ margin: '6px 0' }}><strong>Суммарно съедено:</strong> {totalPeriodCals} ккал</p>
+                   <p style={{ margin: '6px 0' }}><strong>Суммарно потрачено:</strong> {totalPeriodBurned} ккал</p>
+                   <p style={{ margin: '6px 0' }}><strong>Пройдено шагов:</strong> {totalPeriodSteps}</p>
                 </div>
-                {bodyDiffText && (
-                  <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #d4d4d8' }}>
-                    <p style={{ margin: '0', fontSize: '18px', color: '#005f73' }}><strong>Изменения по телу:</strong> {bodyDiffText}</p>
+                <div style={{ display: 'inline-block', width: '48%', verticalAlign: 'top' }}>
+                   <p style={{ margin: '6px 0' }}><strong>Баланс ККАЛ:</strong> {periodDefText}</p>
+                   <p style={{ margin: '6px 0', fontSize: '14px', color: '#555' }}><em>(В среднем {avgDeficit} ккал/день)</em></p>
+                </div>
+                
+                {hasBodyData && (
+                  <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #d4d4d8' }}>
+                    <h3 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 12px 0', color: '#005f73' }}>Изменения по телу:</h3>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '15px', textAlign: 'center', backgroundColor: '#fff' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#e2e8f0' }}>
+                          <th style={{ padding: '10px', border: '1px solid #cbd5e1', textAlign: 'left' }}>Показатель</th>
+                          <th style={{ padding: '10px', border: '1px solid #cbd5e1' }}>Начало периода</th>
+                          <th style={{ padding: '10px', border: '1px solid #cbd5e1' }}>Конец периода</th>
+                          <th style={{ padding: '10px', border: '1px solid #cbd5e1' }}>Разница</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {wStart !== undefined && wEnd !== undefined && (
+                          <tr>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 'bold' }}>Вес (кг)</td>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{wStart}</td>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{wEnd}</td>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', fontWeight: 'bold', color: (wEnd - wStart) > 0 ? '#ef4444' : '#10b981' }}>
+                               {((wEnd - wStart) > 0 ? '+' : '') + (wEnd - wStart).toFixed(1)}
+                            </td>
+                          </tr>
+                        )}
+                        {fStart !== undefined && fEnd !== undefined && (
+                          <tr>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 'bold' }}>Жир (%)</td>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{fStart}</td>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{fEnd}</td>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', fontWeight: 'bold', color: (fEnd - fStart) > 0 ? '#ef4444' : '#10b981' }}>
+                               {((fEnd - fStart) > 0 ? '+' : '') + (fEnd - fStart).toFixed(1)}
+                            </td>
+                          </tr>
+                        )}
+                        {lStart !== undefined && lEnd !== undefined && (
+                          <tr>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 'bold' }}>БЖМ (кг)</td>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{lStart}</td>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{lEnd}</td>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', fontWeight: 'bold', color: (lEnd - lStart) > 0 ? '#10b981' : '#ef4444' }}>
+                               {((lEnd - lStart) > 0 ? '+' : '') + (lEnd - lStart).toFixed(1)}
+                            </td>
+                          </tr>
+                        )}
+                        {fmStart !== undefined && fmEnd !== undefined && (
+                          <tr>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 'bold' }}>Масса жира (кг)</td>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{fmStart}</td>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{fmEnd}</td>
+                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', fontWeight: 'bold', color: (fmEnd - fmStart) > 0 ? '#ef4444' : '#10b981' }}>
+                               {((fmEnd - fmStart) > 0 ? '+' : '') + (fmEnd - fmStart).toFixed(1)}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
-            )}
-
-            {chartDates.length > 1 && (
-               <div style={{ marginBottom: '40px' }}>
-                  <h2 style={{ fontSize: '22px', fontWeight: 'bold', borderBottom: '3px solid #10b981', paddingBottom: '10px', marginBottom: '20px' }}>Динамика прогресса</h2>
-                  <div style={{ textAlign: 'center' }}>
-                     <ProgressChart title="Вес (кг)" data={chartWeight} dates={chartDates} color="#3b82f6" />
-                     <ProgressChart title="Процент жира (%)" data={chartFat} dates={chartDates} color="#ef4444" />
-                     <ProgressChart title="Безжировая масса (кг)" data={chartLean} dates={chartDates} color="#8b5cf6" />
-                     <ProgressChart title="Масса жира (кг)" data={chartFatMass} dates={chartDates} color="#f59e0b" />
-                  </div>
-               </div>
             )}
 
             {filteredDatesForPdf.length === 0 ? (
@@ -877,7 +853,7 @@
                   m.weight ? `Вес: ${m.weight} кг` : '',
                   m.fatPercent ? `Жир: ${m.fatPercent}%` : '',
                   m.leanMass ? `БЖМ: ${m.leanMass} кг` : '',
-                  m.fatMass ? `Вес жира: ${m.fatMass} кг` : ''
+                  m.fatMass ? `Жир: ${m.fatMass} кг` : ''
                 ].filter(Boolean).join(' | ');
 
                 return (
