@@ -94,9 +94,12 @@
       );
     };
 
+    // Компонент безопасного графика для PDF
     const ProgressChart = ({ title, data, dates, color }) => {
       if (!data || data.length < 2) return null;
-      const validData = data.filter(d => d !== null && d !== undefined);
+      
+      // Ищем только валидные числа (защита от пустот, undefined и NaN)
+      const validData = data.filter(d => d !== null && d !== undefined && !isNaN(d));
       if (validData.length < 2) return null;
 
       const min = Math.min(...validData);
@@ -110,17 +113,19 @@
       const height = 120;
       
       const points = data.map((val, i) => {
+        if (val === null || val === undefined || isNaN(val)) return '';
         const x = (i / (data.length - 1)) * width;
         const y = height - ((val - chartMin) / (chartMax - chartMin)) * height;
         return `${x},${y}`;
-      }).join(' ');
+      }).filter(Boolean).join(' ');
 
       return (
         <div style={{ width: '360px', display: 'inline-block', margin: '10px 15px 30px 15px' }}>
           <h4 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '8px', textAlign: 'center', color: '#333' }}>{title}</h4>
-          <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '120px', borderBottom: '2px solid #cbd5e1', borderLeft: '2px solid #cbd5e1', overflow: 'visible' }}>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${width} ${height}`} width={width} height={height} style={{ width: '100%', height: '120px', borderBottom: '2px solid #cbd5e1', borderLeft: '2px solid #cbd5e1', overflow: 'visible' }}>
             <polyline points={points} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
             {data.map((val, i) => {
+               if (val === null || val === undefined || isNaN(val)) return null;
                const x = (i / (data.length - 1)) * width;
                const y = height - ((val - chartMin) / (chartMax - chartMin)) * height;
                return (
@@ -385,18 +390,21 @@
         const element = document.getElementById('pdf-export-container');
         element.style.display = 'block';
         
-        const opt = {
-          margin:       10,
-          filename:     `Отчет_${exportStart}_${exportEnd}.pdf`,
-          image:        { type: 'jpeg', quality: 0.98 },
-          html2canvas:  { scale: 2, useCORS: true },
-          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
+        // Задержка 300мс, чтобы браузер (особенно Safari) успел отрендерить DOM и SVG графики
+        setTimeout(() => {
+          const opt = {
+            margin:       10,
+            filename:     `Отчет_${exportStart}_${exportEnd}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+          };
 
-        html2pdf().set(opt).from(element).save().then(() => {
-          element.style.display = 'none';
-          setShowExportModal(false);
-        });
+          html2pdf().set(opt).from(element).save().then(() => {
+            element.style.display = 'none';
+            setShowExportModal(false);
+          });
+        }, 300);
       };
 
       const forceRefreshApp = () => {
@@ -444,6 +452,7 @@
       const chartFat = [];
       const chartLean = [];
       const chartFatMass = [];
+      
       let lastW = null, lastF = null, lastL = null, lastFM = null;
 
       filteredDatesForPdf.forEach(date => {
@@ -462,10 +471,12 @@
           totalPeriodSteps += daySteps;
 
           const m = dailyMetrics[date];
-          if (m && m.weight) {
-             lastW = m.weight; lastF = m.fatPercent; lastL = m.leanMass; lastFM = m.fatMass;
-          }
-          if (lastW) {
+          if (m && m.weight) lastW = m.weight;
+          if (m && m.fatPercent) lastF = m.fatPercent;
+          if (m && m.leanMass) lastL = m.leanMass;
+          if (m && m.fatMass) lastFM = m.fatMass;
+
+          if (lastW || lastF || lastL || lastFM) {
              chartDates.push(date.slice(5)); // Оставляем только месяц-день
              chartWeight.push(lastW);
              chartFat.push(lastF);
@@ -478,16 +489,26 @@
       const avgDeficit = filteredDatesForPdf.length ? Math.round(periodDeficit / filteredDatesForPdf.length) : 0;
       const periodDefText = periodDeficit > 0 ? `Дефицит: +${periodDeficit} ккал 🔥` : `Профицит: ${Math.abs(periodDeficit)} ккал 📈`;
 
-      // Итоги изменений по телу
+      // Безопасный расчет итогов тела
       let bodyDiffText = "";
-      if (chartWeight.length >= 2) {
-         const wDiff = (chartWeight[chartWeight.length - 1] - chartWeight[0]).toFixed(1);
-         const fDiff = (chartFat[chartFat.length - 1] - chartFat[0]).toFixed(1);
-         const lmDiff = (chartLean[chartLean.length - 1] - chartLean[0]).toFixed(1);
-         const fmDiff = (chartFatMass[chartFatMass.length - 1] - chartFatMass[0]).toFixed(1);
-         
-         bodyDiffText = `Вес: ${wDiff > 0 ? '+'+wDiff : wDiff} кг | Жир: ${fDiff > 0 ? '+'+fDiff : fDiff}% | БЖМ: ${lmDiff > 0 ? '+'+lmDiff : lmDiff} кг | Масса жира: ${fmDiff > 0 ? '+'+fmDiff : fmDiff} кг`;
-      }
+      const getDiff = (arr) => {
+         const valid = arr.filter(v => v !== null && v !== undefined && !isNaN(v));
+         if (valid.length >= 2) return (valid[valid.length - 1] - valid[0]).toFixed(1);
+         return null;
+      };
+
+      const wDiff = getDiff(chartWeight);
+      const fDiff = getDiff(chartFat);
+      const lmDiff = getDiff(chartLean);
+      const fmDiff = getDiff(chartFatMass);
+      
+      const diffParts = [];
+      if (wDiff !== null) diffParts.push(`Вес: ${wDiff > 0 ? '+'+wDiff : wDiff} кг`);
+      if (fDiff !== null) diffParts.push(`Жир: ${fDiff > 0 ? '+'+fDiff : fDiff}%`);
+      if (lmDiff !== null) diffParts.push(`БЖМ: ${lmDiff > 0 ? '+'+lmDiff : lmDiff} кг`);
+      if (fmDiff !== null) diffParts.push(`Масса жира: ${fmDiff > 0 ? '+'+fmDiff : fmDiff} кг`);
+
+      if (diffParts.length > 0) bodyDiffText = diffParts.join(' | ');
 
       const hasUnsavedGoals = JSON.stringify(goals) !== JSON.stringify(draftGoals);
 
