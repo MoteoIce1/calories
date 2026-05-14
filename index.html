@@ -186,6 +186,7 @@
 
     function App() {
       const [isLoading, setIsLoading] = useState(true);
+      const [isPrinting, setIsPrinting] = useState(false); // СОСТОЯНИЕ ДЛЯ КНОПКИ ВЫГРУЗКИ
       
       const defaultGoals = { calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: 6000, maintenance: 2300 };
       const [goals, setGoals] = useState(defaultGoals);
@@ -402,12 +403,16 @@
         docRef.set({ foods: updatedFoods }, { merge: true });
       };
 
-      // НОВАЯ ФУНКЦИЯ ПЕЧАТИ ЧЕРЕЗ НАТИВНЫЙ БРАУЗЕР
+      // ФУНКЦИЯ ПЕЧАТИ (ОБНОВЛЕННАЯ С ИНДИКАТОРОМ ЗАГРУЗКИ)
       const generatePDF = () => {
-        // Вызываем печать мгновенно (прямо в момент клика), чтобы Safari не блокировал окно
-        window.print();
-        // Окно настроек скроется сразу после того, как ты закроешь диалог печати
-        setShowExportModal(false);
+        setIsPrinting(true); // Включаем статус "Загрузка" на кнопке
+        
+        // Даем React 100мс на то, чтобы перерисовать кнопку на "Формируем..." перед тяжелой задачей
+        setTimeout(() => {
+          window.print(); // Открываем системный диалог Safari
+          setIsPrinting(false); // Сбрасываем статус
+          setShowExportModal(false); // Закрываем модалку
+        }, 100);
       };
 
       const forceRefreshApp = () => {
@@ -513,7 +518,7 @@
         );
       }
 
-      // Отдельный рендер компонента Отчета для PDF (он скрыт через CSS класс .print-only)
+      // Отдельный рендер компонента Отчета для PDF
       const ExportReport = () => (
         <div className="print-only" style={{ fontFamily: 'sans-serif' }}>
           <h1 className="avoid-break" style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px', textAlign: 'center' }}>Отчет по питанию ({exportStart} — {exportEnd})</h1>
@@ -972,6 +977,7 @@
               </button>
             </nav>
 
+            {/* Модальное окно настройки целей */}
             {showGoalModal && (
               <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                 <div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm">
@@ -986,6 +992,7 @@
               </div>
             )}
 
+            {/* Модальное окно выгрузки PDF */}
             {showExportModal && (
               <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                 <div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm">
@@ -1008,7 +1015,9 @@
                   </div>
                   <div className="flex gap-3">
                     <button onClick={() => setShowExportModal(false)} className="flex-1 p-4 rounded-xl bg-zinc-800 font-bold text-zinc-300 active:scale-95 transition-transform">Отмена</button>
-                    <button onClick={generatePDF} className="flex-1 p-4 rounded-xl bg-emerald-600 font-bold text-white active:scale-95 transition-transform">Скачать</button>
+                    <button onClick={generatePDF} disabled={isPrinting} className="flex-1 p-4 rounded-xl bg-emerald-600 font-bold text-white active:scale-95 transition-transform disabled:opacity-50">
+                      {isPrinting ? 'Формируем...' : 'Скачать'}
+                    </button>
                   </div>
                 </div>
               </div>
