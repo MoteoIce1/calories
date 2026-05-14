@@ -26,26 +26,21 @@
     .loader { border: 3px solid #27272a; border-top: 3px solid #10b981; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     
-    /* Скрываем отчет в обычном режиме */
     .print-only { display: none; }
     
-    /* НАСТРОЙКИ ИДЕАЛЬНОЙ ПЕЧАТИ / ВЫГРУЗКИ В PDF ДЛЯ iOS */
+    /* НАСТРОЙКИ СКОРОСТНОЙ И ИДЕАЛЬНОЙ ПЕЧАТИ SAFARI */
     @media print {
       body { background-color: white !important; overflow: auto !important; }
-      /* Скрываем сам трекер */
       .no-print { display: none !important; }
-      /* Показываем только отчет */
       .print-only { display: block !important; color: black; background: white; padding: 0 !important; width: 100% !important; margin: 0 !important; }
       
-      @page { margin: 15mm 10mm; } /* Системные поля страницы */
+      @page { margin: 15mm 10mm; }
       
-      /* Жесткая защита от разрывов */
-      .avoid-break { page-break-inside: avoid !important; break-inside: avoid !important; display: block; }
-      tr.avoid-break { display: table-row; }
+      /* Защита таблиц и блоков от разрыва страницы пополам */
+      .avoid-break { page-break-inside: avoid !important; break-inside: avoid !important; }
+      tr { page-break-inside: avoid !important; break-inside: avoid !important; }
       
       h1, h2, h3 { page-break-after: avoid !important; break-after: avoid !important; }
-      
-      /* Заставляем браузер печатать цвета фона (столбики графиков) */
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     }
   </style>
@@ -84,7 +79,6 @@
     const IconTarget = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
     const IconCheck = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
     const IconDownload = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5 5 5-5m-5 5V3"/></svg>;
-    const IconStar = ({className, fill="none"}) => <svg className={className} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>;
     const IconRefresh = ({className}) => <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>;
 
     const HARDCODED_FOODS = [
@@ -401,8 +395,8 @@
         docRef.set({ foods: updatedFoods }, { merge: true });
       };
 
-      // ФУНКЦИЯ ПЕЧАТИ (БЕЗ ЗАДЕРЖЕК, ЧТОБЫ PWA НЕ БЛОКИРОВАЛ)
-      const generatePDF = () => {
+      // ПЕЧАТЬ: МОМЕНТАЛЬНО ЗАПУСКАЕМ И ЗАКРЫВАЕМ ОКНО
+      const startExport = () => {
         window.print();
         setShowExportModal(false);
       };
@@ -510,33 +504,36 @@
         );
       }
 
-      // Этот код рендерится всегда, но скрыт CSS классом print-only до момента печати
+      // Возвращаем легкую и быструю табличную структуру для PDF
       const ExportReport = () => (
-        <div className="print-only" style={{ fontFamily: 'sans-serif' }}>
+        <div className="print-only" style={{ fontFamily: 'sans-serif', maxWidth: '800px', margin: '0 auto', fontSize: '13px' }}>
           <h1 className="avoid-break" style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px', textAlign: 'center' }}>Отчет по питанию ({exportStart} — {exportEnd})</h1>
           
           {allExportDates.length > 0 && (
-            <div className="avoid-break" style={{ backgroundColor: '#f4f4f5', padding: '15px', borderRadius: '8px', marginBottom: '20px', fontSize: '14px' }}>
+            <div className="avoid-break" style={{ backgroundColor: '#f4f4f5', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
               <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 10px 0' }}>Итоги за период:</h2>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <div style={{ width: '48%' }}>
-                   <p style={{ margin: '4px 0' }}><strong>Суммарно съедено:</strong> {totalPeriodCals} ккал</p>
-                   <p style={{ margin: '4px 0' }}><strong>Суммарно потрачено:</strong> {totalPeriodBurned} ккал</p>
-                   <p style={{ margin: '4px 0' }}><strong>Пройдено шагов:</strong> {totalPeriodSteps}</p>
-                </div>
-                <div style={{ width: '48%' }}>
-                   <p style={{ margin: '4px 0' }}><strong>Баланс ККАЛ:</strong> {periodDefText}</p>
-                   <p style={{ margin: '4px 0', fontSize: '13px', color: '#555' }}><em>(В среднем {avgDeficit} ккал/день)</em></p>
-                </div>
-              </div>
+              <table style={{ width: '100%', border: 'none', background: 'transparent' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ width: '50%', verticalAlign: 'top', padding: 0 }}>
+                       <p style={{ margin: '4px 0' }}><strong>Суммарно съедено:</strong> {totalPeriodCals} ккал</p>
+                       <p style={{ margin: '4px 0' }}><strong>Суммарно потрачено:</strong> {totalPeriodBurned} ккал</p>
+                       <p style={{ margin: '4px 0' }}><strong>Пройдено шагов:</strong> {totalPeriodSteps}</p>
+                    </td>
+                    <td style={{ width: '50%', verticalAlign: 'top', padding: 0 }}>
+                       <p style={{ margin: '4px 0' }}><strong>Баланс ККАЛ:</strong> {periodDefText}</p>
+                       <p style={{ margin: '4px 0', color: '#555' }}><em>(В среднем {avgDeficit} ккал/день)</em></p>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           )}
 
           {hasBodyData && (
             <div className="avoid-break" style={{ marginBottom: '20px' }}>
               <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 10px 0', color: '#005f73' }}>Изменения по телу:</h3>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'center', backgroundColor: '#fff', tableLayout: 'fixed', wordWrap: 'break-word' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', backgroundColor: '#fff', tableLayout: 'fixed', wordWrap: 'break-word' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#e2e8f0' }}>
                     <th style={{ padding: '8px', border: '1px solid #cbd5e1', width: '25%', textAlign: 'left' }}>Показатель</th>
@@ -547,7 +544,7 @@
                 </thead>
                 <tbody>
                   {wStart !== undefined && wEnd !== undefined && (
-                    <tr className="avoid-break">
+                    <tr>
                       <td style={{ padding: '8px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 'bold' }}>Вес (кг)</td>
                       <td style={{ padding: '8px', border: '1px solid #cbd5e1' }}>{wStart}</td>
                       <td style={{ padding: '8px', border: '1px solid #cbd5e1' }}>{wEnd}</td>
@@ -557,7 +554,7 @@
                     </tr>
                   )}
                   {fStart !== undefined && fEnd !== undefined && (
-                    <tr className="avoid-break">
+                    <tr>
                       <td style={{ padding: '8px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 'bold' }}>Жир (%)</td>
                       <td style={{ padding: '8px', border: '1px solid #cbd5e1' }}>{fStart}</td>
                       <td style={{ padding: '8px', border: '1px solid #cbd5e1' }}>{fEnd}</td>
@@ -567,7 +564,7 @@
                     </tr>
                   )}
                   {lStart !== undefined && lEnd !== undefined && (
-                    <tr className="avoid-break">
+                    <tr>
                       <td style={{ padding: '8px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 'bold' }}>БЖМ (кг)</td>
                       <td style={{ padding: '8px', border: '1px solid #cbd5e1' }}>{lStart}</td>
                       <td style={{ padding: '8px', border: '1px solid #cbd5e1' }}>{lEnd}</td>
@@ -577,7 +574,7 @@
                     </tr>
                   )}
                   {fmStart !== undefined && fmEnd !== undefined && (
-                    <tr className="avoid-break">
+                    <tr>
                       <td style={{ padding: '8px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 'bold' }}>Масса жира (кг)</td>
                       <td style={{ padding: '8px', border: '1px solid #cbd5e1' }}>{fmStart}</td>
                       <td style={{ padding: '8px', border: '1px solid #cbd5e1' }}>{fmEnd}</td>
@@ -606,7 +603,7 @@
           {datesWithMetrics.length > 0 && (
              <div className="avoid-break" style={{ marginBottom: '30px' }}>
                 <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 10px 0', color: '#005f73' }}>Динамика тела по дням:</h3>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'center', backgroundColor: '#fff', tableLayout: 'fixed', wordWrap: 'break-word' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', backgroundColor: '#fff', tableLayout: 'fixed', wordWrap: 'break-word' }}>
                    <thead>
                       <tr style={{ backgroundColor: '#e2e8f0' }}>
                          <th style={{ padding: '6px', border: '1px solid #cbd5e1', width: '20%', textAlign: 'left' }}>Дата</th>
@@ -620,7 +617,7 @@
                       {datesWithMetrics.map(date => {
                          const m = dailyMetrics[date] || {};
                          return (
-                            <tr key={date} className="avoid-break">
+                            <tr key={date}>
                                <td style={{ padding: '6px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 'bold' }}>{date}</td>
                                <td style={{ padding: '6px', border: '1px solid #cbd5e1' }}>{m.weight || '-'}</td>
                                <td style={{ padding: '6px', border: '1px solid #cbd5e1' }}>{m.fatPercent || '-'}</td>
@@ -665,25 +662,23 @@
               if (dayLogs.length === 0 && !dailyMetrics[date] && dailySteps[date] === undefined) return null;
 
               return (
-                <div key={date} style={{ marginBottom: '20px', paddingBottom: '10px' }}>
-                  <div className="avoid-break">
-                    <h2 style={{ fontSize: '16px', fontWeight: 'bold', borderBottom: '2px solid #10b981', paddingBottom: '4px', margin: '0 0 6px 0' }}>
-                      {date}
-                    </h2>
-                    <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#444', lineHeight: '1.5' }}>
-                      Шаги: {daySteps} | Съедено: {dayCals} ккал | Потрачено: {dayBurned} ккал<br/>
-                      <span style={{ fontSize: '14px', color: '#000' }}><strong>Итог дня:</strong> {dayDefText}</span><br/>
-                      {dayLogs.length > 0 && (
-                        <span>Б: {Math.round(dayPro)}г | Ж: {Math.round(dayFat)}г | У: {Math.round(dayCarb)}г</span>
-                      )}
-                      {mText && <span><br/><span style={{ color: '#005f73' }}><strong>Тело:</strong> {mText}</span></span>}
-                    </p>
-                  </div>
+                <div key={date} className="avoid-break" style={{ marginBottom: '20px', paddingBottom: '10px' }}>
+                  <h2 style={{ fontSize: '16px', fontWeight: 'bold', borderBottom: '2px solid #10b981', paddingBottom: '4px', margin: '0 0 6px 0' }}>
+                    {date}
+                  </h2>
+                  <p style={{ margin: '0 0 8px 0', color: '#444', lineHeight: '1.5' }}>
+                    Шаги: {daySteps} | Съедено: {dayCals} ккал | Потрачено: {dayBurned} ккал<br/>
+                    <span style={{ fontSize: '14px', color: '#000' }}><strong>Итог дня:</strong> {dayDefText}</span><br/>
+                    {dayLogs.length > 0 && (
+                      <span>Б: {Math.round(dayPro)}г | Ж: {Math.round(dayFat)}г | У: {Math.round(dayCarb)}г</span>
+                    )}
+                    {mText && <span><br/><span style={{ color: '#005f73' }}><strong>Тело:</strong> {mText}</span></span>}
+                  </p>
 
                   {dayLogs.length > 0 ? (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', tableLayout: 'fixed', wordWrap: 'break-word' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', wordWrap: 'break-word' }}>
                       <thead>
-                        <tr className="avoid-break" style={{ backgroundColor: '#f4f4f5', textAlign: 'left' }}>
+                        <tr style={{ backgroundColor: '#f4f4f5', textAlign: 'left' }}>
                           <th style={{ padding: '6px', border: '1px solid #e4e4e7', width: '35%' }}>Продукт</th>
                           <th style={{ padding: '6px', border: '1px solid #e4e4e7', width: '13%' }}>Вес (г)</th>
                           <th style={{ padding: '6px', border: '1px solid #e4e4e7', width: '13%' }}>Ккал</th>
@@ -694,7 +689,7 @@
                       </thead>
                       <tbody>
                         {dayLogs.map((log, i) => (
-                          <tr key={i} className="avoid-break">
+                          <tr key={i}>
                             <td style={{ padding: '6px', border: '1px solid #e4e4e7' }}>{foods.find(f => f.id === log.foodId)?.name || 'Удаленный продукт'}</td>
                             <td style={{ padding: '6px', border: '1px solid #e4e4e7' }}>{log.grams}</td>
                             <td style={{ padding: '6px', border: '1px solid #e4e4e7' }}>{Math.round(log.totalCalories || 0)}</td>
@@ -706,7 +701,7 @@
                       </tbody>
                     </table>
                   ) : (
-                    <p className="avoid-break" style={{ fontSize: '12px', color: '#888', fontStyle: 'italic' }}>В этот день дневник питания не заполнялся.</p>
+                    <p style={{ color: '#888', fontStyle: 'italic', margin: 0 }}>В этот день дневник питания не заполнялся.</p>
                   )}
                 </div>
               );
@@ -732,7 +727,6 @@
                   </button>
                 )}
                 
-                {/* СТАНДАРТНАЯ КНОПКА ВЫГРУЗКИ В ШАПКЕ */}
                 {activeTab === 'diary' && (
                   <button onClick={() => setShowExportModal(true)} className="fast-touch p-2 bg-zinc-800 rounded-xl text-zinc-300 active:scale-95 transition-transform">
                     <IconDownload className="w-5 h-5" />
@@ -970,7 +964,6 @@
               </button>
             </nav>
 
-            {/* Модальное окно настройки целей */}
             {showGoalModal && (
               <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                 <div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm">
@@ -985,7 +978,6 @@
               </div>
             )}
 
-            {/* Модальное окно выгрузки PDF */}
             {showExportModal && (
               <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                 <div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm">
@@ -1008,7 +1000,7 @@
                   </div>
                   <div className="flex gap-3">
                     <button onClick={() => setShowExportModal(false)} className="flex-1 p-4 rounded-xl bg-zinc-800 font-bold text-zinc-300 active:scale-95 transition-transform">Отмена</button>
-                    <button onClick={generatePDF} className="flex-1 p-4 rounded-xl bg-emerald-600 font-bold text-white active:scale-95 transition-transform">
+                    <button onClick={startExport} className="flex-1 p-4 rounded-xl bg-emerald-600 font-bold text-white active:scale-95 transition-transform">
                       Скачать
                     </button>
                   </div>
@@ -1017,7 +1009,7 @@
             )}
           </div>
 
-          {/* КОНТЕЙНЕР ДЛЯ ЭКСПОРТА РЕНДЕРИТСЯ ВСЕГДА (НО СКРЫТ) */}
+          {/* КОНТЕЙНЕР ДЛЯ ЭКСПОРТА */}
           <ExportReport />
         </>
       );
