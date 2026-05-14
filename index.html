@@ -20,7 +20,7 @@
     ::-webkit-scrollbar { width: 0px; background: transparent; }
     .safe-pb { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
     
-    .btn-active:active { transform: scale(0.96); opacity: 0.8; }
+    .btn-active:active:not(:disabled) { transform: scale(0.96); opacity: 0.8; }
     .list-item-active:active { background-color: #27272a !important; }
     
     input[type="number"]::-webkit-inner-spin-button, 
@@ -179,6 +179,7 @@
     function App() {
       const [isLoading, setIsLoading] = useState(true);
       const [showReportView, setShowReportView] = useState(false);
+      const [isPrinting, setIsPrinting] = useState(false); // НОВОЕ: Состояние блокировки печати
       
       const defaultGoals = { calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: 6000, maintenance: 2300 };
       const [goals, setGoals] = useState(defaultGoals);
@@ -241,6 +242,16 @@
       const startExport = () => {
         setShowExportModal(false);
         setShowReportView(true);
+      };
+
+      // НОВАЯ ФУНКЦИЯ ДЛЯ БЕЗОПАСНОЙ ПЕЧАТИ
+      const handlePrintClick = () => {
+        setIsPrinting(true); // Блокируем кнопки и меняем текст
+        setTimeout(() => {
+          window.print();
+          // window.print() в iOS возвращает управление только ПОСЛЕ закрытия диалога печати
+          setIsPrinting(false); 
+        }, 100);
       };
 
       const handleDraftGoalChange = (field, val) => setDraftGoals({ ...draftGoals, [field]: val });
@@ -498,10 +509,10 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {wStart !== undefined && wEnd !== undefined && <tr><td style={{border:'1px solid #cbd5e1', padding:'5px'}}>Вес (кг)</td><td style={{border:'1px solid #cbd5e1'}}>{wStart}</td><td style={{border:'1px solid #cbd5e1'}}>{wEnd}</td><td style={{border:'1px solid #cbd5e1', fontWeight:'bold', color: wEnd - wStart > 0 ? 'red' : 'green'}}>{(wEnd-wStart).toFixed(1)}</td></tr>}
-                  {fStart !== undefined && fEnd !== undefined && <tr><td style={{border:'1px solid #cbd5e1', padding:'5px'}}>Жир (%)</td><td style={{border:'1px solid #cbd5e1'}}>{fStart}</td><td style={{border:'1px solid #cbd5e1'}}>{fEnd}</td><td style={{border:'1px solid #cbd5e1', fontWeight:'bold', color: fEnd - fStart > 0 ? 'red' : 'green'}}>{(fEnd-fStart).toFixed(1)}</td></tr>}
-                  {lStart !== undefined && lEnd !== undefined && <tr><td style={{border:'1px solid #cbd5e1', padding:'5px'}}>БЖМ (кг)</td><td style={{border:'1px solid #cbd5e1'}}>{lStart}</td><td style={{border:'1px solid #cbd5e1'}}>{lEnd}</td><td style={{border:'1px solid #cbd5e1', fontWeight:'bold', color: lEnd - lStart > 0 ? 'green' : 'red'}}>{(lEnd-lStart).toFixed(1)}</td></tr>}
-                  {fmStart !== undefined && fmEnd !== undefined && <tr><td style={{border:'1px solid #cbd5e1', padding:'5px'}}>Масса жира (кг)</td><td style={{border:'1px solid #cbd5e1'}}>{fmStart}</td><td style={{border:'1px solid #cbd5e1'}}>{fmEnd}</td><td style={{border:'1px solid #cbd5e1', fontWeight:'bold', color: fmEnd - fmStart > 0 ? 'red' : 'green'}}>{(fmEnd-fmStart).toFixed(1)}</td></tr>}
+                  {wStart !== undefined && wEnd !== undefined && <tr><td style={{border:'1px solid #cbd5e1', padding:'5px'}}>Вес (кг)</td><td style={{border:'1px solid #cbd5e1'}}>{wStart}</td><td style={{border:'1px solid #cbd5e1'}}>{wEnd}</td><td style={{border:'1px solid #cbd5e1', fontWeight:'bold', color: wEnd - wStart > 0 ? '#ef4444' : '#10b981'}}>{(wEnd-wStart).toFixed(1)}</td></tr>}
+                  {fStart !== undefined && fEnd !== undefined && <tr><td style={{border:'1px solid #cbd5e1', padding:'5px'}}>Жир (%)</td><td style={{border:'1px solid #cbd5e1'}}>{fStart}</td><td style={{border:'1px solid #cbd5e1'}}>{fEnd}</td><td style={{border:'1px solid #cbd5e1', fontWeight:'bold', color: fEnd - fStart > 0 ? '#ef4444' : '#10b981'}}>{(fEnd-fStart).toFixed(1)}</td></tr>}
+                  {lStart !== undefined && lEnd !== undefined && <tr><td style={{border:'1px solid #cbd5e1', padding:'5px'}}>БЖМ (кг)</td><td style={{border:'1px solid #cbd5e1'}}>{lStart}</td><td style={{border:'1px solid #cbd5e1'}}>{lEnd}</td><td style={{border:'1px solid #cbd5e1', fontWeight:'bold', color: lEnd - lStart > 0 ? '#10b981' : '#ef4444'}}>{(lEnd-lStart).toFixed(1)}</td></tr>}
+                  {fmStart !== undefined && fmEnd !== undefined && <tr><td style={{border:'1px solid #cbd5e1', padding:'5px'}}>Масса жира (кг)</td><td style={{border:'1px solid #cbd5e1'}}>{fmStart}</td><td style={{border:'1px solid #cbd5e1'}}>{fmEnd}</td><td style={{border:'1px solid #cbd5e1', fontWeight:'bold', color: fmEnd - fmStart > 0 ? '#ef4444' : '#10b981'}}>{(fmEnd-fmStart).toFixed(1)}</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -578,11 +589,21 @@
         return (
           <div style={{ backgroundColor: 'white', minHeight: '100vh', padding: '15px' }}>
             <div className="print-hide" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', paddingBottom: '15px', borderBottom: '2px solid #e4e4e7' }}>
-               <button onClick={() => setShowReportView(false)} className="btn-active" style={{ padding: '12px 20px', background: '#f4f4f5', borderRadius: '12px', fontWeight: 'bold', color: '#18181b', border: '1px solid #d4d4d8', fontSize: '14px', transition: 'all 0.1s' }}>
+               <button 
+                 onClick={() => setShowReportView(false)} 
+                 disabled={isPrinting}
+                 className="btn-active" 
+                 style={{ padding: '12px 20px', background: '#f4f4f5', borderRadius: '12px', fontWeight: 'bold', color: isPrinting ? '#a1a1aa' : '#18181b', border: '1px solid #d4d4d8', fontSize: '14px', transition: 'all 0.1s', opacity: isPrinting ? 0.5 : 1 }}
+               >
                  ⬅ Назад
                </button>
-               <button onClick={() => window.print()} className="btn-active" style={{ padding: '12px 20px', background: '#10b981', borderRadius: '12px', fontWeight: 'bold', color: '#fff', border: 'none', fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.4)', transition: 'all 0.1s' }}>
-                 🖨 Сохранить PDF
+               <button 
+                 onClick={handlePrintClick} 
+                 disabled={isPrinting}
+                 className="btn-active" 
+                 style={{ padding: '12px 20px', background: isPrinting ? '#059669' : '#10b981', borderRadius: '12px', fontWeight: 'bold', color: '#fff', border: 'none', fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.4)', transition: 'all 0.1s' }}
+               >
+                 {isPrinting ? '⏳ Обработка...' : '🖨 Сохранить PDF'}
                </button>
             </div>
             <ExportReport />
