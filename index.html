@@ -120,33 +120,41 @@
       const chartMin = min - padding;
       const chartMax = max + padding;
 
-      const showLabels = data.length <= 15;
+      const showLabels = data.length <= 12;
 
       return (
-        <div className="avoid-break" style={{ width: '45%', display: 'inline-block', margin: '15px 2%', verticalAlign: 'top', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
-          <h4 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '10px', textAlign: 'center', color: '#333' }}>{title}</h4>
-          <table style={{ width: '100%', height: '120px', borderBottom: '2px solid #cbd5e1', borderSpacing: 0, tableLayout: 'fixed' }}>
-            <tbody>
-              <tr>
-                {data.map((val, i) => {
-                   if (val === null || val === undefined || isNaN(val) || val === '') {
-                     return <td key={i} style={{ padding: 0 }}></td>;
-                   }
-                   const pxHeight = Math.max(5, ((val - chartMin) / (chartMax - chartMin)) * 90);
-                   return (
-                     <td key={i} style={{ verticalAlign: 'bottom', padding: '0 1px', textAlign: 'center' }}>
-                       {showLabels && <div style={{ fontSize: '9px', color: '#666', marginBottom: '2px', fontWeight: 'bold' }}>{val}</div>}
-                       <div style={{ height: `${pxHeight}px`, backgroundColor: color, borderRadius: '2px 2px 0 0', width: '100%', maxWidth: '20px', margin: '0 auto' }}></div>
-                     </td>
-                   );
-                })}
-              </tr>
-            </tbody>
-          </table>
-          <div style={{ fontSize: '11px', color: '#888', marginTop: '8px', fontWeight: 'bold' }}>
-            <span style={{ float: 'left' }}>{dates[0]}</span>
-            <span style={{ float: 'right' }}>{dates[dates.length - 1]}</span>
-            <div style={{ clear: 'both' }}></div>
+        <div className="avoid-break" style={{ width: '46%', display: 'inline-block', margin: '15px 2%', verticalAlign: 'top', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
+          <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '10px', textAlign: 'center', color: '#333' }}>{title}</h4>
+          
+          <div style={{ display: 'flex', height: '120px' }}>
+            {/* Ось Y (Шкала) */}
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '5px', fontSize: '9px', color: '#888', borderRight: '1px solid #cbd5e1', textAlign: 'right', width: '35px', flexShrink: 0 }}>
+              <span>{chartMax.toFixed(1)}</span>
+              <span>{((chartMax + chartMin) / 2).toFixed(1)}</span>
+              <span>{chartMin.toFixed(1)}</span>
+            </div>
+            
+            {/* График */}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', borderBottom: '1px solid #cbd5e1', paddingLeft: '5px', gap: '2px' }}>
+              {data.map((val, i) => {
+                 if (val === null || val === undefined || isNaN(val) || val === '') {
+                   return <div key={i} style={{ flex: 1 }}></div>;
+                 }
+                 const percentHeight = Math.max(2, ((val - chartMin) / (chartMax - chartMin)) * 100);
+                 return (
+                   <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', height: '100%' }}>
+                     {showLabels && <div style={{ fontSize: '8px', color: '#666', marginBottom: '2px', fontWeight: 'bold' }}>{val}</div>}
+                     <div style={{ height: `${percentHeight}%`, backgroundColor: color, borderRadius: '2px 2px 0 0', width: '100%', maxWidth: '20px' }}></div>
+                   </div>
+                 );
+              })}
+            </div>
+          </div>
+          
+          {/* Ось X (Даты) */}
+          <div style={{ fontSize: '9px', color: '#888', marginTop: '5px', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', paddingLeft: '40px' }}>
+            <span>{dates[0]}</span>
+            <span>{dates[dates.length - 1]}</span>
           </div>
         </div>
       );
@@ -179,7 +187,7 @@
     function App() {
       const [isLoading, setIsLoading] = useState(true);
       const [showReportView, setShowReportView] = useState(false);
-      const [isPrinting, setIsPrinting] = useState(false); // Блокировка печати
+      const [isPrinting, setIsPrinting] = useState(false);
       
       const defaultGoals = { calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: 6000, maintenance: 2300 };
       const [goals, setGoals] = useState(defaultGoals);
@@ -244,29 +252,24 @@
         setShowReportView(true);
       };
 
-      // УМНАЯ ФУНКЦИЯ ПЕЧАТИ (ждет реального окончания)
       const handlePrintClick = () => {
         setIsPrinting(true); 
         
-        // Эта функция снимет блокировку, как только закроется окно печати
         const onAfterPrint = () => {
            setIsPrinting(false);
            window.removeEventListener('afterprint', onAfterPrint);
         };
         
-        // Подписываемся на системное событие браузера
         window.addEventListener('afterprint', onAfterPrint);
 
         setTimeout(() => {
           window.print();
           
-          // Резервный таймер на 20 секунд:
-          // Если iOS забагует и не пришлет событие afterprint, 
-          // мы все равно разблокируем кнопки, чтобы не застрять навечно.
+          // Резервный таймер на 45 секунд
           setTimeout(() => {
              setIsPrinting(false);
              window.removeEventListener('afterprint', onAfterPrint);
-          }, 20000);
+          }, 45000); // <-- ВРЕМЯ БЛОКИРОВКИ (45000 мс = 45 сек)
         }, 300);
       };
 
