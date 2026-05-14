@@ -179,7 +179,7 @@
     function App() {
       const [isLoading, setIsLoading] = useState(true);
       const [showReportView, setShowReportView] = useState(false);
-      const [isPrinting, setIsPrinting] = useState(false); // НОВОЕ: Состояние блокировки печати
+      const [isPrinting, setIsPrinting] = useState(false); // Блокировка печати
       
       const defaultGoals = { calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: 6000, maintenance: 2300 };
       const [goals, setGoals] = useState(defaultGoals);
@@ -244,14 +244,19 @@
         setShowReportView(true);
       };
 
-      // НОВАЯ ФУНКЦИЯ ДЛЯ БЕЗОПАСНОЙ ПЕЧАТИ
+      // НОВАЯ, НАДЕЖНАЯ ФУНКЦИЯ ПЕЧАТИ
       const handlePrintClick = () => {
-        setIsPrinting(true); // Блокируем кнопки и меняем текст
+        setIsPrinting(true); 
+        // 1. Даем React 300мс на отрисовку кнопки в заблокированном состоянии
         setTimeout(() => {
           window.print();
-          // window.print() в iOS возвращает управление только ПОСЛЕ закрытия диалога печати
-          setIsPrinting(false); 
-        }, 100);
+          // 2. iOS Safari блокирует процесс здесь, пока открыто системное окно.
+          // Когда окно закроется, или если браузер вернет контроль досрочно (баг iOS),
+          // мы снимем блокировку только через 4 секунды, чтобы интерфейс не мелькал.
+          setTimeout(() => {
+            setIsPrinting(false); 
+          }, 4000); 
+        }, 300);
       };
 
       const handleDraftGoalChange = (field, val) => setDraftGoals({ ...draftGoals, [field]: val });
@@ -601,7 +606,7 @@
                  onClick={handlePrintClick} 
                  disabled={isPrinting}
                  className="btn-active" 
-                 style={{ padding: '12px 20px', background: isPrinting ? '#059669' : '#10b981', borderRadius: '12px', fontWeight: 'bold', color: '#fff', border: 'none', fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.4)', transition: 'all 0.1s' }}
+                 style={{ padding: '12px 20px', background: isPrinting ? '#059669' : '#10b981', borderRadius: '12px', fontWeight: 'bold', color: '#fff', border: 'none', fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.4)', transition: 'all 0.1s', opacity: isPrinting ? 0.8 : 1 }}
                >
                  {isPrinting ? '⏳ Обработка...' : '🖨 Сохранить PDF'}
                </button>
