@@ -387,6 +387,7 @@
         const element = document.getElementById('pdf-export-container');
         element.style.display = 'block';
         
+        // Умная защита от разрезания: html2pdf ищет блоки .avoid-break и переносит их целиком
         setTimeout(() => {
           const opt = {
             margin:       [10, 5, 10, 5], 
@@ -394,7 +395,6 @@
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 1.2, useCORS: true, logging: false, windowWidth: 800, width: 800 },
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            // Умная защита от разрезания (защищает класс .avoid-break и все заголовки)
             pagebreak:    { mode: ['css', 'legacy'], avoid: ['.avoid-break'] }
           };
 
@@ -831,58 +831,55 @@
                 {hasBodyData && (
                   <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #d4d4d8' }}>
                     <h3 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 12px 0', color: '#005f73' }}>Изменения по телу:</h3>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '15px', textAlign: 'center', backgroundColor: '#fff', tableLayout: 'fixed', wordWrap: 'break-word' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: '#e2e8f0' }}>
-                          <th style={{ padding: '10px', border: '1px solid #cbd5e1', width: '25%', textAlign: 'left' }}>Показатель</th>
-                          <th style={{ padding: '10px', border: '1px solid #cbd5e1', width: '25%' }}>Начало</th>
-                          <th style={{ padding: '10px', border: '1px solid #cbd5e1', width: '25%' }}>Конец</th>
-                          <th style={{ padding: '10px', border: '1px solid #cbd5e1', width: '25%' }}>Разница</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {wStart !== undefined && wEnd !== undefined && (
-                          <tr>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 'bold' }}>Вес (кг)</td>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{wStart}</td>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{wEnd}</td>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', fontWeight: 'bold', color: (wEnd - wStart) > 0 ? '#ef4444' : '#10b981' }}>
-                               {((wEnd - wStart) > 0 ? '+' : '') + (wEnd - wStart).toFixed(1)}
-                            </td>
-                          </tr>
-                        )}
-                        {fStart !== undefined && fEnd !== undefined && (
-                          <tr>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 'bold' }}>Жир (%)</td>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{fStart}</td>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{fEnd}</td>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', fontWeight: 'bold', color: (fEnd - fStart) > 0 ? '#ef4444' : '#10b981' }}>
-                               {((fEnd - fStart) > 0 ? '+' : '') + (fEnd - fStart).toFixed(1)}
-                            </td>
-                          </tr>
-                        )}
-                        {lStart !== undefined && lEnd !== undefined && (
-                          <tr>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 'bold' }}>БЖМ (кг)</td>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{lStart}</td>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{lEnd}</td>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', fontWeight: 'bold', color: (lEnd - lStart) > 0 ? '#10b981' : '#ef4444' }}>
-                               {((lEnd - lStart) > 0 ? '+' : '') + (lEnd - lStart).toFixed(1)}
-                            </td>
-                          </tr>
-                        )}
-                        {fmStart !== undefined && fmEnd !== undefined && (
-                          <tr>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 'bold' }}>Масса жира (кг)</td>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{fmStart}</td>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1' }}>{fmEnd}</td>
-                            <td style={{ padding: '10px', border: '1px solid #cbd5e1', fontWeight: 'bold', color: (fmEnd - fmStart) > 0 ? '#ef4444' : '#10b981' }}>
-                               {((fmEnd - fmStart) > 0 ? '+' : '') + (fmEnd - fmStart).toFixed(1)}
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                    
+                    {/* Таблица на DIV */}
+                    <div className="avoid-break" style={{ width: '100%', backgroundColor: '#e2e8f0', borderTop: '1px solid #cbd5e1', borderBottom: '1px solid #cbd5e1', overflow: 'hidden' }}>
+                      <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', fontWeight: 'bold' }}>Показатель</div>
+                      <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', fontWeight: 'bold', textAlign: 'center' }}>Начало</div>
+                      <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', fontWeight: 'bold', textAlign: 'center' }}>Конец</div>
+                      <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', fontWeight: 'bold', textAlign: 'center' }}>Разница</div>
+                    </div>
+
+                    {wStart !== undefined && wEnd !== undefined && (
+                      <div className="avoid-break" style={{ width: '100%', borderBottom: '1px solid #cbd5e1', overflow: 'hidden' }}>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', fontWeight: 'bold' }}>Вес (кг)</div>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', textAlign: 'center' }}>{wStart}</div>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', textAlign: 'center' }}>{wEnd}</div>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', fontWeight: 'bold', textAlign: 'center', color: (wEnd - wStart) > 0 ? '#ef4444' : '#10b981' }}>
+                           {((wEnd - wStart) > 0 ? '+' : '') + (wEnd - wStart).toFixed(1)}
+                        </div>
+                      </div>
+                    )}
+                    {fStart !== undefined && fEnd !== undefined && (
+                      <div className="avoid-break" style={{ width: '100%', borderBottom: '1px solid #cbd5e1', overflow: 'hidden' }}>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', fontWeight: 'bold' }}>Жир (%)</div>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', textAlign: 'center' }}>{fStart}</div>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', textAlign: 'center' }}>{fEnd}</div>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', fontWeight: 'bold', textAlign: 'center', color: (fEnd - fStart) > 0 ? '#ef4444' : '#10b981' }}>
+                           {((fEnd - fStart) > 0 ? '+' : '') + (fEnd - fStart).toFixed(1)}
+                        </div>
+                      </div>
+                    )}
+                    {lStart !== undefined && lEnd !== undefined && (
+                      <div className="avoid-break" style={{ width: '100%', borderBottom: '1px solid #cbd5e1', overflow: 'hidden' }}>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', fontWeight: 'bold' }}>БЖМ (кг)</div>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', textAlign: 'center' }}>{lStart}</div>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', textAlign: 'center' }}>{lEnd}</div>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', fontWeight: 'bold', textAlign: 'center', color: (lEnd - lStart) > 0 ? '#10b981' : '#ef4444' }}>
+                           {((lEnd - lStart) > 0 ? '+' : '') + (lEnd - lStart).toFixed(1)}
+                        </div>
+                      </div>
+                    )}
+                    {fmStart !== undefined && fmEnd !== undefined && (
+                      <div className="avoid-break" style={{ width: '100%', borderBottom: '1px solid #cbd5e1', overflow: 'hidden' }}>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', fontWeight: 'bold' }}>Масса жира (кг)</div>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', textAlign: 'center' }}>{fmStart}</div>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', textAlign: 'center' }}>{fmEnd}</div>
+                        <div style={{ float: 'left', width: '25%', padding: '10px', boxSizing: 'border-box', fontSize: '15px', fontWeight: 'bold', textAlign: 'center', color: (fmEnd - fmStart) > 0 ? '#ef4444' : '#10b981' }}>
+                           {((fmEnd - fmStart) > 0 ? '+' : '') + (fmEnd - fmStart).toFixed(1)}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -904,36 +901,33 @@
             {datesWithMetrics.length > 0 && (
                <div style={{ marginBottom: '40px' }}>
                   <h3 className="avoid-break" style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 15px 0', color: '#005f73' }}>Динамика тела по дням:</h3>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', textAlign: 'center', backgroundColor: '#fff', tableLayout: 'fixed', wordWrap: 'break-word' }}>
-                     <thead>
-                        <tr className="avoid-break" style={{ backgroundColor: '#e2e8f0' }}>
-                           <th style={{ padding: '8px', border: '1px solid #cbd5e1', width: '20%', textAlign: 'left' }}>Дата</th>
-                           <th style={{ padding: '8px', border: '1px solid #cbd5e1', width: '20%' }}>Вес (кг)</th>
-                           <th style={{ padding: '8px', border: '1px solid #cbd5e1', width: '20%' }}>Жир (%)</th>
-                           <th style={{ padding: '8px', border: '1px solid #cbd5e1', width: '20%' }}>БЖМ (кг)</th>
-                           <th style={{ padding: '8px', border: '1px solid #cbd5e1', width: '20%' }}>Масса жира</th>
-                        </tr>
-                     </thead>
-                     <tbody>
-                        {datesWithMetrics.map(date => {
-                           const m = dailyMetrics[date] || {};
-                           return (
-                              <tr key={date} className="avoid-break">
-                                 <td style={{ padding: '8px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 'bold' }}>{date}</td>
-                                 <td style={{ padding: '8px', border: '1px solid #cbd5e1' }}>{m.weight || '-'}</td>
-                                 <td style={{ padding: '8px', border: '1px solid #cbd5e1' }}>{m.fatPercent || '-'}</td>
-                                 <td style={{ padding: '8px', border: '1px solid #cbd5e1' }}>{m.leanMass || '-'}</td>
-                                 <td style={{ padding: '8px', border: '1px solid #cbd5e1' }}>{m.fatMass || '-'}</td>
-                              </tr>
-                           )
-                        })}
-                     </tbody>
-                  </table>
+                  
+                  {/* Таблица на DIV */}
+                  <div className="avoid-break" style={{ width: '100%', backgroundColor: '#e2e8f0', borderTop: '1px solid #cbd5e1', borderBottom: '1px solid #cbd5e1', overflow: 'hidden' }}>
+                    <div style={{ float: 'left', width: '20%', padding: '8px', boxSizing: 'border-box', fontSize: '14px', fontWeight: 'bold' }}>Дата</div>
+                    <div style={{ float: 'left', width: '20%', padding: '8px', boxSizing: 'border-box', fontSize: '14px', fontWeight: 'bold', textAlign: 'center' }}>Вес (кг)</div>
+                    <div style={{ float: 'left', width: '20%', padding: '8px', boxSizing: 'border-box', fontSize: '14px', fontWeight: 'bold', textAlign: 'center' }}>Жир (%)</div>
+                    <div style={{ float: 'left', width: '20%', padding: '8px', boxSizing: 'border-box', fontSize: '14px', fontWeight: 'bold', textAlign: 'center' }}>БЖМ (кг)</div>
+                    <div style={{ float: 'left', width: '20%', padding: '8px', boxSizing: 'border-box', fontSize: '14px', fontWeight: 'bold', textAlign: 'center' }}>Масса жира</div>
+                  </div>
+
+                  {datesWithMetrics.map(date => {
+                     const m = dailyMetrics[date] || {};
+                     return (
+                        <div key={date} className="avoid-break" style={{ width: '100%', borderBottom: '1px solid #cbd5e1', overflow: 'hidden' }}>
+                           <div style={{ float: 'left', width: '20%', padding: '8px', boxSizing: 'border-box', fontSize: '14px', fontWeight: 'bold' }}>{date}</div>
+                           <div style={{ float: 'left', width: '20%', padding: '8px', boxSizing: 'border-box', fontSize: '14px', textAlign: 'center' }}>{m.weight || '-'}</div>
+                           <div style={{ float: 'left', width: '20%', padding: '8px', boxSizing: 'border-box', fontSize: '14px', textAlign: 'center' }}>{m.fatPercent || '-'}</div>
+                           <div style={{ float: 'left', width: '20%', padding: '8px', boxSizing: 'border-box', fontSize: '14px', textAlign: 'center' }}>{m.leanMass || '-'}</div>
+                           <div style={{ float: 'left', width: '20%', padding: '8px', boxSizing: 'border-box', fontSize: '14px', textAlign: 'center' }}>{m.fatMass || '-'}</div>
+                        </div>
+                     )
+                  })}
                </div>
             )}
 
             {allExportDates.length === 0 ? (
-              <p>За выбранный период нет данных.</p>
+              <p>За выбранный период нет данных о питании.</p>
             ) : (
               allExportDates.map(date => {
                 const dayActiveGoals = getEffectiveGoals(date);
@@ -960,7 +954,6 @@
                   m.fatMass ? `Жир: ${m.fatMass} кг` : ''
                 ].filter(Boolean).join(' | ');
 
-                // Если в день нет ни еды, ни шагов, ни замеров веса в этом диапазоне (такого быть не должно из-за логики сбора, но на всякий случай)
                 if (dayLogs.length === 0 && !dailyMetrics[date] && dailySteps[date] === undefined) return null;
 
                 return (
@@ -981,30 +974,29 @@
                     </div>
 
                     {dayLogs.length > 0 ? (
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', tableLayout: 'fixed', wordWrap: 'break-word' }}>
-                        <thead>
-                          <tr className="avoid-break" style={{ backgroundColor: '#f4f4f5', textAlign: 'left' }}>
-                            <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '35%' }}>Продукт</th>
-                            <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Вес (г)</th>
-                            <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Ккал</th>
-                            <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Белки</th>
-                            <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Жиры</th>
-                            <th style={{ padding: '4px', border: '1px solid #e4e4e7', width: '13%' }}>Углеводы</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dayLogs.map((log, i) => (
-                            <tr key={i} className="avoid-break">
-                              <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{foods.find(f => f.id === log.foodId)?.name || 'Удаленный продукт'}</td>
-                              <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{log.grams}</td>
-                              <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{Math.round(log.totalCalories || 0)}</td>
-                              <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{Math.round(log.totalProtein || 0)}</td>
-                              <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{Math.round(log.totalFats || 0)}</td>
-                              <td style={{ padding: '4px', border: '1px solid #e4e4e7' }}>{Math.round(log.totalCarbs || 0)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <div style={{ width: '100%', borderTop: '2px solid #cbd5e1' }}>
+                        
+                        {/* Таблица на DIV */}
+                        <div className="avoid-break" style={{ width: '100%', backgroundColor: '#f4f4f5', borderBottom: '1px solid #cbd5e1', overflow: 'hidden' }}>
+                          <div style={{ float: 'left', width: '35%', padding: '6px 4px', boxSizing: 'border-box', fontSize: '14px', fontWeight: 'bold' }}>Продукт</div>
+                          <div style={{ float: 'left', width: '13%', padding: '6px 4px', boxSizing: 'border-box', fontSize: '14px', fontWeight: 'bold' }}>Вес (г)</div>
+                          <div style={{ float: 'left', width: '13%', padding: '6px 4px', boxSizing: 'border-box', fontSize: '14px', fontWeight: 'bold' }}>Ккал</div>
+                          <div style={{ float: 'left', width: '13%', padding: '6px 4px', boxSizing: 'border-box', fontSize: '14px', fontWeight: 'bold' }}>Белки</div>
+                          <div style={{ float: 'left', width: '13%', padding: '6px 4px', boxSizing: 'border-box', fontSize: '14px', fontWeight: 'bold' }}>Жиры</div>
+                          <div style={{ float: 'left', width: '13%', padding: '6px 4px', boxSizing: 'border-box', fontSize: '14px', fontWeight: 'bold' }}>Углеводы</div>
+                        </div>
+
+                        {dayLogs.map((log, i) => (
+                          <div key={i} className="avoid-break" style={{ width: '100%', borderBottom: '1px solid #cbd5e1', overflow: 'hidden' }}>
+                            <div style={{ float: 'left', width: '35%', padding: '6px 4px', boxSizing: 'border-box', fontSize: '14px', wordWrap: 'break-word' }}>{foods.find(f => f.id === log.foodId)?.name || 'Удаленный продукт'}</div>
+                            <div style={{ float: 'left', width: '13%', padding: '6px 4px', boxSizing: 'border-box', fontSize: '14px' }}>{log.grams}</div>
+                            <div style={{ float: 'left', width: '13%', padding: '6px 4px', boxSizing: 'border-box', fontSize: '14px' }}>{Math.round(log.totalCalories || 0)}</div>
+                            <div style={{ float: 'left', width: '13%', padding: '6px 4px', boxSizing: 'border-box', fontSize: '14px' }}>{Math.round(log.totalProtein || 0)}</div>
+                            <div style={{ float: 'left', width: '13%', padding: '6px 4px', boxSizing: 'border-box', fontSize: '14px' }}>{Math.round(log.totalFats || 0)}</div>
+                            <div style={{ float: 'left', width: '13%', padding: '6px 4px', boxSizing: 'border-box', fontSize: '14px' }}>{Math.round(log.totalCarbs || 0)}</div>
+                          </div>
+                        ))}
+                      </div>
                     ) : (
                       <p className="avoid-break" style={{ fontSize: '13px', color: '#888', fontStyle: 'italic' }}>В этот день дневник питания не заполнялся.</p>
                     )}
