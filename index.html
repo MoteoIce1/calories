@@ -12,6 +12,9 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
   <style>
     body { background-color: #000; margin: 0; padding: 0; overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     ::-webkit-scrollbar { width: 0px; background: transparent; }
@@ -44,6 +47,27 @@
   <div id="root"></div>
 
   <script type="text/babel">
+    // Инициализация базы данных
+    const firebaseConfig = {
+      apiKey: "AIzaSyBg9rVgF6WUjuu9abFvV_1KCHdSW3fZ5uQ",
+      authDomain: "my-test-db-de78c.firebaseapp.com",
+      projectId: "my-test-db-de78c",
+      storageBucket: "my-test-db-de78c.firebasestorage.app",
+      messagingSenderId: "30801099639",
+      appId: "1:30801099639:web:585da0bba1f27d4a6fff72",
+      measurementId: "G-KW2YVT1ZJW"
+    };
+
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+      // Умный оффлайн-кэш: мгновенная загрузка базы
+      firebase.firestore().enablePersistence().catch((err) => {
+        console.warn("Firebase persistence error:", err.code);
+      });
+    }
+    const db = firebase.firestore();
+    const docRef = db.collection('users').doc('main_profile');
+
     const { useState, useEffect, useRef } = React;
 
     const IconStar = ({className, fill}) => <svg className={className} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
@@ -67,16 +91,6 @@
       { id: 'h14', name: 'Огурец', calories: 15, protein: 1, fats: 0.1, carbs: 3, isFavorite: false },
       { id: 'h18', name: 'Яйцо куриное (на 100г)', calories: 155, protein: 13, fats: 11, carbs: 1, isFavorite: false },
     ];
-
-    const saveToLocalStorage = (updates) => {
-      try {
-        const existing = JSON.parse(localStorage.getItem('dietTrackerLocalData') || '{}');
-        const merged = { ...existing, ...updates };
-        localStorage.setItem('dietTrackerLocalData', JSON.stringify(merged));
-      } catch (e) {
-        console.error("Ошибка сохранения:", e);
-      }
-    };
 
     const MacroBar = ({ label, current, goal, colorClass, bgClass }) => {
       const numGoal = Number(goal) || 1;
@@ -201,13 +215,13 @@
       const scrollContainerRef = useRef(null);
 
       useEffect(() => {
-        try {
-          const localData = localStorage.getItem('dietTrackerLocalData');
-          if (localData) {
-            const data = JSON.parse(localData);
+        // Слушаем БД Firebase
+        const unsubscribe = docRef.onSnapshot((docSnap) => {
+          if (docSnap.exists) {
+            const data = docSnap.data();
             if (data.goals) {
                 setGoals({...goals, ...data.goals});
-                setDraftGoals({...goals, ...data.goals});
+                if (isLoading) setDraftGoals({...goals, ...data.goals});
             }
             if (data.dailyGoals) setDailyGoals(data.dailyGoals);
             if (data.foods) setFoods(data.foods);
@@ -218,11 +232,12 @@
           } else {
             setFoods(HARDCODED_FOODS);
           }
-        } catch (e) {
-          console.error("Ошибка загрузки:", e);
-          setFoods(HARDCODED_FOODS);
-        }
-        setIsLoading(false);
+          setIsLoading(false);
+        }, (error) => {
+           console.log("Firebase error", error);
+           setIsLoading(false);
+        });
+        return () => unsubscribe();
       }, []);
 
       useEffect(() => {
@@ -243,7 +258,6 @@
            setIsPrinting(false);
            window.removeEventListener('afterprint', onAfterPrint);
         };
-        
         window.addEventListener('afterprint', onAfterPrint);
 
         setTimeout(() => {
@@ -269,7 +283,8 @@
                 if (date < todayStr && !updatedDailyGoals[date]) updatedDailyGoals[date] = { ...goals };
             });
         }
-        saveToLocalStorage({ goals: draftGoals, dailyGoals: updatedDailyGoals });
+        // Сохраняем в Firebase
+        docRef.set({ goals: draftGoals, dailyGoals: updatedDailyGoals }, { merge: true });
         setGoals(draftGoals); setDailyGoals(updatedDailyGoals); setShowGoalModal(false);
       };
 
@@ -278,7 +293,8 @@
       const handleUpdateSteps = (val) => {
         const num = parseInt(val);
         const updated = { ...dailySteps, [currentDate]: isNaN(num) ? '' : num };
-        setDailySteps(updated); saveToLocalStorage({ dailySteps: updated });
+        setDailySteps(updated); 
+        docRef.set({ dailySteps: updated }, { merge: true });
       };
 
       const handleUpdateMetrics = (field, val) => {
@@ -286,7 +302,8 @@
         const currentDayMetrics = dailyMetrics[currentDate] || {};
         const updatedDay = { ...currentDayMetrics, [field]: isNaN(num) ? '' : num };
         const updated = { ...dailyMetrics, [currentDate]: updatedDay };
-        setDailyMetrics(updated); saveToLocalStorage({ dailyMetrics: updated });
+        setDailyMetrics(updated); 
+        docRef.set({ dailyMetrics: updated }, { merge: true });
       };
 
       const handleAddLog = (e) => {
@@ -302,7 +319,8 @@
           totalCarbs: Math.round((grams / 100) * (food.carbs || 0))
         };
         const updatedLogs = { ...dailyLogs, [currentDate]: [...(dailyLogs[currentDate] || []), newLog] };
-        setDailyLogs(updatedLogs); saveToLocalStorage({ dailyLogs: updatedLogs });
+        setDailyLogs(updatedLogs); 
+        docRef.set({ dailyLogs: updatedLogs }, { merge: true });
         setSelectedFoodId(''); setGramsInput('');
       };
 
@@ -322,12 +340,15 @@
           return log;
         });
         const updatedLogs = { ...dailyLogs, [currentDate]: dayLogs };
-        setDailyLogs(updatedLogs); saveToLocalStorage({ dailyLogs: updatedLogs }); setEditingLogId(null);
+        setDailyLogs(updatedLogs); 
+        docRef.set({ dailyLogs: updatedLogs }, { merge: true }); 
+        setEditingLogId(null);
       };
 
       const deleteLog = (id) => {
         const updatedLogs = { ...dailyLogs, [currentDate]: dailyLogs[currentDate].filter(l => l.id !== id) };
-        setDailyLogs(updatedLogs); saveToLocalStorage({ dailyLogs: updatedLogs });
+        setDailyLogs(updatedLogs); 
+        docRef.set({ dailyLogs: updatedLogs }, { merge: true });
       };
 
       const handleAddFood = (e) => {
@@ -340,7 +361,8 @@
           carbs: parseFloat(newFood.carb || 0), isFavorite: false
         };
         const updatedFoods = [foodItem, ...foods];
-        setFoods(updatedFoods); saveToLocalStorage({ foods: updatedFoods });
+        setFoods(updatedFoods); 
+        docRef.set({ foods: updatedFoods }, { merge: true });
         setNewFood({ name: '', cals: '', pro: '', fat: '', carb: '' });
       };
 
@@ -371,15 +393,18 @@
           });
         });
 
-        setDailyLogs(updatedLogs); saveToLocalStorage({ foods: updatedFoods, dailyLogs: updatedLogs }); setEditingFoodId(null);
+        setDailyLogs(updatedLogs); 
+        docRef.set({ foods: updatedFoods, dailyLogs: updatedLogs }, { merge: true }); 
+        setEditingFoodId(null);
       };
 
-      const deleteFood = (e, id) => { e.stopPropagation(); const updatedFoods = foods.filter(x => x.id !== id); setFoods(updatedFoods); saveToLocalStorage({ foods: updatedFoods }); };
+      const deleteFood = (e, id) => { e.stopPropagation(); const updatedFoods = foods.filter(x => x.id !== id); setFoods(updatedFoods); docRef.set({ foods: updatedFoods }, { merge: true }); };
 
       const toggleFavorite = (e, id, currentStatus) => {
         e.stopPropagation();
         const updatedFoods = foods.map(f => f.id === id ? { ...f, isFavorite: !currentStatus } : f);
-        setFoods(updatedFoods); saveToLocalStorage({ foods: updatedFoods });
+        setFoods(updatedFoods); 
+        docRef.set({ foods: updatedFoods }, { merge: true });
       };
 
       const forceRefreshApp = () => window.location.href = window.location.pathname + '?v=' + Date.now();
