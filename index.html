@@ -12,9 +12,6 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-
   <style>
     body { background-color: #000; margin: 0; padding: 0; overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     ::-webkit-scrollbar { width: 0px; background: transparent; }
@@ -47,25 +44,6 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const firebaseConfig = {
-      apiKey: "AIzaSyBg9rVgF6WUjuu9abFvV_1KCHdSW3fZ5uQ",
-      authDomain: "my-test-db-de78c.firebaseapp.com",
-      projectId: "my-test-db-de78c",
-      storageBucket: "my-test-db-de78c.firebasestorage.app",
-      messagingSenderId: "30801099639",
-      appId: "1:30801099639:web:585da0bba1f27d4a6fff72",
-      measurementId: "G-KW2YVT1ZJW"
-    };
-
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-      firebase.firestore().enablePersistence().catch((err) => {
-        console.warn("Firebase persistence error:", err.code);
-      });
-    }
-    const db = firebase.firestore();
-    const docRef = db.collection('users').doc('main_profile');
-
     const { useState, useEffect, useRef } = React;
 
     const IconStar = ({className, fill}) => <svg className={className} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
@@ -89,6 +67,16 @@
       { id: 'h14', name: 'Огурец', calories: 15, protein: 1, fats: 0.1, carbs: 3, isFavorite: false },
       { id: 'h18', name: 'Яйцо куриное (на 100г)', calories: 155, protein: 13, fats: 11, carbs: 1, isFavorite: false },
     ];
+
+    const saveToLocalStorage = (updates) => {
+      try {
+        const existing = JSON.parse(localStorage.getItem('dietTrackerLocalData') || '{}');
+        const merged = { ...existing, ...updates };
+        localStorage.setItem('dietTrackerLocalData', JSON.stringify(merged));
+      } catch (e) {
+        console.error("Ошибка сохранения:", e);
+      }
+    };
 
     const MacroBar = ({ label, current, goal, colorClass, bgClass }) => {
       const numGoal = Number(goal) || 1;
@@ -127,19 +115,15 @@
           <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '10px', textAlign: 'center', color: '#333' }}>{title}</h4>
           
           <div style={{ display: 'flex', height: '120px' }}>
-            {/* Ось Y (Шкала) */}
             <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingRight: '5px', fontSize: '9px', color: '#888', borderRight: '1px solid #cbd5e1', textAlign: 'right', width: '35px', flexShrink: 0 }}>
               <span>{chartMax.toFixed(1)}</span>
               <span>{((chartMax + chartMin) / 2).toFixed(1)}</span>
               <span>{chartMin.toFixed(1)}</span>
             </div>
             
-            {/* График */}
             <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', borderBottom: '1px solid #cbd5e1', paddingLeft: '5px', gap: '2px' }}>
               {data.map((val, i) => {
-                 if (val === null || val === undefined || isNaN(val) || val === '') {
-                   return <div key={i} style={{ flex: 1 }}></div>;
-                 }
+                 if (val === null || val === undefined || isNaN(val) || val === '') return <div key={i} style={{ flex: 1 }}></div>;
                  const percentHeight = Math.max(2, ((val - chartMin) / (chartMax - chartMin)) * 100);
                  return (
                    <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', height: '100%' }}>
@@ -151,7 +135,6 @@
             </div>
           </div>
           
-          {/* Ось X (Даты) */}
           <div style={{ fontSize: '9px', color: '#888', marginTop: '5px', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', paddingLeft: '40px' }}>
             <span>{dates[0]}</span>
             <span>{dates[dates.length - 1]}</span>
@@ -218,27 +201,28 @@
       const scrollContainerRef = useRef(null);
 
       useEffect(() => {
-        const unsubscribe = docRef.onSnapshot((docSnap) => {
-          if (docSnap.exists) {
-            const data = docSnap.data();
+        try {
+          const localData = localStorage.getItem('dietTrackerLocalData');
+          if (localData) {
+            const data = JSON.parse(localData);
             if (data.goals) {
                 setGoals({...goals, ...data.goals});
-                if (isLoading) setDraftGoals({...goals, ...data.goals});
+                setDraftGoals({...goals, ...data.goals});
             }
             if (data.dailyGoals) setDailyGoals(data.dailyGoals);
             if (data.foods) setFoods(data.foods);
+            else setFoods(HARDCODED_FOODS);
             if (data.dailyLogs) setDailyLogs(data.dailyLogs);
             if (data.dailySteps) setDailySteps(data.dailySteps);
             if (data.dailyMetrics) setDailyMetrics(data.dailyMetrics);
           } else {
             setFoods(HARDCODED_FOODS);
           }
-          setIsLoading(false);
-        }, (error) => {
-           console.log("Firebase error", error);
-           setIsLoading(false);
-        });
-        return () => unsubscribe();
+        } catch (e) {
+          console.error("Ошибка загрузки:", e);
+          setFoods(HARDCODED_FOODS);
+        }
+        setIsLoading(false);
       }, []);
 
       useEffect(() => {
@@ -264,12 +248,10 @@
 
         setTimeout(() => {
           window.print();
-          
-          // Резервный таймер на 45 секунд
           setTimeout(() => {
              setIsPrinting(false);
              window.removeEventListener('afterprint', onAfterPrint);
-          }, 45000); // <-- ВРЕМЯ БЛОКИРОВКИ (45000 мс = 45 сек)
+          }, 45000); 
         }, 300);
       };
 
@@ -287,7 +269,7 @@
                 if (date < todayStr && !updatedDailyGoals[date]) updatedDailyGoals[date] = { ...goals };
             });
         }
-        docRef.set({ goals: draftGoals, dailyGoals: updatedDailyGoals }, { merge: true });
+        saveToLocalStorage({ goals: draftGoals, dailyGoals: updatedDailyGoals });
         setGoals(draftGoals); setDailyGoals(updatedDailyGoals); setShowGoalModal(false);
       };
 
@@ -296,7 +278,7 @@
       const handleUpdateSteps = (val) => {
         const num = parseInt(val);
         const updated = { ...dailySteps, [currentDate]: isNaN(num) ? '' : num };
-        setDailySteps(updated); docRef.set({ dailySteps: updated }, { merge: true });
+        setDailySteps(updated); saveToLocalStorage({ dailySteps: updated });
       };
 
       const handleUpdateMetrics = (field, val) => {
@@ -304,7 +286,7 @@
         const currentDayMetrics = dailyMetrics[currentDate] || {};
         const updatedDay = { ...currentDayMetrics, [field]: isNaN(num) ? '' : num };
         const updated = { ...dailyMetrics, [currentDate]: updatedDay };
-        setDailyMetrics(updated); docRef.set({ dailyMetrics: updated }, { merge: true });
+        setDailyMetrics(updated); saveToLocalStorage({ dailyMetrics: updated });
       };
 
       const handleAddLog = (e) => {
@@ -320,7 +302,7 @@
           totalCarbs: Math.round((grams / 100) * (food.carbs || 0))
         };
         const updatedLogs = { ...dailyLogs, [currentDate]: [...(dailyLogs[currentDate] || []), newLog] };
-        setDailyLogs(updatedLogs); docRef.set({ dailyLogs: updatedLogs }, { merge: true });
+        setDailyLogs(updatedLogs); saveToLocalStorage({ dailyLogs: updatedLogs });
         setSelectedFoodId(''); setGramsInput('');
       };
 
@@ -340,35 +322,35 @@
           return log;
         });
         const updatedLogs = { ...dailyLogs, [currentDate]: dayLogs };
-        setDailyLogs(updatedLogs); docRef.set({ dailyLogs: updatedLogs }, { merge: true }); setEditingLogId(null);
+        setDailyLogs(updatedLogs); saveToLocalStorage({ dailyLogs: updatedLogs }); setEditingLogId(null);
       };
 
       const deleteLog = (id) => {
         const updatedLogs = { ...dailyLogs, [currentDate]: dailyLogs[currentDate].filter(l => l.id !== id) };
-        setDailyLogs(updatedLogs); docRef.set({ dailyLogs: updatedLogs }, { merge: true });
+        setDailyLogs(updatedLogs); saveToLocalStorage({ dailyLogs: updatedLogs });
       };
 
       const handleAddFood = (e) => {
         e.preventDefault();
         const foodItem = {
           id: Date.now().toString(), name: newFood.name,
-          calories: Math.round(parseFloat(newFood.cals || 0)),
-          protein: Math.round(parseFloat(newFood.pro || 0)),
-          fats: Math.round(parseFloat(newFood.fat || 0)),
-          carbs: Math.round(parseFloat(newFood.carb || 0)), isFavorite: false
+          calories: parseFloat(newFood.cals || 0),
+          protein: parseFloat(newFood.pro || 0),
+          fats: parseFloat(newFood.fat || 0),
+          carbs: parseFloat(newFood.carb || 0), isFavorite: false
         };
         const updatedFoods = [foodItem, ...foods];
-        setFoods(updatedFoods); docRef.set({ foods: updatedFoods }, { merge: true });
+        setFoods(updatedFoods); saveToLocalStorage({ foods: updatedFoods });
         setNewFood({ name: '', cals: '', pro: '', fat: '', carb: '' });
       };
 
       const updateFoodBase = (id) => {
         const updatedFoods = foods.map(f => f.id === id ? { 
             ...f, name: editValue.name,
-            calories: Math.round(parseFloat(editValue.calories || 0)),
-            protein: Math.round(parseFloat(editValue.protein || 0)),
-            fats: Math.round(parseFloat(editValue.fats || 0)),
-            carbs: Math.round(parseFloat(editValue.carbs || 0))
+            calories: parseFloat(editValue.calories || 0),
+            protein: parseFloat(editValue.protein || 0),
+            fats: parseFloat(editValue.fats || 0),
+            carbs: parseFloat(editValue.carbs || 0)
         } : f);
         setFoods(updatedFoods);
         
@@ -389,15 +371,15 @@
           });
         });
 
-        setDailyLogs(updatedLogs); docRef.set({ foods: updatedFoods, dailyLogs: updatedLogs }, { merge: true }); setEditingFoodId(null);
+        setDailyLogs(updatedLogs); saveToLocalStorage({ foods: updatedFoods, dailyLogs: updatedLogs }); setEditingFoodId(null);
       };
 
-      const deleteFood = (e, id) => { e.stopPropagation(); const updatedFoods = foods.filter(x => x.id !== id); setFoods(updatedFoods); docRef.set({ foods: updatedFoods }, { merge: true }); };
+      const deleteFood = (e, id) => { e.stopPropagation(); const updatedFoods = foods.filter(x => x.id !== id); setFoods(updatedFoods); saveToLocalStorage({ foods: updatedFoods }); };
 
       const toggleFavorite = (e, id, currentStatus) => {
         e.stopPropagation();
         const updatedFoods = foods.map(f => f.id === id ? { ...f, isFavorite: !currentStatus } : f);
-        setFoods(updatedFoods); docRef.set({ foods: updatedFoods }, { merge: true });
+        setFoods(updatedFoods); saveToLocalStorage({ foods: updatedFoods });
       };
 
       const forceRefreshApp = () => window.location.href = window.location.pathname + '?v=' + Date.now();
@@ -572,7 +554,7 @@
                   </p>
 
                   {dayLogs.length > 0 && (
-                    <table style={{ fontSize: '10px' }}>
+                    <table style={{ fontSize: '10px', width: '100%', borderCollapse: 'collapse' }}>
                       <thead style={{ backgroundColor: '#f9fafb' }}>
                         <tr>
                           <th style={{ border: '1px solid #e4e4e7', padding: '4px', textAlign: 'left', width: '40%' }}>Продукт</th>
@@ -603,7 +585,6 @@
         </div>
       );
 
-      // ЕСЛИ ВКЛЮЧЕН РЕЖИМ ПРЕДПРОСМОТРА ОТЧЕТА
       if (showReportView) {
         return (
           <div style={{ backgroundColor: 'white', minHeight: '100vh', padding: '15px' }}>
@@ -630,7 +611,6 @@
         );
       }
 
-      // ОСНОВНОЙ ИНТЕРФЕЙС ПРИЛОЖЕНИЯ
       return (
         <div className="flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900 relative">
             <header className="shrink-0 pt-8 px-6 pb-4 bg-[#09090b] flex justify-between items-center z-10">
@@ -712,7 +692,7 @@
                       {sortedFoods.map(f => <option key={f.id} value={f.id}>{f.isFavorite ? '⭐️ ' : ''}{f.name}</option>)}
                     </select>
                     <div className="flex gap-2">
-                      <input type="number" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => e.target.select()} required />
+                      <input type="number" step="0.1" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => e.target.select()} required />
                       <button type="submit" className="btn-active w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20"><IconPlus className="w-6 h-6 text-white" /></button>
                     </div>
                   </form>
@@ -723,7 +703,7 @@
                         <div className="flex-1 cursor-pointer pr-4 overflow-hidden" onClick={() => { setEditingLogId(log.id); setEditValue({ grams: log.grams }); }}>
                           {editingLogId === log.id ? (
                             <div className="flex items-center gap-2">
-                              <input autoFocus type="number" className="w-20 bg-zinc-900 rounded-lg p-2 text-sm outline-none border border-emerald-500 text-white" value={editValue.grams} onChange={(e) => setEditValue({grams: e.target.value})} onFocus={(e) => e.target.select()} onBlur={() => updateLogWeight(log.id, editValue.grams)} />
+                              <input autoFocus type="number" step="0.1" className="w-20 bg-zinc-900 rounded-lg p-2 text-sm outline-none border border-emerald-500 text-white" value={editValue.grams} onChange={(e) => setEditValue({grams: e.target.value})} onFocus={(e) => e.target.select()} onBlur={() => updateLogWeight(log.id, editValue.grams)} />
                               <span className="text-xs text-zinc-500">гр</span>
                             </div>
                           ) : (
@@ -740,6 +720,7 @@
                             <div className="flex gap-1.5 opacity-80">
                                 <span className="text-indigo-400 text-[9px] font-bold">Б:{Math.round(log.totalProtein || 0)}</span>
                                 <span className="text-amber-400 text-[9px] font-bold">Ж:{Math.round(log.totalFats || 0)}</span>
+                                <span className="text-blue-400 text-[9px] font-bold">У:{Math.round(log.totalCarbs || 0)}</span>
                             </div>
                           </div>
                           <button onClick={() => deleteLog(log.id)} className="btn-active text-zinc-700 active:text-red-500 p-2 transition-colors"><IconTrash className="w-5 h-5" /></button>
@@ -756,12 +737,12 @@
                   <div className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><IconTarget className="w-4 h-4" /> Ваши цели</h2>
                     <div className="grid grid-cols-2 gap-3 mb-3">
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ (ЦЕЛЬ)</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.calories} onChange={(e) => handleDraftGoalChange('calories', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ (ЦЕЛЬ)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.calories} onChange={(e) => handleDraftGoalChange('calories', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">БАЗА ШАГОВ</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-300 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.baseSteps} onChange={(e) => handleDraftGoalChange('baseSteps', e.target.value === '' ? '' : parseInt(e.target.value))} /></div>
                       <div className="col-span-2"><span className="text-[9px] text-zinc-500 font-bold block mb-1">НОРМА (БЕЗ ДЕФИЦИТА)</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-white font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.maintenance} onChange={(e) => handleDraftGoalChange('maintenance', e.target.value === '' ? '' : parseInt(e.target.value))} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">БЕЛОК (Г)</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.protein} onChange={(e) => handleDraftGoalChange('protein', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЖИРЫ (Г)</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.fats} onChange={(e) => handleDraftGoalChange('fats', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
-                      <div className="col-span-2"><span className="text-[9px] text-zinc-500 font-bold block mb-1">УГЛЕВОДЫ (Г)</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.carbs} onChange={(e) => handleDraftGoalChange('carbs', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">БЕЛОК (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.protein} onChange={(e) => handleDraftGoalChange('protein', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЖИРЫ (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.fats} onChange={(e) => handleDraftGoalChange('fats', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
+                      <div className="col-span-2"><span className="text-[9px] text-zinc-500 font-bold block mb-1">УГЛЕВОДЫ (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.carbs} onChange={(e) => handleDraftGoalChange('carbs', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
                     </div>
                     {hasUnsavedGoals && <button onClick={() => setShowGoalModal(true)} className="btn-active w-full bg-indigo-600 text-white p-4 rounded-xl font-bold mt-4 shadow-lg shadow-indigo-900/30 transition-all">💾 Сохранить цели</button>}
                   </div>
@@ -770,10 +751,10 @@
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Добавить продукт (на 100г)</h2>
                     <input type="text" placeholder="Название" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.name} onChange={(e) => setNewFood({...newFood, name: e.target.value})} required />
                     <div className="grid grid-cols-2 gap-3">
-                      <input type="number" placeholder="Ккал" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.cals} onChange={(e) => setNewFood({...newFood, cals: e.target.value})} required />
-                      <input type="number" placeholder="Б (г)" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.pro} onChange={(e) => setNewFood({...newFood, pro: e.target.value})} required />
-                      <input type="number" placeholder="Ж (г)" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.fat} onChange={(e) => setNewFood({...newFood, fat: e.target.value})} required />
-                      <input type="number" placeholder="У (г)" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.carb} onChange={(e) => setNewFood({...newFood, carb: e.target.value})} required />
+                      <input type="number" step="0.1" placeholder="Ккал" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.cals} onChange={(e) => setNewFood({...newFood, cals: e.target.value})} onFocus={(e) => e.target.select()} required />
+                      <input type="number" step="0.1" placeholder="Б (г)" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.pro} onChange={(e) => setNewFood({...newFood, pro: e.target.value})} onFocus={(e) => e.target.select()} required />
+                      <input type="number" step="0.1" placeholder="Ж (г)" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.fat} onChange={(e) => setNewFood({...newFood, fat: e.target.value})} onFocus={(e) => e.target.select()} required />
+                      <input type="number" step="0.1" placeholder="У (г)" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.carb} onChange={(e) => setNewFood({...newFood, carb: e.target.value})} onFocus={(e) => e.target.select()} required />
                     </div>
                     <button type="submit" className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold shadow-lg shadow-emerald-900/20 transition-all">Добавить в базу</button>
                   </form>
@@ -786,10 +767,10 @@
                           <div className="space-y-3">
                              <input autoFocus className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-white border border-indigo-500 outline-none" value={editValue.name} onChange={e => setEditValue({...editValue, name: e.target.value})} />
                              <div className="grid grid-cols-2 gap-2">
-                                <input type="number" placeholder="Ккал" className="bg-zinc-900 rounded-lg p-2 text-sm text-emerald-400 outline-none text-center" value={editValue.calories} onChange={e => setEditValue({...editValue, calories: parseFloat(e.target.value)})} />
-                                <input type="number" placeholder="Белок" className="bg-zinc-900 rounded-lg p-2 text-sm text-indigo-400 outline-none text-center" value={editValue.protein} onChange={e => setEditValue({...editValue, protein: parseFloat(e.target.value)})} />
-                                <input type="number" placeholder="Жиры" className="bg-zinc-900 rounded-lg p-2 text-sm text-amber-400 outline-none text-center" value={editValue.fats} onChange={e => setEditValue({...editValue, fats: parseFloat(e.target.value)})} />
-                                <input type="number" placeholder="Углев" className="bg-zinc-900 rounded-lg p-2 text-sm text-blue-400 outline-none text-center" value={editValue.carbs} onChange={e => setEditValue({...editValue, carbs: parseFloat(e.target.value)})} />
+                                <input type="number" step="0.1" placeholder="Ккал" className="bg-zinc-900 rounded-lg p-2 text-sm text-emerald-400 outline-none text-center" value={editValue.calories} onChange={e => setEditValue({...editValue, calories: e.target.value})} onFocus={(e) => e.target.select()} />
+                                <input type="number" step="0.1" placeholder="Белок" className="bg-zinc-900 rounded-lg p-2 text-sm text-indigo-400 outline-none text-center" value={editValue.protein} onChange={e => setEditValue({...editValue, protein: e.target.value})} onFocus={(e) => e.target.select()} />
+                                <input type="number" step="0.1" placeholder="Жиры" className="bg-zinc-900 rounded-lg p-2 text-sm text-amber-400 outline-none text-center" value={editValue.fats} onChange={e => setEditValue({...editValue, fats: e.target.value})} onFocus={(e) => e.target.select()} />
+                                <input type="number" step="0.1" placeholder="Углев" className="bg-zinc-900 rounded-lg p-2 text-sm text-blue-400 outline-none text-center" value={editValue.carbs} onChange={e => setEditValue({...editValue, carbs: e.target.value})} onFocus={(e) => e.target.select()} />
                              </div>
                              <button onClick={() => updateFoodBase(f.id)} className="btn-active w-full bg-emerald-600 p-2 rounded-lg flex justify-center transition-all"><IconCheck className="w-5 h-5 text-white" /></button>
                           </div>
@@ -801,10 +782,10 @@
                             <div className="flex-1" onClick={() => { setEditingFoodId(f.id); setEditValue({ ...f, fats: f.fats || 0, carbs: f.carbs || 0 }); }}>
                               <span className="text-sm font-medium border-b border-zinc-800/50 pb-0.5">{f.name}</span>
                               <div className="flex gap-3 text-[10px] font-bold uppercase mt-1.5 opacity-80">
-                                <span className="text-emerald-500">{Math.round(f.calories || 0)}</span>
-                                <span className="text-indigo-500">Б: {Math.round(f.protein || 0)}</span>
-                                <span className="text-amber-500">Ж: {Math.round(f.fats || 0)}</span>
-                                <span className="text-blue-500">У: {Math.round(f.carbs || 0)}</span>
+                                <span className="text-emerald-500">{f.calories}</span>
+                                <span className="text-indigo-500">Б: {f.protein}</span>
+                                <span className="text-amber-500">Ж: {f.fats}</span>
+                                <span className="text-blue-500">У: {f.carbs}</span>
                               </div>
                             </div>
                             <button onClick={(e) => deleteFood(e, f.id)} className="btn-active text-zinc-800 active:text-red-500 p-2 transition-colors"><IconTrash className="w-5 h-5" /></button>
