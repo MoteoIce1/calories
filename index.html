@@ -68,7 +68,6 @@
 
     const { useState, useEffect, useRef } = React;
 
-    // Встроенный калькулятор для вычисления математических выражений в строке
     const evaluateMath = (expr) => {
       if (!expr) return 0;
       try {
@@ -321,9 +320,8 @@
         const food = foods.find(f => f.id === selectedFoodId);
         if (!food || !gramsInput) return;
         
-        // Вычисляем математическое выражение
         const grams = evaluateMath(gramsInput);
-        if (grams <= 0) return; // Если ерунда или <= 0, игнорируем добавление
+        if (grams <= 0) return;
 
         const newLog = {
           id: Date.now().toString(), foodId: food.id, grams,
@@ -747,7 +745,7 @@
                         <div className="flex-1 cursor-pointer pr-4 overflow-hidden" onClick={() => { setEditingLogId(log.id); setEditValue({ grams: log.grams }); }}>
                           {editingLogId === log.id ? (
                             <div className="flex items-center gap-2">
-                              <input autoFocus type="text" className="w-24 bg-zinc-900 rounded-lg p-2 text-sm outline-none border border-emerald-500 text-white" value={editValue.grams} onChange={(e) => setEditValue({grams: e.target.value})} onFocus={(e) => e.target.select()} onBlur={() => updateLogWeight(log.id, editValue.grams)} />
+                              <input autoFocus type="text" className="w-24 bg-zinc-900 rounded-lg p-2 text-sm outline-none border border-emerald-500 text-white" value={editValue.grams} onChange={(e) => setEditValue({grams: e.target.value})} onFocus={(e) => { const el = e.target; setTimeout(() => el.setSelectionRange(el.value.length, el.value.length), 0); }} onBlur={() => updateLogWeight(log.id, editValue.grams)} />
                               <span className="text-xs text-zinc-500">гр</span>
                             </div>
                           ) : (
