@@ -734,7 +734,7 @@
                       {sortedFoods.map(f => <option key={f.id} value={f.id}>{f.isFavorite ? '⭐️ ' : ''}{f.name}</option>)}
                     </select>
                     <div className="flex gap-2">
-                      <input type="text" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => e.target.select()} required />
+                      <input type="text" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value.replace(/[^0-9.\-+*/()]/g, ''))} onFocus={(e) => e.target.select()} required />
                       <button type="submit" className="btn-active w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20"><IconPlus className="w-6 h-6 text-white" /></button>
                     </div>
                   </form>
@@ -745,7 +745,7 @@
                         <div className="flex-1 cursor-pointer pr-4 overflow-hidden" onClick={() => { setEditingLogId(log.id); setEditValue({ grams: log.grams }); }}>
                           {editingLogId === log.id ? (
                             <div className="flex items-center gap-2">
-                              <input autoFocus type="text" className="w-24 bg-zinc-900 rounded-lg p-2 text-sm outline-none border border-emerald-500 text-white" value={editValue.grams} onChange={(e) => setEditValue({grams: e.target.value})} onFocus={(e) => { const el = e.target; setTimeout(() => el.setSelectionRange(el.value.length, el.value.length), 0); }} onBlur={() => updateLogWeight(log.id, editValue.grams)} />
+                              <input autoFocus type="text" className="w-24 bg-zinc-900 rounded-lg p-2 text-sm outline-none border border-emerald-500 text-white" value={editValue.grams} onChange={(e) => setEditValue({grams: e.target.value.replace(/[^0-9.\-+*/()]/g, '')})} onFocus={(e) => { const el = e.target; setTimeout(() => el.setSelectionRange(el.value.length, el.value.length), 0); }} onBlur={() => updateLogWeight(log.id, editValue.grams)} />
                               <span className="text-xs text-zinc-500">гр</span>
                             </div>
                           ) : (
