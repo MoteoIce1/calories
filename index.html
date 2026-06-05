@@ -659,7 +659,10 @@
           if (avgIntake > 0) tdeeReal = Math.round(avgIntake - (deltaSmoothW * 7700) / daysBetweenWeigh);
         }
       }
-      const tdeeDiff = tdeeReal !== null ? tdeeReal - baseMaintenance : 0;
+      // Модельный расход = средний дневной (норма + бонус за шаги) за период с логами.
+      // totalPeriodBurned уже суммирует (норма + шаги) по дням, поэтому делим на их количество.
+      const modelTdee = filteredDatesForPdf.length ? Math.round(totalPeriodBurned / filteredDatesForPdf.length) : baseMaintenance;
+      const tdeeDiff = tdeeReal !== null ? tdeeReal - modelTdee : 0;
       const workoutCount = allExportDates.filter(d => dailyWorkouts[d]).length;
 
       if (isLoading) {
@@ -696,8 +699,17 @@
             <div style={{ backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 5px 0', color: '#065f46' }}>Аналитика динамики (по сглаженному весу):</h2>
               {weeklyRate !== null && <p><strong>Скорость изменения веса:</strong> {weeklyRate > 0 ? '+' : ''}{weeklyRate} кг/нед {weeklyRate < 0 ? '📉' : weeklyRate > 0 ? '📈' : ''}</p>}
-              {tdeeReal !== null && <p><strong>Расчётный реальный расход (TDEE):</strong> ~{tdeeReal} ккал/день</p>}
-              {tdeeReal !== null && <p style={{ color: '#555' }}><em>Заявленная норма: {baseMaintenance} ккал. {Math.abs(tdeeDiff) > 150 ? `Расхождение ${tdeeDiff > 0 ? '+' : ''}${tdeeDiff} ккал — норму стоит подкорректировать.` : 'Оценка близка к заявленной.'}</em></p>}
+              {tdeeReal !== null && <p><strong>Реальный расход по весам (TDEE):</strong> ~{tdeeReal} ккал/день <span style={{ color: '#555' }}>(уже включает ходьбу)</span></p>}
+              {tdeeReal !== null && <p><strong>Модельный расход (норма + шаги):</strong> ~{modelTdee} ккал/день</p>}
+              {tdeeReal !== null && (
+                <p style={{ color: Math.abs(tdeeDiff) > 150 ? '#b45309' : '#555' }}><em>
+                  Расхождение модели с реальностью: {tdeeDiff > 0 ? '+' : ''}{tdeeDiff} ккал/день. {
+                    tdeeDiff > 150 ? `Вес уходит быстрее, чем считает модель — базу нормы можно поднять примерно на ${tdeeDiff} ккал (либо это остаточная вода в начале периода).`
+                    : tdeeDiff < -150 ? 'Вес уходит медленнее модели — вероятна недооценка съеденного или завышенная норма.'
+                    : 'Модель приложения близка к реальности.'
+                  }
+                </em></p>
+              )}
               {daysBetweenWeigh < 14 && <p style={{ color: '#b45309', fontSize: '11px' }}><em>⚠️ Замеры веса всего за {daysBetweenWeigh} дн. Для надёжного TDEE нужно 14+ дней данных.</em></p>}
               {workoutCount > 0 && <p><strong>Силовых тренировок за период:</strong> {workoutCount}</p>}
             </div>
