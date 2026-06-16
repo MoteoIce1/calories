@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <title>Трекер Диеты</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
@@ -14,6 +15,7 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 
   <style>
     body { background-color: #000; margin: 0; padding: 0; overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
@@ -64,7 +66,22 @@
       });
     }
     const db = firebase.firestore();
-    const docRef = db.collection('users').doc('main_profile');
+    const auth = firebase.auth();
+    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+
+    // Ссылки на данные в БД считаются по uid авторизованного пользователя.
+    // Профиль (цели, продукты) — один документ; каждый день — отдельный документ.
+    const profileRef = (uid) => db.collection('users').doc(uid);
+    const dayRef = (uid, date) => db.collection('users').doc(uid).collection('days').doc(date);
+    const daysCol = (uid) => db.collection('users').doc(uid).collection('days');
+    const legacyRef = db.collection('users').doc('main_profile'); // старая единая структура (для переноса)
+
+    // Регистрируем service worker для офлайн-работы (кешируется оболочка и библиотеки с CDN)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW:', e));
+      });
+    }
 
     const { useState, useEffect, useRef } = React;
 
@@ -223,10 +240,19 @@
       const [showReportView, setShowReportView] = useState(false);
       const [isPrinting, setIsPrinting] = useState(false);
       
-      const defaultGoals = { calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: 6000, maintenance: 2300 };
+      const defaultGoals = { calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: 6000, maintenance: 2300, targetFat: 12 };
       const [goals, setGoals] = useState(defaultGoals);
       const [draftGoals, setDraftGoals] = useState(defaultGoals);
       const [dailyGoals, setDailyGoals] = useState({});
+
+      // Авторизация
+      const [uid, setUid] = useState(null);
+      const [authReady, setAuthReady] = useState(false);
+      const [authEmail, setAuthEmail] = useState('');
+      const [authPass, setAuthPass] = useState('');
+      const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
+      const [authError, setAuthError] = useState('');
+      const [authBusy, setAuthBusy] = useState(false);
       
       const [foods, setFoods] = useState([]);
       const [dailyLogs, setDailyLogs] = useState({});
@@ -253,32 +279,132 @@
       const [exportEnd, setExportEnd] = useState(getLocalDateString(new Date()));
 
       const scrollContainerRef = useRef(null);
+      const initialGoalsRef = useRef(false);
 
+      // Авторизация: следим за состоянием входа
       useEffect(() => {
-        const unsubscribe = docRef.onSnapshot((docSnap) => {
+        const unsub = auth.onAuthStateChanged((user) => {
+          setUid(user ? user.uid : null);
+          setAuthReady(true);
+          if (!user) { setIsLoading(false); initialGoalsRef.current = false; }
+        });
+        return () => unsub();
+      }, []);
+
+      const doAuth = async () => {
+        setAuthError(''); setAuthBusy(true);
+        try {
+          if (authMode === 'register') await auth.createUserWithEmailAndPassword(authEmail.trim(), authPass);
+          else await auth.signInWithEmailAndPassword(authEmail.trim(), authPass);
+          setAuthPass('');
+        } catch (err) {
+          const map = {
+            'auth/invalid-email': 'Неверный формат e-mail.',
+            'auth/missing-password': 'Введите пароль.',
+            'auth/weak-password': 'Пароль слишком короткий (минимум 6 символов).',
+            'auth/email-already-in-use': 'Аккаунт уже существует — войдите.',
+            'auth/invalid-credential': 'Неверный e-mail или пароль.',
+            'auth/wrong-password': 'Неверный пароль.',
+            'auth/user-not-found': 'Аккаунт не найден — зарегистрируйтесь.',
+            'auth/operation-not-allowed': 'Вход по e-mail не включён в консоли Firebase (Authentication → Sign-in method).',
+            'auth/network-request-failed': 'Нет сети.',
+          };
+          setAuthError(map[err.code] || err.message);
+        }
+        setAuthBusy(false);
+      };
+
+      const profileDoc = uid ? profileRef(uid) : null;
+      // Запись одного дня в подколлекцию days (merge — трогаем только нужное поле)
+      const writeDay = (date, partial) => { if (uid) dayRef(uid, date).set(partial, { merge: true }); };
+
+      // Запись большого набора данных (импорт/перенос): профиль + дни батчами
+      const writeAllData = async (data) => {
+        if (!uid) return;
+        const profilePayload = {};
+        if (data.goals) profilePayload.goals = data.goals;
+        if (data.dailyGoals) profilePayload.dailyGoals = data.dailyGoals;
+        if (data.foods) profilePayload.foods = data.foods;
+        if (Object.keys(profilePayload).length) await profileRef(uid).set(profilePayload, { merge: true });
+        const dates = new Set([
+          ...Object.keys(data.dailyLogs || {}),
+          ...Object.keys(data.dailySteps || {}),
+          ...Object.keys(data.dailyMetrics || {}),
+          ...Object.keys(data.dailyWorkouts || {}),
+        ]);
+        const all = Array.from(dates);
+        for (let i = 0; i < all.length; i += 400) {
+          const batch = db.batch();
+          all.slice(i, i + 400).forEach(date => {
+            const payload = {};
+            const lg = (data.dailyLogs || {})[date];
+            const st = (data.dailySteps || {})[date];
+            const mt = (data.dailyMetrics || {})[date];
+            const wk = (data.dailyWorkouts || {})[date];
+            if (lg) payload.logs = lg;
+            if (st !== undefined && st !== '') payload.steps = st;
+            if (mt) payload.metrics = mt;
+            payload.workout = !!wk;
+            batch.set(dayRef(uid, date), payload, { merge: true });
+          });
+          await batch.commit();
+        }
+      };
+
+      // Перенос данных из старой версии (единый документ users/main_profile)
+      const importLegacy = async () => {
+        if (!uid) return;
+        if (!confirm('Перенести данные из старой версии (main_profile) в твой аккаунт?')) return;
+        try {
+          const snap = await legacyRef.get();
+          if (!snap.exists) { alert('Старый документ main_profile не найден.'); return; }
+          await writeAllData(snap.data());
+          alert('Данные перенесены. Проверь дневник и отчёт.');
+        } catch (err) {
+          alert('Не удалось прочитать старые данные: ' + err.message + '\nЕсли правила Firestore уже закрыты — перенеси через JSON-бэкап.');
+        }
+      };
+
+      // Профиль: цели, дневные цели, продукты
+      useEffect(() => {
+        if (!uid) return;
+        setIsLoading(true);
+        const unsubscribe = profileRef(uid).onSnapshot((docSnap) => {
           if (docSnap.exists) {
             const data = docSnap.data();
             if (data.goals) {
-                setGoals({...goals, ...data.goals});
-                if (isLoading) setDraftGoals({...goals, ...data.goals});
+              setGoals({ ...defaultGoals, ...data.goals });
+              if (!initialGoalsRef.current) {
+                setDraftGoals({ ...defaultGoals, ...data.goals });
+                initialGoalsRef.current = true;
+              }
             }
-            if (data.dailyGoals) setDailyGoals(data.dailyGoals);
-            if (data.foods) setFoods(data.foods);
-            else setFoods(HARDCODED_FOODS);
-            if (data.dailyLogs) setDailyLogs(data.dailyLogs);
-            if (data.dailySteps) setDailySteps(data.dailySteps);
-            if (data.dailyMetrics) setDailyMetrics(data.dailyMetrics);
-            if (data.dailyWorkouts) setDailyWorkouts(data.dailyWorkouts);
+            setDailyGoals(data.dailyGoals || {});
+            setFoods(data.foods && data.foods.length ? data.foods : HARDCODED_FOODS);
           } else {
             setFoods(HARDCODED_FOODS);
           }
           setIsLoading(false);
-        }, (error) => {
-           console.log("Firebase error", error);
-           setIsLoading(false);
-        });
+        }, (error) => { console.log("Firebase error", error); setIsLoading(false); });
         return () => unsubscribe();
-      }, []);
+      }, [uid]);
+
+      // Дни: собираем карты в память из подколлекции days
+      useEffect(() => {
+        if (!uid) return;
+        const unsubscribe = daysCol(uid).onSnapshot((snap) => {
+          const logs = {}, steps = {}, metrics = {}, workouts = {};
+          snap.forEach((doc) => {
+            const d = doc.data();
+            if (d.logs && d.logs.length) logs[doc.id] = d.logs;
+            if (d.steps !== undefined && d.steps !== '' && d.steps !== null) steps[doc.id] = d.steps;
+            if (d.metrics && Object.keys(d.metrics).length) metrics[doc.id] = d.metrics;
+            if (d.workout) workouts[doc.id] = true;
+          });
+          setDailyLogs(logs); setDailySteps(steps); setDailyMetrics(metrics); setDailyWorkouts(workouts);
+        }, (e) => console.log("days listener error", e));
+        return () => unsubscribe();
+      }, [uid]);
 
       useEffect(() => {
         if (!showReportView && scrollContainerRef.current) {
@@ -323,7 +449,7 @@
                 if (date < todayStr && !updatedDailyGoals[date]) updatedDailyGoals[date] = { ...goals };
             });
         }
-        docRef.set({ goals: draftGoals, dailyGoals: updatedDailyGoals }, { merge: true });
+        if (profileDoc) profileDoc.set({ goals: draftGoals, dailyGoals: updatedDailyGoals }, { merge: true });
         setGoals(draftGoals); setDailyGoals(updatedDailyGoals); setShowGoalModal(false);
       };
 
@@ -331,18 +457,17 @@
 
       const handleUpdateSteps = (val) => {
         const num = parseInt(val);
-        const updated = { ...dailySteps, [currentDate]: isNaN(num) ? '' : num };
-        setDailySteps(updated); 
-        docRef.set({ dailySteps: updated }, { merge: true });
+        const value = isNaN(num) ? '' : num;
+        setDailySteps({ ...dailySteps, [currentDate]: value });
+        writeDay(currentDate, { steps: value });
       };
 
       const handleUpdateMetrics = (field, val) => {
         const num = parseFloat(val);
         const currentDayMetrics = dailyMetrics[currentDate] || {};
         const updatedDay = { ...currentDayMetrics, [field]: isNaN(num) ? '' : num };
-        const updated = { ...dailyMetrics, [currentDate]: updatedDay };
-        setDailyMetrics(updated); 
-        docRef.set({ dailyMetrics: updated }, { merge: true });
+        setDailyMetrics({ ...dailyMetrics, [currentDate]: updatedDay });
+        writeDay(currentDate, { metrics: updatedDay });
       };
 
       const handleAddLog = (e) => {
@@ -362,7 +487,7 @@
         };
         const updatedLogs = { ...dailyLogs, [currentDate]: [...(dailyLogs[currentDate] || []), newLog] };
         setDailyLogs(updatedLogs); 
-        docRef.set({ dailyLogs: updatedLogs }, { merge: true });
+        writeDay(currentDate, { logs: updatedLogs[currentDate] });
         setSelectedFoodId(''); setGramsInput('');
       };
 
@@ -408,7 +533,7 @@
         });
         const updatedLogs = { ...dailyLogs, [currentDate]: dayLogs };
         setDailyLogs(updatedLogs); 
-        docRef.set({ dailyLogs: updatedLogs }, { merge: true }); 
+        writeDay(currentDate, { logs: dayLogs }); 
         setEditingLogId(null);
         setModifier({type: null, value: ''});
       };
@@ -416,7 +541,7 @@
       const deleteLog = (id) => {
         const updatedLogs = { ...dailyLogs, [currentDate]: dailyLogs[currentDate].filter(l => l.id !== id) };
         setDailyLogs(updatedLogs); 
-        docRef.set({ dailyLogs: updatedLogs }, { merge: true });
+        writeDay(currentDate, { logs: updatedLogs[currentDate] });
       };
 
       const handleAddFood = (e) => {
@@ -430,7 +555,7 @@
         };
         const updatedFoods = [foodItem, ...foods];
         setFoods(updatedFoods); 
-        docRef.set({ foods: updatedFoods }, { merge: true });
+        if (profileDoc) profileDoc.set({ foods: updatedFoods }, { merge: true });
         setNewFood({ name: '', cals: '', pro: '', fat: '', carb: '' });
       };
 
@@ -445,9 +570,12 @@
         setFoods(updatedFoods);
         
         const updatedLogs = { ...dailyLogs };
+        const affected = [];
         Object.keys(updatedLogs).forEach(date => {
+          let changed = false;
           updatedLogs[date] = updatedLogs[date].map(log => {
             if (log.foodId === id) {
+              changed = true;
               const grams = log.grams;
               return {
                 ...log,
@@ -459,20 +587,28 @@
             }
             return log;
           });
+          if (changed) affected.push(date);
         });
 
         setDailyLogs(updatedLogs); 
-        docRef.set({ foods: updatedFoods, dailyLogs: updatedLogs }, { merge: true }); 
+        if (profileDoc) profileDoc.set({ foods: updatedFoods }, { merge: true }); 
+        if (uid && affected.length) {
+          for (let i = 0; i < affected.length; i += 400) {
+            const batch = db.batch();
+            affected.slice(i, i + 400).forEach(date => batch.set(dayRef(uid, date), { logs: updatedLogs[date] }, { merge: true }));
+            batch.commit();
+          }
+        }
         setEditingFoodId(null);
       };
 
-      const deleteFood = (e, id) => { e.stopPropagation(); const updatedFoods = foods.filter(x => x.id !== id); setFoods(updatedFoods); docRef.set({ foods: updatedFoods }, { merge: true }); };
+      const deleteFood = (e, id) => { e.stopPropagation(); const updatedFoods = foods.filter(x => x.id !== id); setFoods(updatedFoods); if (profileDoc) profileDoc.set({ foods: updatedFoods }, { merge: true }); };
 
       const toggleFavorite = (e, id, currentStatus) => {
         e.stopPropagation();
         const updatedFoods = foods.map(f => f.id === id ? { ...f, isFavorite: !currentStatus } : f);
         setFoods(updatedFoods); 
-        docRef.set({ foods: updatedFoods }, { merge: true });
+        if (profileDoc) profileDoc.set({ foods: updatedFoods }, { merge: true });
       };
 
       const forceRefreshApp = () => window.location.href = window.location.pathname + '?v=' + Date.now();
@@ -480,7 +616,7 @@
       const toggleWorkout = () => {
         const updated = { ...dailyWorkouts, [currentDate]: !dailyWorkouts[currentDate] };
         setDailyWorkouts(updated);
-        docRef.set({ dailyWorkouts: updated }, { merge: true });
+        writeDay(currentDate, { workout: !!updated[currentDate] });
       };
 
       const copyPreviousDay = () => {
@@ -492,7 +628,7 @@
         const copied = prevLogs.map((l, idx) => ({ ...l, id: (Date.now() + idx).toString() }));
         const updated = { ...dailyLogs, [currentDate]: [...(dailyLogs[currentDate] || []), ...copied] };
         setDailyLogs(updated);
-        docRef.set({ dailyLogs: updated }, { merge: true });
+        writeDay(currentDate, { logs: updated[currentDate] });
       };
 
       const triggerDownload = (content, filename, type) => {
@@ -539,15 +675,11 @@
         const file = e.target.files && e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = (ev) => {
+        reader.onload = async (ev) => {
           try {
             const data = JSON.parse(ev.target.result);
-            if (!confirm('Это ПЕРЕЗАПИШЕТ текущие данные содержимым файла. Продолжить?')) { e.target.value = ''; return; }
-            const payload = {};
-            ['goals', 'dailyGoals', 'foods', 'dailyLogs', 'dailySteps', 'dailyMetrics', 'dailyWorkouts'].forEach(k => {
-              if (data[k] !== undefined) payload[k] = data[k];
-            });
-            docRef.set(payload, { merge: true });
+            if (!confirm('Это перезапишет/дополнит данные аккаунта содержимым файла. Продолжить?')) { e.target.value = ''; return; }
+            await writeAllData(data);
             alert('Данные восстановлены из бэкапа.');
           } catch (err) {
             alert('Ошибка чтения файла: ' + err.message);
@@ -665,6 +797,115 @@
       const tdeeDiff = tdeeReal !== null ? tdeeReal - modelTdee : 0;
       const workoutCount = allExportDates.filter(d => dailyWorkouts[d]).length;
 
+      // --- Прогноз до целевого % жира (по сглаженному жиру) ---
+      const targetFat = Number(goals.targetFat) || 12;
+      const smoothedFat = movingAverage(allFat, 7);
+      let fSi = -1, fEi = -1;
+      smoothedFat.forEach((v, i) => { if (v !== null) { if (fSi === -1) fSi = i; fEi = i; } });
+      let fatWeeklyRate = null, projectionDate = null, daysToGoal = null;
+      const latestSmoothedFat = fEi !== -1 ? smoothedFat[fEi] : null;
+      if (fSi !== -1 && fEi > fSi) {
+        const days = Math.round((new Date(datesWithMetrics[fEi]) - new Date(datesWithMetrics[fSi])) / 86400000);
+        const dF = smoothedFat[fEi] - smoothedFat[fSi];
+        if (days >= 1) {
+          fatWeeklyRate = Math.round((dF / days) * 7 * 100) / 100;
+          if (fatWeeklyRate < 0 && latestSmoothedFat > targetFat) {
+            daysToGoal = Math.round(((latestSmoothedFat - targetFat) / Math.abs(fatWeeklyRate)) * 7);
+            const proj = new Date(); proj.setDate(proj.getDate() + daysToGoal);
+            projectionDate = getLocalDateString(proj);
+          }
+        }
+      }
+
+      // --- Адхеренс и стрик ---
+      const rangeDayCount = Math.max(1, Math.round((new Date(exportEnd) - new Date(exportStart)) / 86400000) + 1);
+      const adherence = Math.round((filteredDatesForPdf.length / rangeDayCount) * 100);
+      let streak = 0;
+      {
+        const d = new Date();
+        if (!(dailyLogs[getLocalDateString(d)] || []).length) d.setDate(d.getDate() - 1);
+        while ((dailyLogs[getLocalDateString(d)] || []).length) { streak++; d.setDate(d.getDate() - 1); }
+      }
+
+      // --- Недельная сводка (неделя с понедельника) ---
+      const weekKey = (dateStr) => {
+        const d = new Date(dateStr);
+        const day = (d.getDay() + 6) % 7;
+        d.setDate(d.getDate() - day);
+        return getLocalDateString(d);
+      };
+      const weeksMap = {};
+      allExportDates.forEach(date => {
+        const wk = weekKey(date);
+        if (!weeksMap[wk]) weeksMap[wk] = { cals: 0, deficit: 0, logged: 0, weights: [] };
+        const g = getEffectiveGoals(date);
+        const bSteps = g.baseSteps || 6000, bMaint = g.maintenance || 2300;
+        const logs = dailyLogs[date] || [];
+        if (logs.length) {
+          const c = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
+          const steps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
+          const burned = bMaint + Math.round((steps - bSteps) * 0.04);
+          weeksMap[wk].cals += c; weeksMap[wk].deficit += (burned - c); weeksMap[wk].logged += 1;
+        }
+        const w = dailyMetrics[date]?.weight;
+        if (w) weeksMap[wk].weights.push(w);
+      });
+      const weeklySummary = Object.keys(weeksMap).sort().map(wk => {
+        const w = weeksMap[wk];
+        const wAvg = w.weights.length ? Math.round((w.weights.reduce((a, b) => a + b, 0) / w.weights.length) * 10) / 10 : null;
+        return { week: wk, avgCals: w.logged ? Math.round(w.cals / w.logged) : null, avgDef: w.logged ? Math.round(w.deficit / w.logged) : null, wAvg, logged: w.logged };
+      });
+      weeklySummary.forEach((wk, i) => {
+        wk.dW = (i > 0 && wk.wAvg !== null && weeklySummary[i - 1].wAvg !== null) ? Math.round((wk.wAvg - weeklySummary[i - 1].wAvg) * 10) / 10 : null;
+      });
+
+      // --- Белок на кг массы тела (по последнему известному весу) ---
+      const latestWeight = (() => {
+        const ds = Object.keys(dailyMetrics).filter(d => dailyMetrics[d]?.weight).sort();
+        return ds.length ? dailyMetrics[ds[ds.length - 1]].weight : null;
+      })();
+      const proteinPerKg = latestWeight ? Math.round((totalPro / latestWeight) * 10) / 10 : null;
+      const proteinGoalPerKg = latestWeight ? Math.round(((activeGoals.protein || 0) / latestWeight) * 10) / 10 : null;
+
+      // --- Частые продукты (по всем логам) для быстрого добавления ---
+      const foodCounts = {};
+      Object.values(dailyLogs).forEach(arr => arr.forEach(l => { foodCounts[l.foodId] = (foodCounts[l.foodId] || 0) + 1; }));
+      const frequentFoods = Object.keys(foodCounts)
+        .sort((a, b) => foodCounts[b] - foodCounts[a])
+        .map(id => foods.find(f => f.id === id))
+        .filter(Boolean)
+        .slice(0, 5);
+
+      if (!authReady) {
+        return (
+          <div className="flex h-[100dvh] items-center justify-center bg-[#09090b] flex-col gap-4">
+            <div className="loader"></div>
+            <p className="text-zinc-500 font-bold text-sm tracking-widest uppercase">Подключение...</p>
+          </div>
+        );
+      }
+
+      if (!uid) {
+        return (
+          <div className="flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 items-center justify-center px-8">
+            <div className="w-full">
+              <div className="flex flex-col items-center mb-8">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-600/20 border border-emerald-700/40 flex items-center justify-center mb-4 text-3xl">🥗</div>
+                <h1 className="text-2xl font-bold">Трекер диеты</h1>
+                <p className="text-zinc-500 text-sm mt-1">{authMode === 'register' ? 'Создание аккаунта' : 'Вход в аккаунт'}</p>
+              </div>
+              <div className="space-y-3">
+                <input type="email" autoCapitalize="none" autoCorrect="off" placeholder="E-mail" className="w-full bg-[#18181b] rounded-2xl p-4 outline-none text-zinc-200 border border-zinc-800 focus:border-emerald-500" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} />
+                <input type="password" placeholder="Пароль (минимум 6 символов)" className="w-full bg-[#18181b] rounded-2xl p-4 outline-none text-zinc-200 border border-zinc-800 focus:border-emerald-500" value={authPass} onChange={(e) => setAuthPass(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') doAuth(); }} />
+                {authError && <p className="text-red-400 text-xs px-1">{authError}</p>}
+                <button onClick={doAuth} disabled={authBusy} className="btn-active w-full bg-emerald-600 text-white rounded-2xl p-4 font-bold transition-all disabled:opacity-50">{authBusy ? '...' : (authMode === 'register' ? 'Зарегистрироваться' : 'Войти')}</button>
+                <button onClick={() => { setAuthMode(authMode === 'register' ? 'login' : 'register'); setAuthError(''); }} className="btn-active w-full text-zinc-400 text-sm p-2">{authMode === 'register' ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}</button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       if (isLoading) {
         return (
           <div className="flex h-[100dvh] items-center justify-center bg-[#09090b] flex-col gap-4">
@@ -695,6 +936,20 @@
             </div>
           )}
 
+          {allExportDates.length > 0 && (
+            <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 5px 0', color: '#1e40af' }}>Дисциплина и прогноз:</h2>
+              <p><strong>Дней с записями:</strong> {filteredDatesForPdf.length} из {rangeDayCount} ({adherence}%)</p>
+              <p><strong>Текущий стрик:</strong> {streak} дн. подряд</p>
+              {projectionDate
+                ? <p><strong>Прогноз до {targetFat}% жира:</strong> ~{projectionDate} (≈{Math.round(daysToGoal / 7)} нед.) <span style={{ color: '#555' }}>— при темпе {fatWeeklyRate} %/нед</span></p>
+                : (latestSmoothedFat !== null && latestSmoothedFat <= targetFat
+                    ? <p><strong>Цель по жиру достигнута:</strong> {latestSmoothedFat}% ≤ {targetFat}% 🎉</p>
+                    : <p style={{ color: '#555' }}><em>Прогноз по жиру появится, когда жир пойдёт вниз по тренду (нужно 14+ дней замеров).</em></p>)}
+              {projectionDate && <p style={{ color: '#555', fontSize: '11px' }}><em>Грубая линейная оценка — у тела темп нелинеен и к цели замедлится.</em></p>}
+            </div>
+          )}
+
           {(tdeeReal !== null || weeklyRate !== null) && (
             <div style={{ backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 5px 0', color: '#065f46' }}>Аналитика динамики (по сглаженному весу):</h2>
@@ -712,6 +967,36 @@
               )}
               {daysBetweenWeigh < 14 && <p style={{ color: '#b45309', fontSize: '11px' }}><em>⚠️ Замеры веса всего за {daysBetweenWeigh} дн. Для надёжного TDEE нужно 14+ дней данных.</em></p>}
               {workoutCount > 0 && <p><strong>Силовых тренировок за период:</strong> {workoutCount}</p>}
+            </div>
+          )}
+
+          {weeklySummary.length > 1 && (
+            <div style={{ marginBottom: '15px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 'bold', margin: '10px 0 5px 0', color: '#005f73' }}>Недельная сводка:</h3>
+              <table style={{ borderCollapse: 'collapse', textAlign: 'center', width: '100%', fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#e2e8f0' }}>
+                    <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Неделя с</th>
+                    <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Дней</th>
+                    <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Ср. ккал</th>
+                    <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Ср. дефицит</th>
+                    <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Ср. вес</th>
+                    <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Δ вес</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {weeklySummary.map(wk => (
+                    <tr key={wk.week}>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '4px' }}>{wk.week.slice(5)}</td>
+                      <td style={{ border: '1px solid #cbd5e1' }}>{wk.logged}</td>
+                      <td style={{ border: '1px solid #cbd5e1' }}>{wk.avgCals !== null ? wk.avgCals : '—'}</td>
+                      <td style={{ border: '1px solid #cbd5e1', color: wk.avgDef > 0 ? '#10b981' : '#ef4444' }}>{wk.avgDef !== null ? (wk.avgDef > 0 ? '+' : '') + wk.avgDef : '—'}</td>
+                      <td style={{ border: '1px solid #cbd5e1' }}>{wk.wAvg !== null ? wk.wAvg : '—'}</td>
+                      <td style={{ border: '1px solid #cbd5e1', fontWeight: 'bold', color: wk.dW === null ? '#555' : (wk.dW > 0 ? '#ef4444' : wk.dW < 0 ? '#10b981' : '#555') }}>{wk.dW === null ? '—' : (wk.dW > 0 ? '+' : '') + wk.dW}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 
@@ -912,6 +1197,12 @@
                       <MacroBar label="Белок" current={totalPro} goal={activeGoals.protein} colorClass="text-indigo-400" bgClass="bg-indigo-500" />
                       <MacroBar label="Жиры" current={totalFats} goal={activeGoals.fats} colorClass="text-amber-400" bgClass="bg-amber-500" />
                       <MacroBar label="Углеводы" current={totalCarbs} goal={activeGoals.carbs} colorClass="text-blue-400" bgClass="bg-blue-500" />
+                      {proteinPerKg !== null && (
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Белок на кг веса</span>
+                          <span className={`text-[11px] font-bold ${proteinPerKg >= 1.6 ? 'text-emerald-400' : 'text-amber-400'}`}>{proteinPerKg} г/кг <span className="text-zinc-600">· цель {proteinGoalPerKg}</span></span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -921,6 +1212,13 @@
                       <button type="button" onClick={copyPreviousDay} className="btn-active text-[10px] font-bold text-emerald-400 bg-emerald-900/20 px-3 py-1.5 rounded-lg transition-all">Копировать вчера</button>
                     </div>
                     <input type="text" placeholder="🔍 Поиск продукта..." className="bg-[#27272a] rounded-2xl p-3 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500" value={foodSearch} onChange={(e) => setFoodSearch(e.target.value)} />
+                    {frequentFoods.length > 0 && (
+                      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                        {frequentFoods.map(f => (
+                          <button type="button" key={f.id} onClick={() => setSelectedFoodId(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
+                        ))}
+                      </div>
+                    )}
                     <select className="bg-[#27272a] rounded-2xl p-4 outline-none appearance-none text-zinc-200 text-sm font-medium truncate w-full border border-zinc-700/30 focus:border-emerald-500" value={selectedFoodId} onChange={(e) => setSelectedFoodId(e.target.value)} required>
                       <option value="" disabled>Выберите продукт{foodSearch && ` (найдено: ${visibleFoods.length})`}</option>
                       {visibleFoods.map(f => <option key={f.id} value={f.id}>{f.isFavorite ? '⭐️ ' : ''}{f.name}</option>)}
@@ -990,6 +1288,7 @@
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">БЕЛОК (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.protein} onChange={(e) => handleDraftGoalChange('protein', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЖИРЫ (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.fats} onChange={(e) => handleDraftGoalChange('fats', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
                       <div className="col-span-2"><span className="text-[9px] text-zinc-500 font-bold block mb-1">УГЛЕВОДЫ (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.carbs} onChange={(e) => handleDraftGoalChange('carbs', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
+                      <div className="col-span-2"><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЦЕЛЬ ПО ЖИРУ (%)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.targetFat} onChange={(e) => handleDraftGoalChange('targetFat', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
                     </div>
                     {hasUnsavedGoals && <button onClick={() => setShowGoalModal(true)} className="btn-active w-full bg-indigo-600 text-white p-4 rounded-xl font-bold mt-4 shadow-lg shadow-indigo-900/30 transition-all">💾 Сохранить цели</button>}
                   </div>
@@ -1013,7 +1312,14 @@
                       ♻️ Восстановить из файла
                       <input type="file" accept="application/json,.json" className="hidden" onChange={importBackup} />
                     </label>
-                    <p className="text-[10px] text-zinc-600 leading-relaxed">JSON — полная копия всех данных. Восстановление перезапишет текущие данные.</p>
+                    <p className="text-[10px] text-zinc-600 leading-relaxed">JSON — полная копия всех данных. Восстановление дополнит/перезапишет данные аккаунта.</p>
+                    <button onClick={importLegacy} className="btn-active w-full bg-zinc-900 text-zinc-400 rounded-xl p-3 text-sm font-bold transition-all border border-zinc-800">⬆️ Перенести из старой версии</button>
+                  </div>
+
+                  <div className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
+                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Аккаунт</h2>
+                    <p className="text-xs text-zinc-500 break-all">{auth.currentUser ? auth.currentUser.email : ''}</p>
+                    <button onClick={() => { if (confirm('Выйти из аккаунта?')) auth.signOut(); }} className="btn-active w-full bg-zinc-800 text-red-400 rounded-xl p-4 font-bold transition-all">Выйти</button>
                   </div>
 
                   <div className="space-y-2">
