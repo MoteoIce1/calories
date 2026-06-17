@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#0d1115">
+  <meta name="theme-color" content="#141725">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -53,7 +53,19 @@
     html {
       height: 100%;
       min-height: 100%;
-      background-color: #0d1115 !important;
+      background-color: #141725 !important;
+    }
+
+    html::before {
+      content: "";
+      position: fixed;
+      inset: -240px 0 -80px;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 28% -2%, rgba(127, 142, 216, 0.2), transparent 32rem),
+        radial-gradient(circle at 100% 6%, rgba(163, 101, 123, 0.15), transparent 30rem),
+        linear-gradient(160deg, #141725 0%, #12171c 48%, #090c10 100%);
     }
 
     #root {
@@ -88,13 +100,13 @@
     body::before {
       content: "";
       position: fixed;
-      inset: -160px 0;
+      inset: -240px 0 -80px;
       z-index: 0;
       pointer-events: none;
       background:
-        radial-gradient(circle at 28% -12%, rgba(127, 142, 216, 0.16), transparent 30rem),
-        radial-gradient(circle at 100% 8%, rgba(163, 101, 123, 0.14), transparent 28rem),
-        linear-gradient(160deg, #0d1115 0%, #12171c 48%, #090c10 100%);
+        radial-gradient(circle at 28% -2%, rgba(127, 142, 216, 0.2), transparent 32rem),
+        radial-gradient(circle at 100% 6%, rgba(163, 101, 123, 0.15), transparent 30rem),
+        linear-gradient(160deg, #141725 0%, #12171c 48%, #090c10 100%);
     }
 
     .h-\[100dvh\],
@@ -123,8 +135,8 @@
       inset: 0;
       pointer-events: none;
       background:
-        radial-gradient(circle at 28% -8%, rgba(127, 142, 216, 0.15), transparent 24rem),
-        radial-gradient(circle at 95% 18%, rgba(163, 101, 123, 0.12), transparent 20rem),
+        radial-gradient(circle at 28% -18%, rgba(127, 142, 216, 0.18), transparent 28rem),
+        radial-gradient(circle at 95% 12%, rgba(163, 101, 123, 0.13), transparent 22rem),
         linear-gradient(180deg, rgba(255,255,255,0.03), transparent 18rem);
       opacity: 0.85;
     }
