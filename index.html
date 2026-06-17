@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#050403">
+  <meta name="theme-color" content="#071018">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -20,32 +20,21 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 
-  <script>
-    (() => {
-      let theme = 'night';
-      try {
-        theme = localStorage.getItem('tracker-theme') || theme;
-      } catch (e) {}
-      document.documentElement.dataset.theme = theme;
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'day' ? '#f5efe4' : '#050403');
-    })();
-  </script>
-
   <style>
     :root {
-      --bg-deep: #050403;
-      --bg-ink: #090807;
-      --surface: rgba(20, 18, 15, 0.82);
-      --surface-strong: rgba(30, 26, 20, 0.94);
-      --surface-soft: rgba(38, 33, 25, 0.76);
-      --line: rgba(214, 176, 98, 0.16);
-      --line-strong: rgba(214, 176, 98, 0.3);
-      --text-muted: #a79b88;
-      --accent: #d8b66c;
-      --accent-strong: #b88a3d;
-      --accent-soft: rgba(216, 182, 108, 0.15);
-      --violet: #9f8ad7;
-      --amber: #d8b66c;
+      --bg-deep: #071018;
+      --bg-ink: #0b1420;
+      --surface: rgba(16, 28, 43, 0.84);
+      --surface-strong: rgba(21, 36, 54, 0.94);
+      --surface-soft: rgba(28, 44, 64, 0.76);
+      --line: rgba(132, 170, 194, 0.16);
+      --line-strong: rgba(132, 170, 194, 0.3);
+      --text-muted: #92a7b8;
+      --accent: #67c9bd;
+      --accent-strong: #4b9a92;
+      --accent-soft: rgba(103, 201, 189, 0.15);
+      --violet: #a79be8;
+      --amber: #d6a85f;
       --danger: #e06d6d;
       --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
     }
@@ -54,27 +43,17 @@
     body,
     #root {
       min-height: 100%;
-      background-color: #050403;
+      background-color: #071018;
       background:
-        radial-gradient(circle at 50% -12%, rgba(216, 182, 108, 0.2), transparent 30rem),
-        radial-gradient(circle at 100% 8%, rgba(120, 88, 42, 0.18), transparent 28rem),
-        linear-gradient(160deg, #050403 0%, #0b0907 48%, #030303 100%);
-    }
-
-    html[data-theme="day"],
-    html[data-theme="day"] body,
-    html[data-theme="day"] #root {
-      background-color: #f5efe4 !important;
-      background:
-        radial-gradient(circle at 50% -12%, rgba(88, 130, 108, 0.2), transparent 30rem),
-        radial-gradient(circle at 100% 10%, rgba(199, 121, 78, 0.16), transparent 28rem),
-        linear-gradient(160deg, #f8f1e6 0%, #efe3d1 52%, #e5d6bf 100%) !important;
+        radial-gradient(circle at 32% -12%, rgba(103, 201, 189, 0.2), transparent 30rem),
+        radial-gradient(circle at 100% 8%, rgba(167, 155, 232, 0.15), transparent 28rem),
+        linear-gradient(160deg, #071018 0%, #0b1420 48%, #060a12 100%);
     }
 
     html {
       height: 100%;
       min-height: 100%;
-      background-color: #050403 !important;
+      background-color: #071018 !important;
     }
 
     #root {
@@ -90,11 +69,11 @@
     }
 
     body {
-      background-color: #050403 !important;
+      background-color: #071018 !important;
       background:
-        radial-gradient(circle at 50% -12%, rgba(216, 182, 108, 0.2), transparent 30rem),
-        radial-gradient(circle at 100% 8%, rgba(120, 88, 42, 0.18), transparent 28rem),
-        linear-gradient(160deg, var(--bg-deep) 0%, #0b0907 48%, #030303 100%);
+        radial-gradient(circle at 32% -12%, rgba(103, 201, 189, 0.2), transparent 30rem),
+        radial-gradient(circle at 100% 8%, rgba(167, 155, 232, 0.15), transparent 28rem),
+        linear-gradient(160deg, var(--bg-deep) 0%, #0b1420 48%, #060a12 100%);
       margin: 0;
       padding: 0;
       min-height: 100vh;
@@ -113,16 +92,9 @@
       z-index: 0;
       pointer-events: none;
       background:
-        radial-gradient(circle at 50% -12%, rgba(216, 182, 108, 0.2), transparent 30rem),
-        radial-gradient(circle at 100% 8%, rgba(120, 88, 42, 0.18), transparent 28rem),
-        linear-gradient(160deg, #050403 0%, #0b0907 48%, #030303 100%);
-    }
-
-    html[data-theme="day"] body::before {
-      background:
-        radial-gradient(circle at 50% -12%, rgba(88, 130, 108, 0.2), transparent 30rem),
-        radial-gradient(circle at 100% 10%, rgba(199, 121, 78, 0.16), transparent 28rem),
-        linear-gradient(160deg, #f8f1e6 0%, #efe3d1 52%, #e5d6bf 100%);
+        radial-gradient(circle at 32% -12%, rgba(103, 201, 189, 0.2), transparent 30rem),
+        radial-gradient(circle at 100% 8%, rgba(167, 155, 232, 0.15), transparent 28rem),
+        linear-gradient(160deg, #071018 0%, #0b1420 48%, #060a12 100%);
     }
 
     .h-\[100dvh\],
@@ -139,19 +111,10 @@
     
     .app-shell {
       background:
-        linear-gradient(180deg, rgba(10, 9, 7, 0.92) 0%, rgba(5, 5, 5, 0.98) 100%),
+        linear-gradient(180deg, rgba(10, 19, 31, 0.94) 0%, rgba(7, 12, 22, 0.98) 100%),
         var(--bg-ink) !important;
-      border-color: rgba(216, 182, 108, 0.12) !important;
+      border-color: rgba(132, 170, 194, 0.12) !important;
       box-shadow: 0 28px 90px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255,255,255,0.045);
-    }
-
-    html[data-theme="day"] .app-shell {
-      background:
-        linear-gradient(180deg, rgba(255, 248, 236, 0.92) 0%, rgba(239, 227, 209, 0.96) 100%),
-        #f3eadc !important;
-      border-color: rgba(82, 75, 64, 0.12) !important;
-      box-shadow: 0 28px 80px rgba(92, 66, 38, 0.22), inset 0 1px 0 rgba(255,255,255,0.7);
-      color: #211c17 !important;
     }
 
     .app-shell::before {
@@ -160,32 +123,18 @@
       inset: 0;
       pointer-events: none;
       background:
-        radial-gradient(circle at 42% -8%, rgba(216, 182, 108, 0.18), transparent 24rem),
-        radial-gradient(circle at 95% 18%, rgba(88, 61, 27, 0.18), transparent 20rem),
+        radial-gradient(circle at 32% -8%, rgba(103, 201, 189, 0.18), transparent 24rem),
+        radial-gradient(circle at 95% 18%, rgba(167, 155, 232, 0.12), transparent 20rem),
         linear-gradient(180deg, rgba(255,255,255,0.03), transparent 18rem);
       opacity: 0.85;
-    }
-
-    html[data-theme="day"] .app-shell::before {
-      background:
-        radial-gradient(circle at 42% -8%, rgba(88, 130, 108, 0.2), transparent 24rem),
-        radial-gradient(circle at 95% 18%, rgba(199, 121, 78, 0.13), transparent 20rem),
-        linear-gradient(180deg, rgba(255,255,255,0.55), transparent 18rem);
-      opacity: 0.95;
     }
 
     .app-shell > * { position: relative; }
     .app-header,
     .bottom-nav {
-      background: rgba(5, 5, 5, 0.72) !important;
+      background: rgba(7, 12, 22, 0.72) !important;
       backdrop-filter: blur(24px) saturate(1.15);
       -webkit-backdrop-filter: blur(24px) saturate(1.15);
-    }
-
-    html[data-theme="day"] .app-header,
-    html[data-theme="day"] .bottom-nav {
-      background: rgba(250, 242, 229, 0.78) !important;
-      border-color: rgba(82, 75, 64, 0.1) !important;
     }
 
     .bottom-nav::after {
@@ -195,47 +144,21 @@
       right: 0;
       bottom: calc(env(safe-area-inset-bottom) * -1);
       height: env(safe-area-inset-bottom);
-      background: rgba(5, 5, 5, 0.86);
+      background: rgba(7, 12, 22, 0.88);
       pointer-events: none;
-    }
-
-    html[data-theme="day"] .bottom-nav::after {
-      background: rgba(250, 242, 229, 0.9);
     }
 
     .app-header {
       padding-top: max(2rem, calc(env(safe-area-inset-top) + 0.75rem)) !important;
-      border-bottom: 1px solid rgba(216, 182, 108, 0.06);
+      border-bottom: 1px solid rgba(132, 170, 194, 0.08);
     }
 
     .app-header h1 {
-      background: linear-gradient(135deg, #fff7df 0%, #e5c77d 42%, #9f7332 100%);
+      background: linear-gradient(135deg, #eff8fb 0%, #8fded4 46%, #a79be8 100%);
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
       letter-spacing: -0.03em;
-    }
-
-    html[data-theme="day"] .app-header h1 {
-      background: linear-gradient(135deg, #1f2f29 0%, #587f69 48%, #bd7550 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-    }
-
-    .theme-toggle {
-      min-width: 2.75rem;
-      background: rgba(38, 33, 25, 0.76) !important;
-      border: 1px solid var(--line) !important;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-    }
-
-    .theme-toggle span {
-      display: block;
-      transition: transform 300ms var(--ease-out);
-    }
-
-    .theme-toggle:active span {
-      transform: rotate(-12deg) scale(0.92);
     }
 
     .btn-active {
@@ -259,61 +182,171 @@
     }
 
     .progress-fill {
-      box-shadow: 0 0 22px rgba(216, 182, 108, 0.26);
+      box-shadow: 0 0 22px rgba(103, 201, 189, 0.26);
       transition: width 900ms var(--ease-out), background-color 360ms var(--ease-out), box-shadow 360ms var(--ease-out) !important;
     }
 
     .modal-card { animation: modalIn 360ms var(--ease-out) both; }
 
+    .report-modern {
+      background:
+        radial-gradient(circle at 20% 0%, rgba(103, 201, 189, 0.12), transparent 260px),
+        linear-gradient(180deg, #f8fafc 0%, #eef4f7 100%) !important;
+      color: #17212b !important;
+      padding: 22px !important;
+      border-radius: 0;
+    }
+
+    .report-modern h1 {
+      background: linear-gradient(135deg, #0f2530 0%, #276f6c 52%, #6b63ba 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent !important;
+      font-size: 24px !important;
+      letter-spacing: -0.04em;
+      margin: 0 0 18px 0 !important;
+      text-align: left !important;
+    }
+
+    .report-modern h1::after {
+      content: "Персональная сводка по питанию, активности и динамике тела";
+      display: block;
+      color: #64748b;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: 6px;
+    }
+
+    .report-modern > div {
+      background: rgba(255,255,255,0.86) !important;
+      border: 1px solid rgba(100, 116, 139, 0.16) !important;
+      border-radius: 18px !important;
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08) !important;
+      margin-bottom: 14px !important;
+      padding: 14px !important;
+      overflow: hidden;
+    }
+
+    .report-modern > div:first-of-type {
+      background:
+        linear-gradient(135deg, rgba(15, 37, 48, 0.96), rgba(39, 111, 108, 0.9)) !important;
+      color: #ecfeff !important;
+      border-color: rgba(103, 201, 189, 0.3) !important;
+    }
+
+    .report-modern > div:first-of-type h2,
+    .report-modern > div:first-of-type p,
+    .report-modern > div:first-of-type strong,
+    .report-modern > div:first-of-type em {
+      color: inherit !important;
+    }
+
+    .report-modern h2,
+    .report-modern h3,
+    .report-modern h4 {
+      color: #17313b !important;
+      letter-spacing: -0.02em;
+    }
+
+    .report-modern h2 {
+      font-size: 15px !important;
+      margin-bottom: 10px !important;
+    }
+
+    .report-modern h3 {
+      font-size: 13px !important;
+    }
+
+    .report-modern p {
+      color: #334155;
+      line-height: 1.45;
+      margin: 5px 0 !important;
+    }
+
+    .report-modern em,
+    .report-modern span {
+      color: #64748b;
+    }
+
+    .report-modern table {
+      border-collapse: separate !important;
+      border-spacing: 0 !important;
+      border: 1px solid rgba(100, 116, 139, 0.16);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .report-modern thead,
+    .report-modern tr[style*="backgroundColor"],
+    .report-modern tr[style*="background-color"] {
+      background: #e8f3f3 !important;
+    }
+
+    .report-modern th {
+      background: #e8f3f3 !important;
+      color: #24545a !important;
+      border-color: rgba(100, 116, 139, 0.14) !important;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .report-modern td {
+      border-color: rgba(100, 116, 139, 0.12) !important;
+      color: #27313d;
+    }
+
+    .report-modern .avoid-break {
+      box-shadow: none !important;
+      border-radius: 16px !important;
+    }
+
     .bg-\[\#09090b\] { background: transparent !important; }
     .bg-\[\#18181b\] {
       background:
-        linear-gradient(145deg, rgba(28, 24, 18, 0.9), rgba(12, 11, 9, 0.82)) !important;
+        linear-gradient(145deg, rgba(18, 31, 47, 0.9), rgba(10, 18, 30, 0.82)) !important;
       box-shadow: 0 20px 48px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255,255,255,0.045);
-    }
-
-    html[data-theme="day"] .bg-\[\#18181b\] {
-      background:
-        linear-gradient(145deg, rgba(255, 250, 242, 0.92), rgba(236, 224, 207, 0.84)) !important;
-      box-shadow: 0 18px 42px rgba(92, 66, 38, 0.13), inset 0 1px 0 rgba(255,255,255,0.78);
     }
     .bg-\[\#27272a\],
     .bg-zinc-800,
     .bg-zinc-900 {
       background-color: var(--surface-soft) !important;
     }
-    .bg-zinc-900\/40 { background-color: rgba(0, 0, 0, 0.42) !important; }
-    .bg-zinc-900\/50 { background-color: rgba(216, 182, 108, 0.12) !important; }
-    .bg-zinc-800\/60 { background-color: rgba(38, 33, 25, 0.74) !important; }
+    .bg-zinc-900\/40 { background-color: rgba(5, 13, 24, 0.46) !important; }
+    .bg-zinc-900\/50 { background-color: rgba(103, 201, 189, 0.12) !important; }
+    .bg-zinc-800\/60 { background-color: rgba(28, 44, 64, 0.74) !important; }
     .border-zinc-900,
     [class*="border-zinc-800"],
     [class*="border-zinc-700"] { border-color: var(--line) !important; }
     .text-zinc-500,
     .text-zinc-400 { color: var(--text-muted) !important; }
     .text-zinc-600,
-    .text-zinc-700 { color: #756b5b !important; }
+    .text-zinc-700 { color: #667d90 !important; }
     .text-emerald-300,
     .text-emerald-400,
-    .text-emerald-500 { color: #e4c875 !important; }
+    .text-emerald-500 { color: #8fded4 !important; }
     .text-indigo-400,
-    .text-indigo-500 { color: #b9a5e6 !important; }
+    .text-indigo-500 { color: #b8aef2 !important; }
     .text-blue-400,
-    .text-blue-500 { color: #8fb6d6 !important; }
+    .text-blue-500 { color: #8cc8eb !important; }
     .text-amber-400,
-    .text-amber-500 { color: #e4c875 !important; }
+    .text-amber-500 { color: #e0b86f !important; }
     .text-red-400,
     .text-red-500 { color: var(--danger) !important; }
     .bg-emerald-500,
     .bg-emerald-600 {
-      background: linear-gradient(135deg, #f0d98b 0%, var(--accent) 42%, var(--accent-strong) 100%) !important;
-      box-shadow: 0 14px 34px rgba(184, 138, 61, 0.28);
+      background: linear-gradient(135deg, #8fded4 0%, var(--accent) 42%, var(--accent-strong) 100%) !important;
+      box-shadow: 0 14px 34px rgba(75, 154, 146, 0.28);
     }
     .bg-emerald-900\/20,
     .bg-emerald-900\/30,
     .bg-emerald-900\/40 { background-color: var(--accent-soft) !important; }
     .border-emerald-500,
     .border-emerald-700\/50,
-    .focus\:border-emerald-500:focus { border-color: rgba(228, 200, 117, 0.66) !important; }
+    .focus\:border-emerald-500:focus { border-color: rgba(143, 222, 212, 0.66) !important; }
     .bg-indigo-500,
     .bg-indigo-600 {
       background: linear-gradient(135deg, #9a86e8, #7668c9) !important;
@@ -324,62 +357,15 @@
       background: linear-gradient(135deg, #6aa9d3, #4d82b0) !important;
       box-shadow: 0 12px 28px rgba(77, 130, 176, 0.22);
     }
-    .bg-amber-500 { background: linear-gradient(135deg, #f0d98b, #b9823d) !important; }
+    .bg-amber-500 { background: linear-gradient(135deg, #e0b86f, #b9823d) !important; }
     .bg-red-500 { background: linear-gradient(135deg, #e06d6d, #b95362) !important; }
-
-    html[data-theme="day"] .progress-track { background: rgba(87, 75, 60, 0.16) !important; }
-    html[data-theme="day"] .bg-\[\#27272a\],
-    html[data-theme="day"] .bg-zinc-800,
-    html[data-theme="day"] .bg-zinc-900 { background-color: rgba(255, 252, 246, 0.66) !important; }
-    html[data-theme="day"] .bg-zinc-900\/40 { background-color: rgba(96, 84, 66, 0.08) !important; }
-    html[data-theme="day"] .bg-zinc-900\/50 { background-color: rgba(88, 130, 108, 0.14) !important; }
-    html[data-theme="day"] .bg-zinc-800\/60 { background-color: rgba(255, 252, 246, 0.72) !important; }
-    html[data-theme="day"] [class*="border-zinc-800"],
-    html[data-theme="day"] [class*="border-zinc-700"],
-    html[data-theme="day"] .border-zinc-900 { border-color: rgba(82, 75, 64, 0.13) !important; }
-    html[data-theme="day"] .text-zinc-100,
-    html[data-theme="day"] .text-zinc-200,
-    html[data-theme="day"] .text-zinc-300 { color: #27221c !important; }
-    html[data-theme="day"] .text-zinc-400,
-    html[data-theme="day"] .text-zinc-500 { color: #786c5c !important; }
-    html[data-theme="day"] .text-zinc-600,
-    html[data-theme="day"] .text-zinc-700,
-    html[data-theme="day"] .text-zinc-800 { color: #9a8b76 !important; }
-    html[data-theme="day"] .text-emerald-300,
-    html[data-theme="day"] .text-emerald-400,
-    html[data-theme="day"] .text-emerald-500 { color: #4f7a64 !important; }
-    html[data-theme="day"] .text-amber-400,
-    html[data-theme="day"] .text-amber-500 { color: #b86e43 !important; }
-    html[data-theme="day"] .text-indigo-400,
-    html[data-theme="day"] .text-indigo-500 { color: #7062a9 !important; }
-    html[data-theme="day"] .text-blue-400,
-    html[data-theme="day"] .text-blue-500 { color: #4e7894 !important; }
-    html[data-theme="day"] .bg-emerald-500,
-    html[data-theme="day"] .bg-emerald-600 {
-      background: linear-gradient(135deg, #86a891 0%, #5f8a73 48%, #4c765f 100%) !important;
-      box-shadow: 0 14px 32px rgba(76, 118, 95, 0.24);
-    }
-    html[data-theme="day"] .bg-emerald-900\/20,
-    html[data-theme="day"] .bg-emerald-900\/30,
-    html[data-theme="day"] .bg-emerald-900\/40 { background-color: rgba(88, 130, 108, 0.14) !important; }
-    html[data-theme="day"] .border-emerald-500,
-    html[data-theme="day"] .border-emerald-700\/50,
-    html[data-theme="day"] .focus\:border-emerald-500:focus { border-color: rgba(88, 130, 108, 0.56) !important; }
-    html[data-theme="day"] .theme-toggle {
-      background: rgba(255, 252, 246, 0.72) !important;
-      border-color: rgba(82, 75, 64, 0.13) !important;
-    }
-    html[data-theme="day"] input,
-    html[data-theme="day"] select {
-      color: #27221c !important;
-    }
 
     input, select {
       transition: border-color 240ms var(--ease-out), background-color 240ms var(--ease-out), box-shadow 240ms var(--ease-out), transform 240ms var(--ease-out);
     }
 
     input:focus, select:focus {
-      box-shadow: 0 0 0 4px rgba(216, 182, 108, 0.12);
+      box-shadow: 0 0 0 4px rgba(103, 201, 189, 0.12);
     }
 
     @keyframes floatIn {
@@ -404,13 +390,15 @@
     input[type="number"]::-webkit-inner-spin-button, 
     input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     
-    .loader { border: 3px solid rgba(216, 182, 108, 0.18); border-top: 3px solid var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; box-shadow: 0 0 30px rgba(216, 182, 108, 0.18); }
+    .loader { border: 3px solid rgba(132, 170, 194, 0.18); border-top: 3px solid var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; box-shadow: 0 0 30px rgba(103, 201, 189, 0.18); }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     
     @media print {
       body { background-color: white !important; color: black !important; }
       body::before { display: none !important; }
       .print-hide { display: none !important; }
+      .report-view { height: auto !important; overflow: visible !important; padding: 0 !important; background: white !important; }
+      .report-modern { max-width: none !important; padding: 0 !important; background: white !important; }
       @page { margin: 10mm; }
       
       .avoid-break { page-break-inside: auto !important; break-inside: auto !important; margin-bottom: 10px !important; }
@@ -614,8 +602,8 @@
           </div>
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block">
             <line x1={padX} y1={yFor((yMin + yMax) / 2)} x2={W - padX} y2={yFor((yMin + yMax) / 2)} stroke="rgba(142, 167, 195, 0.18)" strokeWidth="1" />
-            <polyline points={line} fill="none" stroke="#d8b66c" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-            {points.map((p, idx) => <circle key={idx} cx={xFor(p.i)} cy={yFor(p.v)} r="3" fill="#e4c875" />)}
+            <polyline points={line} fill="none" stroke="#67c9bd" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            {points.map((p, idx) => <circle key={idx} cx={xFor(p.i)} cy={yFor(p.v)} r="3" fill="#8fded4" />)}
             <text x={padX} y={H - 2} fontSize="9" fill="#71717a">{dates[points[0].i]}</text>
             <text x={W - padX} y={H - 2} textAnchor="end" fontSize="9" fill="#71717a">{dates[points[points.length - 1].i]}</text>
           </svg>
@@ -701,22 +689,6 @@
 
       const scrollContainerRef = useRef(null);
       const initialGoalsRef = useRef(false);
-      const [theme, setTheme] = useState(() => {
-        try {
-          return localStorage.getItem('tracker-theme') || document.documentElement.dataset.theme || 'night';
-        } catch (e) {
-          return 'night';
-        }
-      });
-
-      useEffect(() => {
-        const nextTheme = theme === 'day' ? 'day' : 'night';
-        document.documentElement.dataset.theme = nextTheme;
-        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', nextTheme === 'day' ? '#f5efe4' : '#050403');
-        try {
-          localStorage.setItem('tracker-theme', nextTheme);
-        } catch (e) {}
-      }, [theme]);
 
       // Авторизация: следим за состоянием входа
       useEffect(() => {
@@ -1473,7 +1445,7 @@
       }
 
       const ExportReport = () => (
-        <div style={{ fontFamily: 'sans-serif', maxWidth: '800px', margin: '0 auto', fontSize: '12px', background: 'white', color: 'black' }}>
+        <div className="report-modern" style={{ fontFamily: 'sans-serif', maxWidth: '800px', margin: '0 auto', fontSize: '12px', background: 'white', color: 'black' }}>
           <h1 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '15px', textAlign: 'center' }}>Отчет по питанию ({exportStart} — {exportEnd})</h1>
           
           {allExportDates.length > 0 && (
@@ -1707,13 +1679,12 @@
 
       if (showReportView) {
         return (
-          <div style={{ backgroundColor: 'white', minHeight: '100vh', padding: '15px' }}>
-            <div className="print-hide" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', paddingBottom: '15px', borderBottom: '2px solid #e4e4e7' }}>
+          <div className="report-view" style={{ background: 'linear-gradient(180deg, #e8f3f3 0%, #f8fafc 42%, #eef4f7 100%)', color: 'black', height: '100vh', height: '100lvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '15px', position: 'relative', zIndex: 2 }}>
+            <div className="print-hide" style={{ position: 'sticky', top: 0, zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', padding: '12px', background: 'rgba(248, 250, 252, 0.86)', border: '1px solid rgba(100, 116, 139, 0.16)', borderRadius: '18px', boxShadow: '0 14px 34px rgba(15, 23, 42, 0.08)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
                <button 
-                 onClick={() => setShowReportView(false)} 
-                 disabled={isPrinting}
+                 onClick={() => { setIsPrinting(false); setShowReportView(false); }} 
                  className="btn-active" 
-                 style={{ padding: '12px 20px', background: '#f4f4f5', borderRadius: '12px', fontWeight: 'bold', color: isPrinting ? '#a1a1aa' : '#18181b', border: '1px solid #d4d4d8', fontSize: '14px', transition: 'all 0.1s', opacity: isPrinting ? 0.5 : 1 }}
+                 style={{ padding: '12px 18px', background: '#ffffff', borderRadius: '14px', fontWeight: 'bold', color: '#17212b', border: '1px solid rgba(100, 116, 139, 0.18)', fontSize: '14px', transition: 'all 0.1s', boxShadow: '0 8px 18px rgba(15, 23, 42, 0.06)' }}
                >
                  ⬅ Назад
                </button>
@@ -1721,7 +1692,7 @@
                  onClick={handlePrintClick} 
                  disabled={isPrinting}
                  className="btn-active" 
-                 style={{ padding: '12px 20px', background: isPrinting ? '#059669' : '#10b981', borderRadius: '12px', fontWeight: 'bold', color: '#fff', border: 'none', fontSize: '14px', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.4)', transition: 'all 0.1s', opacity: isPrinting ? 0.8 : 1 }}
+                 style={{ padding: '12px 18px', background: isPrinting ? '#4b9a92' : 'linear-gradient(135deg, #67c9bd, #4b9a92)', borderRadius: '14px', fontWeight: 'bold', color: '#fff', border: 'none', fontSize: '14px', boxShadow: '0 12px 24px rgba(75, 154, 146, 0.28)', transition: 'all 0.1s', opacity: isPrinting ? 0.8 : 1 }}
                >
                  {isPrinting ? '⏳ Обработка...' : '🖨 Сохранить PDF'}
                </button>
@@ -1738,15 +1709,6 @@
                 <h1 className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : 'База'}</h1>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTheme(theme === 'day' ? 'night' : 'day')}
-                  className="theme-toggle btn-active p-2 rounded-xl text-zinc-300 transition-all"
-                  title={theme === 'day' ? 'Включить ночную тему' : 'Включить дневную тему'}
-                  aria-label={theme === 'day' ? 'Включить ночную тему' : 'Включить дневную тему'}
-                >
-                  <span className="text-lg leading-none">{theme === 'day' ? '☀️' : '🌙'}</span>
-                </button>
                 {activeTab === 'directory' && (
                   <button onClick={forceRefreshApp} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50"><IconRefresh className="w-5 h-5" /></button>
                 )}
