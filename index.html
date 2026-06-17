@@ -259,6 +259,7 @@
       const [dailySteps, setDailySteps] = useState({});
       const [dailyMetrics, setDailyMetrics] = useState({});
       const [dailyWorkouts, setDailyWorkouts] = useState({});
+      const [isRefreshingDay, setIsRefreshingDay] = useState(false);
       
       const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
       const [activeTab, setActiveTab] = useState('diary');
@@ -272,6 +273,7 @@
       const [editingFoodId, setEditingFoodId] = useState(null);
       const [editValue, setEditValue] = useState({});
       const [modifier, setModifier] = useState({ type: null, value: '' });
+      const [draggingFavoriteId, setDraggingFavoriteId] = useState(null);
 
       const [showExportModal, setShowExportModal] = useState(false);
       const [showGoalModal, setShowGoalModal] = useState(false);
@@ -471,6 +473,30 @@
         writeDay(currentDate, { metrics: updatedDay });
       };
 
+      const refreshCurrentDayVitals = async () => {
+        if (!uid) return;
+        setIsRefreshingDay(true);
+        try {
+          const snap = await dayRef(uid, currentDate).get({ source: 'server' });
+          const data = snap.exists ? snap.data() : {};
+          setDailySteps(prev => {
+            const next = { ...prev };
+            if (data.steps !== undefined && data.steps !== '' && data.steps !== null) next[currentDate] = data.steps;
+            else delete next[currentDate];
+            return next;
+          });
+          setDailyMetrics(prev => {
+            const next = { ...prev };
+            if (data.metrics && Object.keys(data.metrics).length) next[currentDate] = data.metrics;
+            else delete next[currentDate];
+            return next;
+          });
+        } catch (err) {
+          alert('Не удалось обновить шаги и замеры: ' + err.message);
+        }
+        setIsRefreshingDay(false);
+      };
+
       const handleAddLog = (e) => {
         e.preventDefault();
         const food = foods.find(f => f.id === selectedFoodId);
@@ -635,6 +661,24 @@
         saveFoods([...reorderedFavorites, ...regularFoods]);
       };
 
+      const reorderFavorite = (dragId, targetId) => {
+        if (!dragId || !targetId || dragId === targetId) return;
+        const favorites = foods.filter(f => f.isFavorite);
+        const from = favorites.findIndex(f => f.id === dragId);
+        const to = favorites.findIndex(f => f.id === targetId);
+        if (from === -1 || to === -1) return;
+        const reorderedFavorites = [...favorites];
+        const [moved] = reorderedFavorites.splice(from, 1);
+        reorderedFavorites.splice(to, 0, moved);
+        saveFoods([...reorderedFavorites, ...foods.filter(f => !f.isFavorite)]);
+      };
+
+      const finishFavoriteTouchDrag = (touch) => {
+        const target = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('[data-favorite-id]');
+        reorderFavorite(draggingFavoriteId, target?.dataset.favoriteId);
+        setDraggingFavoriteId(null);
+      };
+
       const forceRefreshApp = () => window.location.href = window.location.pathname + '?v=' + Date.now();
 
       const toggleWorkout = () => {
@@ -740,6 +784,7 @@
         ...foods.filter(f => !f.isFavorite).sort((a, b) => a.name.localeCompare(b.name, 'ru')),
       ];
       const visibleFoods = sortedFoods.filter(f => f.name.toLowerCase().includes(foodSearch.toLowerCase()));
+      const showFoodSuggestions = foodSearch.trim().length > 0;
 
       const allDatesSet = new Set([
          ...Object.keys(dailyLogs).filter(d => d >= exportStart && d <= exportEnd),
@@ -1186,7 +1231,12 @@
                           {extraCalories !== 0 && <span className={`text-[9px] font-bold mt-0.5 ${extraCalories > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{extraCalories > 0 ? `+${extraCalories}` : extraCalories} ккал к цели</span>}
                         </div>
                       </div>
-                      <input type="number" className="w-24 bg-zinc-800 rounded-xl p-2 text-center text-sm font-bold outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={todaySteps} onChange={(e) => handleUpdateSteps(e.target.value)} onFocus={(e) => e.target.select()} />
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={refreshCurrentDayVitals} disabled={isRefreshingDay || !uid} className="btn-active w-10 h-10 rounded-xl bg-zinc-800 text-zinc-300 flex items-center justify-center border border-zinc-700/30 disabled:opacity-40 transition-all" title="Обновить шаги и замеры">
+                          <IconRefresh className={`w-5 h-5 ${isRefreshingDay ? 'animate-spin' : ''}`} />
+                        </button>
+                        <input type="number" className="w-24 bg-zinc-800 rounded-xl p-2 text-center text-sm font-bold outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={todaySteps} onChange={(e) => handleUpdateSteps(e.target.value)} onFocus={(e) => e.target.select()} />
+                      </div>
                     </div>
 
                     <button onClick={toggleWorkout} className={`btn-active w-full mb-4 flex items-center justify-between p-3 rounded-2xl border transition-all ${dailyWorkouts[currentDate] ? 'bg-emerald-900/30 border-emerald-700/50' : 'bg-zinc-900/40 border-zinc-800/40'}`}>
@@ -1232,12 +1282,29 @@
                     {favoriteFoods.length > 0 && (
                       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
                         {favoriteFoods.map(f => (
-                          <button type="button" key={f.id} onClick={() => setSelectedFoodId(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
+                          <button type="button" key={f.id} onClick={() => setSelectedFoodId(selectedFoodId === f.id ? '' : f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
                         ))}
                       </div>
                     )}
+                    {showFoodSuggestions && (
+                      <div className="max-h-56 overflow-y-auto rounded-2xl border border-zinc-700/40 bg-[#18181b] divide-y divide-zinc-800/70">
+                        {selectedFoodId && (
+                          <button type="button" onClick={() => setSelectedFoodId('')} className="btn-active w-full text-left px-4 py-3 text-sm font-bold text-zinc-500">
+                            Не выбрано
+                          </button>
+                        )}
+                        {visibleFoods.length > 0 ? visibleFoods.map(f => (
+                          <button type="button" key={f.id} onClick={() => { setSelectedFoodId(f.id); setFoodSearch(''); }} className={`btn-active w-full text-left px-4 py-3 transition-colors ${selectedFoodId === f.id ? 'bg-emerald-900/40 text-emerald-300' : 'text-zinc-200'}`}>
+                            <span className="font-bold text-sm">{f.isFavorite ? '⭐️ ' : ''}{f.name}</span>
+                            <span className="block text-[10px] text-zinc-500 mt-1">{f.calories} ккал · Б {f.protein} · Ж {f.fats} · У {f.carbs}</span>
+                          </button>
+                        )) : (
+                          <div className="px-4 py-3 text-sm text-zinc-500">Ничего не найдено</div>
+                        )}
+                      </div>
+                    )}
                     <select className="bg-[#27272a] rounded-2xl p-4 outline-none appearance-none text-zinc-200 text-sm font-medium truncate w-full border border-zinc-700/30 focus:border-emerald-500" value={selectedFoodId} onChange={(e) => setSelectedFoodId(e.target.value)} required>
-                      <option value="" disabled>Выберите продукт{foodSearch && ` (найдено: ${visibleFoods.length})`}</option>
+                      <option value="">Не выбрано{foodSearch && ` (найдено: ${visibleFoods.length})`}</option>
                       {visibleFoods.map(f => <option key={f.id} value={f.id}>{f.isFavorite ? '⭐️ ' : ''}{f.name}</option>)}
                     </select>
                     <div className="flex gap-2">
@@ -1322,6 +1389,7 @@
                     <button type="submit" className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold shadow-lg shadow-emerald-900/20 transition-all">Добавить в базу</button>
                   </form>
 
+                  {false && (
                   <div className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Резервное копирование</h2>
                     <button onClick={downloadBackup} className="btn-active w-full bg-zinc-800 text-zinc-200 rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2"><IconDownload className="w-5 h-5" /> Скачать бэкап (JSON)</button>
@@ -1332,17 +1400,18 @@
                     <p className="text-[10px] text-zinc-600 leading-relaxed">JSON — полная копия всех данных. Восстановление дополнит/перезапишет данные аккаунта.</p>
                     <button onClick={importLegacy} className="btn-active w-full bg-zinc-900 text-zinc-400 rounded-xl p-3 text-sm font-bold transition-all border border-zinc-800">⬆️ Перенести из старой версии</button>
                   </div>
-
-                  <div className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Аккаунт</h2>
-                    <p className="text-xs text-zinc-500 break-all">{auth.currentUser ? auth.currentUser.email : ''}</p>
-                    <button onClick={() => { if (confirm('Выйти из аккаунта?')) auth.signOut(); }} className="btn-active w-full bg-zinc-800 text-red-400 rounded-xl p-4 font-bold transition-all">Выйти</button>
-                  </div>
+                  )}
 
                   <div className="space-y-2">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-1">База продуктов ({foods.length})</h2>
                     {sortedFoods.map(f => (
-                      <div key={f.id} className="list-item-active bg-[#18181b] rounded-xl p-3 border border-zinc-800/30 transition-colors">
+                      <div
+                        key={f.id}
+                        data-favorite-id={f.isFavorite ? f.id : undefined}
+                        onDragOver={(e) => { if (f.isFavorite && draggingFavoriteId) e.preventDefault(); }}
+                        onDrop={(e) => { e.preventDefault(); reorderFavorite(draggingFavoriteId, f.id); setDraggingFavoriteId(null); }}
+                        className={`list-item-active bg-[#18181b] rounded-xl p-3 border transition-colors ${draggingFavoriteId === f.id ? 'border-emerald-500/70 opacity-60' : 'border-zinc-800/30'}`}
+                      >
                         {editingFoodId === f.id ? (
                           <div className="space-y-3">
                              <input autoFocus className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-white border border-indigo-500 outline-none" value={editValue.name} onChange={e => setEditValue({...editValue, name: e.target.value})} />
@@ -1361,10 +1430,20 @@
                                 <IconStar className={`w-6 h-6 ${f.isFavorite ? 'text-amber-400' : 'text-zinc-700'}`} fill={f.isFavorite ? "currentColor" : "none"} />
                               </button>
                               {f.isFavorite && (
-                                <div className="flex flex-col gap-1 mr-2">
-                                  <button type="button" onClick={(e) => moveFavorite(e, f.id, -1)} disabled={favoriteFoods[0]?.id === f.id} className="btn-active w-6 h-5 rounded bg-zinc-900 text-[10px] font-bold text-zinc-400 disabled:opacity-20">↑</button>
-                                  <button type="button" onClick={(e) => moveFavorite(e, f.id, 1)} disabled={favoriteFoods[favoriteFoods.length - 1]?.id === f.id} className="btn-active w-6 h-5 rounded bg-zinc-900 text-[10px] font-bold text-zinc-400 disabled:opacity-20">↓</button>
-                                </div>
+                                <button
+                                  type="button"
+                                  draggable
+                                  onClick={(e) => e.stopPropagation()}
+                                  onDragStart={(e) => { e.stopPropagation(); setDraggingFavoriteId(f.id); e.dataTransfer.effectAllowed = 'move'; }}
+                                  onDragEnd={() => setDraggingFavoriteId(null)}
+                                  onTouchStart={(e) => { e.stopPropagation(); setDraggingFavoriteId(f.id); }}
+                                  onTouchMove={(e) => { if (draggingFavoriteId) e.preventDefault(); }}
+                                  onTouchEnd={(e) => { e.stopPropagation(); if (e.changedTouches[0]) finishFavoriteTouchDrag(e.changedTouches[0]); }}
+                                  className="btn-active mr-2 px-2 py-2 rounded-lg bg-zinc-900 text-zinc-500 active:text-zinc-200 cursor-grab"
+                                  title="Перетащить избранное"
+                                >
+                                  ☰
+                                </button>
                               )}
                             </div>
                             <div className="flex-1" onClick={() => { setEditingFoodId(f.id); setEditValue({ ...f, fats: f.fats || 0, carbs: f.carbs || 0 }); }}>
@@ -1381,6 +1460,12 @@
                         )}
                       </div>
                     ))}
+                  </div>
+
+                  <div className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
+                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Аккаунт</h2>
+                    <p className="text-xs text-zinc-500 break-all">{auth.currentUser ? auth.currentUser.email : ''}</p>
+                    <button onClick={() => { if (confirm('Выйти из аккаунта?')) auth.signOut(); }} className="btn-active w-full bg-zinc-800 text-red-400 rounded-xl p-4 font-bold transition-all">Выйти</button>
                   </div>
                 </div>
               )}
