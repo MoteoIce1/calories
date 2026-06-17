@@ -261,6 +261,12 @@
       return getLocalDateString(d);
     };
 
+    const getDefaultExportEndDate = () => {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      return getLocalDateString(d);
+    };
+
     const displayDate = (dateString) => {
       const [year, month, day] = dateString.split('-');
       const d = new Date(year, month - 1, day);
@@ -316,7 +322,7 @@
       const [showExportModal, setShowExportModal] = useState(false);
       const [showGoalModal, setShowGoalModal] = useState(false);
       const [exportStart, setExportStart] = useState(getDefaultStartDate());
-      const [exportEnd, setExportEnd] = useState(getLocalDateString(new Date()));
+      const [exportEnd, setExportEnd] = useState(getDefaultExportEndDate());
 
       const scrollContainerRef = useRef(null);
       const initialGoalsRef = useRef(false);
@@ -1670,7 +1676,7 @@
                       <label className="text-[10px] text-zinc-500 uppercase font-bold block mb-1">Конец периода</label>
                       <div className="relative w-full bg-[#27272a] rounded-xl p-4 flex items-center justify-center border border-zinc-700/50">
                         <span className="text-zinc-200 font-bold">{displayDate(exportEnd)}</span>
-                        <input type="date" className="absolute opacity-0 top-0 left-0 w-full h-full cursor-pointer" value={exportEnd} onChange={(e) => { if(e.target.value) setExportEnd(e.target.value); }} />
+                        <input type="date" className="absolute opacity-0 top-0 left-0 w-full h-full cursor-pointer" value={exportEnd} max={getDefaultExportEndDate()} onChange={(e) => { if(e.target.value) setExportEnd(e.target.value); }} />
                       </div>
                     </div>
                   </div>
