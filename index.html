@@ -30,10 +30,10 @@
       --line: rgba(168, 176, 184, 0.16);
       --line-strong: rgba(168, 176, 184, 0.3);
       --text-muted: #9aa3ac;
-      --accent: #a4ad99;
-      --accent-strong: #788570;
-      --accent-soft: rgba(164, 173, 153, 0.16);
-      --violet: #a99fb4;
+      --accent: #7f8ed8;
+      --accent-strong: #a3657b;
+      --accent-soft: rgba(127, 142, 216, 0.15);
+      --violet: #b18bd3;
       --amber: #c6a56d;
       --danger: #e06d6d;
       --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -45,8 +45,8 @@
       min-height: 100%;
       background-color: #0d1115;
       background:
-        radial-gradient(circle at 28% -12%, rgba(164, 173, 153, 0.16), transparent 30rem),
-        radial-gradient(circle at 100% 8%, rgba(120, 128, 137, 0.14), transparent 28rem),
+        radial-gradient(circle at 28% -12%, rgba(127, 142, 216, 0.16), transparent 30rem),
+        radial-gradient(circle at 100% 8%, rgba(163, 101, 123, 0.14), transparent 28rem),
         linear-gradient(160deg, #0d1115 0%, #12171c 48%, #090c10 100%);
     }
 
@@ -71,8 +71,8 @@
     body {
       background-color: #0d1115 !important;
       background:
-        radial-gradient(circle at 28% -12%, rgba(164, 173, 153, 0.16), transparent 30rem),
-        radial-gradient(circle at 100% 8%, rgba(120, 128, 137, 0.14), transparent 28rem),
+        radial-gradient(circle at 28% -12%, rgba(127, 142, 216, 0.16), transparent 30rem),
+        radial-gradient(circle at 100% 8%, rgba(163, 101, 123, 0.14), transparent 28rem),
         linear-gradient(160deg, var(--bg-deep) 0%, #12171c 48%, #090c10 100%);
       margin: 0;
       padding: 0;
@@ -92,8 +92,8 @@
       z-index: 0;
       pointer-events: none;
       background:
-        radial-gradient(circle at 28% -12%, rgba(164, 173, 153, 0.16), transparent 30rem),
-        radial-gradient(circle at 100% 8%, rgba(120, 128, 137, 0.14), transparent 28rem),
+        radial-gradient(circle at 28% -12%, rgba(127, 142, 216, 0.16), transparent 30rem),
+        radial-gradient(circle at 100% 8%, rgba(163, 101, 123, 0.14), transparent 28rem),
         linear-gradient(160deg, #0d1115 0%, #12171c 48%, #090c10 100%);
     }
 
@@ -123,8 +123,8 @@
       inset: 0;
       pointer-events: none;
       background:
-        radial-gradient(circle at 28% -8%, rgba(164, 173, 153, 0.16), transparent 24rem),
-        radial-gradient(circle at 95% 18%, rgba(120, 128, 137, 0.12), transparent 20rem),
+        radial-gradient(circle at 28% -8%, rgba(127, 142, 216, 0.15), transparent 24rem),
+        radial-gradient(circle at 95% 18%, rgba(163, 101, 123, 0.12), transparent 20rem),
         linear-gradient(180deg, rgba(255,255,255,0.03), transparent 18rem);
       opacity: 0.85;
     }
@@ -154,7 +154,7 @@
     }
 
     .app-header h1 {
-      background: linear-gradient(135deg, #f2f3ef 0%, #a4ad99 48%, #858b91 100%);
+      background: linear-gradient(135deg, #f2f3ef 0%, #9aa6e8 46%, #d08aa0 100%);
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
@@ -182,7 +182,7 @@
     }
 
     .progress-fill {
-      box-shadow: 0 0 22px rgba(164, 173, 153, 0.24);
+      box-shadow: 0 0 22px rgba(127, 142, 216, 0.2);
       transition: width 900ms var(--ease-out), background-color 360ms var(--ease-out), box-shadow 360ms var(--ease-out) !important;
     }
 
@@ -190,7 +190,7 @@
 
     .report-modern {
       background:
-        radial-gradient(circle at 20% 0%, rgba(164, 173, 153, 0.12), transparent 260px),
+        radial-gradient(circle at 20% 0%, rgba(127, 142, 216, 0.1), transparent 260px),
         linear-gradient(180deg, #f8fafc 0%, #eef4f7 100%) !important;
       color: #17212b !important;
       padding: 22px !important;
@@ -198,7 +198,7 @@
     }
 
     .report-modern h1 {
-      background: linear-gradient(135deg, #20262c 0%, #697466 52%, #8b8393 100%);
+      background: linear-gradient(135deg, #20262c 0%, #6574bf 52%, #a3657b 100%);
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent !important;
@@ -231,9 +231,9 @@
 
     .report-modern > div:first-of-type {
       background:
-        linear-gradient(135deg, rgba(30, 36, 43, 0.96), rgba(105, 116, 102, 0.9)) !important;
+        linear-gradient(135deg, rgba(30, 36, 43, 0.96), rgba(88, 96, 150, 0.9), rgba(136, 80, 102, 0.86)) !important;
       color: #ecfeff !important;
-      border-color: rgba(164, 173, 153, 0.3) !important;
+      border-color: rgba(127, 142, 216, 0.26) !important;
     }
 
     .report-modern > div:first-of-type h2,
@@ -316,7 +316,7 @@
       background-color: var(--surface-soft) !important;
     }
     .bg-zinc-900\/40 { background-color: rgba(8, 11, 14, 0.48) !important; }
-    .bg-zinc-900\/50 { background-color: rgba(164, 173, 153, 0.12) !important; }
+    .bg-zinc-900\/50 { background-color: rgba(127, 142, 216, 0.11) !important; }
     .bg-zinc-800\/60 { background-color: rgba(38, 45, 53, 0.74) !important; }
     .border-zinc-900,
     [class*="border-zinc-800"],
@@ -327,26 +327,26 @@
     .text-zinc-700 { color: #707980 !important; }
     .text-emerald-300,
     .text-emerald-400,
-    .text-emerald-500 { color: #c3cbb8 !important; }
+    .text-emerald-500 { color: #aeb8ff !important; }
     .text-indigo-400,
-    .text-indigo-500 { color: #c0b4ca !important; }
+    .text-indigo-500 { color: #c3b6f2 !important; }
     .text-blue-400,
-    .text-blue-500 { color: #aeb8c0 !important; }
+    .text-blue-500 { color: #a8b6df !important; }
     .text-amber-400,
     .text-amber-500 { color: #d0ad73 !important; }
     .text-red-400,
     .text-red-500 { color: var(--danger) !important; }
     .bg-emerald-500,
     .bg-emerald-600 {
-      background: linear-gradient(135deg, #c3cbb8 0%, var(--accent) 42%, var(--accent-strong) 100%) !important;
-      box-shadow: 0 14px 34px rgba(120, 133, 112, 0.28);
+      background: linear-gradient(135deg, #7f8ed8 0%, #8c78c6 48%, #a3657b 100%) !important;
+      box-shadow: 0 12px 28px rgba(127, 142, 216, 0.2);
     }
     .bg-emerald-900\/20,
     .bg-emerald-900\/30,
     .bg-emerald-900\/40 { background-color: var(--accent-soft) !important; }
     .border-emerald-500,
     .border-emerald-700\/50,
-    .focus\:border-emerald-500:focus { border-color: rgba(195, 203, 184, 0.66) !important; }
+    .focus\:border-emerald-500:focus { border-color: rgba(154, 166, 232, 0.58) !important; }
     .bg-indigo-500,
     .bg-indigo-600 {
       background: linear-gradient(135deg, #9a86e8, #7668c9) !important;
@@ -365,7 +365,7 @@
     }
 
     input:focus, select:focus {
-      box-shadow: 0 0 0 4px rgba(164, 173, 153, 0.13);
+      box-shadow: 0 0 0 4px rgba(127, 142, 216, 0.12);
     }
 
     @keyframes floatIn {
@@ -390,7 +390,7 @@
     input[type="number"]::-webkit-inner-spin-button, 
     input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     
-    .loader { border: 3px solid rgba(168, 176, 184, 0.18); border-top: 3px solid var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; box-shadow: 0 0 30px rgba(164, 173, 153, 0.18); }
+    .loader { border: 3px solid rgba(168, 176, 184, 0.18); border-top: 3px solid var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; box-shadow: 0 0 30px rgba(127, 142, 216, 0.16); }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     
     @media print {
@@ -602,8 +602,8 @@
           </div>
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block">
             <line x1={padX} y1={yFor((yMin + yMax) / 2)} x2={W - padX} y2={yFor((yMin + yMax) / 2)} stroke="rgba(142, 167, 195, 0.18)" strokeWidth="1" />
-            <polyline points={line} fill="none" stroke="#a4ad99" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-            {points.map((p, idx) => <circle key={idx} cx={xFor(p.i)} cy={yFor(p.v)} r="3" fill="#c3cbb8" />)}
+            <polyline points={line} fill="none" stroke="#8c78c6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            {points.map((p, idx) => <circle key={idx} cx={xFor(p.i)} cy={yFor(p.v)} r="3" fill="#aeb8ff" />)}
             <text x={padX} y={H - 2} fontSize="9" fill="#71717a">{dates[points[0].i]}</text>
             <text x={W - padX} y={H - 2} textAnchor="end" fontSize="9" fill="#71717a">{dates[points[points.length - 1].i]}</text>
           </svg>
@@ -1679,8 +1679,8 @@
 
       if (showReportView) {
         return (
-          <div className="report-view" style={{ background: 'linear-gradient(180deg, #e8f3f3 0%, #f8fafc 42%, #eef4f7 100%)', color: 'black', height: '100vh', height: '100lvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '15px', paddingTop: 'max(15px, calc(env(safe-area-inset-top) + 12px))', position: 'relative', zIndex: 2 }}>
-            <div className="print-hide" style={{ position: 'sticky', top: 'max(0px, env(safe-area-inset-top))', zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', padding: '12px', background: 'rgba(248, 250, 252, 0.86)', border: '1px solid rgba(100, 116, 139, 0.16)', borderRadius: '18px', boxShadow: '0 14px 34px rgba(15, 23, 42, 0.08)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+          <div className="report-view" style={{ background: 'linear-gradient(180deg, #eceef7 0%, #f8fafc 42%, #f1f2f6 100%)', color: 'black', height: '100vh', height: '100lvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '15px', paddingTop: 'max(10px, calc(env(safe-area-inset-top) + 4px))', position: 'relative', zIndex: 2 }}>
+            <div className="print-hide" style={{ position: 'sticky', top: '6px', zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '22px', padding: '10px', background: 'rgba(248, 250, 252, 0.9)', border: '1px solid rgba(100, 116, 139, 0.16)', borderRadius: '18px', boxShadow: '0 12px 28px rgba(15, 23, 42, 0.08)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
                <button 
                  onClick={() => { setIsPrinting(false); setShowReportView(false); }} 
                  className="btn-active" 
@@ -1692,7 +1692,7 @@
                  onClick={handlePrintClick} 
                  disabled={isPrinting}
                  className="btn-active" 
-                 style={{ padding: '12px 18px', background: isPrinting ? '#788570' : 'linear-gradient(135deg, #c3cbb8, #788570)', borderRadius: '14px', fontWeight: 'bold', color: '#fff', border: 'none', fontSize: '14px', boxShadow: '0 12px 24px rgba(120, 133, 112, 0.28)', transition: 'all 0.1s', opacity: isPrinting ? 0.8 : 1 }}
+                 style={{ padding: '12px 18px', background: isPrinting ? '#7f8ed8' : 'linear-gradient(135deg, #7f8ed8, #8c78c6, #a3657b)', borderRadius: '14px', fontWeight: 'bold', color: '#fff', border: 'none', fontSize: '14px', boxShadow: '0 12px 24px rgba(127, 142, 216, 0.24)', transition: 'all 0.1s', opacity: isPrinting ? 0.8 : 1 }}
                >
                  {isPrinting ? '⏳ Обработка...' : '🖨 Сохранить PDF'}
                </button>
