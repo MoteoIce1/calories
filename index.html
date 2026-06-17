@@ -306,6 +306,7 @@
             'auth/invalid-credential': 'Неверный e-mail или пароль.',
             'auth/wrong-password': 'Неверный пароль.',
             'auth/user-not-found': 'Аккаунт не найден — зарегистрируйтесь.',
+            'auth/configuration-not-found': 'Firebase Authentication не настроен для этого проекта. Включи Authentication → Sign-in method → Email/Password в Firebase Console.',
             'auth/operation-not-allowed': 'Вход по e-mail не включён в консоли Firebase (Authentication → Sign-in method).',
             'auth/network-request-failed': 'Нет сети.',
           };
@@ -602,13 +603,36 @@
         setEditingFoodId(null);
       };
 
-      const deleteFood = (e, id) => { e.stopPropagation(); const updatedFoods = foods.filter(x => x.id !== id); setFoods(updatedFoods); if (profileDoc) profileDoc.set({ foods: updatedFoods }, { merge: true }); };
+      const saveFoods = (updatedFoods) => {
+        setFoods(updatedFoods);
+        if (profileDoc) profileDoc.set({ foods: updatedFoods }, { merge: true });
+      };
+
+      const deleteFood = (e, id) => { e.stopPropagation(); saveFoods(foods.filter(x => x.id !== id)); };
 
       const toggleFavorite = (e, id, currentStatus) => {
         e.stopPropagation();
-        const updatedFoods = foods.map(f => f.id === id ? { ...f, isFavorite: !currentStatus } : f);
-        setFoods(updatedFoods); 
-        if (profileDoc) profileDoc.set({ foods: updatedFoods }, { merge: true });
+        const nextStatus = !currentStatus;
+        const target = foods.find(f => f.id === id);
+        if (!target) return;
+        const rest = foods.filter(f => f.id !== id);
+        const updatedTarget = { ...target, isFavorite: nextStatus };
+        const updatedFoods = nextStatus
+          ? [...rest.filter(f => f.isFavorite), updatedTarget, ...rest.filter(f => !f.isFavorite)]
+          : [...rest.filter(f => f.isFavorite), updatedTarget, ...rest.filter(f => !f.isFavorite)];
+        saveFoods(updatedFoods);
+      };
+
+      const moveFavorite = (e, id, direction) => {
+        e.stopPropagation();
+        const favorites = foods.filter(f => f.isFavorite);
+        const index = favorites.findIndex(f => f.id === id);
+        const nextIndex = index + direction;
+        if (index === -1 || nextIndex < 0 || nextIndex >= favorites.length) return;
+        const reorderedFavorites = [...favorites];
+        [reorderedFavorites[index], reorderedFavorites[nextIndex]] = [reorderedFavorites[nextIndex], reorderedFavorites[index]];
+        const regularFoods = foods.filter(f => !f.isFavorite);
+        saveFoods([...reorderedFavorites, ...regularFoods]);
       };
 
       const forceRefreshApp = () => window.location.href = window.location.pathname + '?v=' + Date.now();
@@ -710,11 +734,11 @@
       
       const progressCals = Math.min(100, (totalCals / (targetCalories || 1)) * 100);
       
-      const sortedFoods = [...foods].sort((a, b) => {
-        if (a.isFavorite && !b.isFavorite) return -1;
-        if (!a.isFavorite && b.isFavorite) return 1;
-        return a.name.localeCompare(b.name, 'ru');
-      });
+      const favoriteFoods = foods.filter(f => f.isFavorite);
+      const sortedFoods = [
+        ...favoriteFoods,
+        ...foods.filter(f => !f.isFavorite).sort((a, b) => a.name.localeCompare(b.name, 'ru')),
+      ];
       const visibleFoods = sortedFoods.filter(f => f.name.toLowerCase().includes(foodSearch.toLowerCase()));
 
       const allDatesSet = new Set([
@@ -867,14 +891,7 @@
       const proteinPerKg = latestWeight ? Math.round((totalPro / latestWeight) * 10) / 10 : null;
       const proteinGoalPerKg = latestWeight ? Math.round(((activeGoals.protein || 0) / latestWeight) * 10) / 10 : null;
 
-      // --- Частые продукты (по всем логам) для быстрого добавления ---
-      const foodCounts = {};
-      Object.values(dailyLogs).forEach(arr => arr.forEach(l => { foodCounts[l.foodId] = (foodCounts[l.foodId] || 0) + 1; }));
-      const frequentFoods = Object.keys(foodCounts)
-        .sort((a, b) => foodCounts[b] - foodCounts[a])
-        .map(id => foods.find(f => f.id === id))
-        .filter(Boolean)
-        .slice(0, 5);
+      // --- Избранные продукты для быстрого добавления ---
 
       if (!authReady) {
         return (
@@ -1212,9 +1229,9 @@
                       <button type="button" onClick={copyPreviousDay} className="btn-active text-[10px] font-bold text-emerald-400 bg-emerald-900/20 px-3 py-1.5 rounded-lg transition-all">Копировать вчера</button>
                     </div>
                     <input type="text" placeholder="🔍 Поиск продукта..." className="bg-[#27272a] rounded-2xl p-3 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500" value={foodSearch} onChange={(e) => setFoodSearch(e.target.value)} />
-                    {frequentFoods.length > 0 && (
+                    {favoriteFoods.length > 0 && (
                       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-                        {frequentFoods.map(f => (
+                        {favoriteFoods.map(f => (
                           <button type="button" key={f.id} onClick={() => setSelectedFoodId(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
                         ))}
                       </div>
@@ -1339,9 +1356,17 @@
                           </div>
                         ) : (
                           <div className="flex justify-between items-center cursor-pointer">
-                            <button onClick={(e) => toggleFavorite(e, f.id, f.isFavorite)} className="btn-active p-2 pl-0 transition-colors">
-                              <IconStar className={`w-6 h-6 ${f.isFavorite ? 'text-amber-400' : 'text-zinc-700'}`} fill={f.isFavorite ? "currentColor" : "none"} />
-                            </button>
+                            <div className="flex items-center">
+                              <button onClick={(e) => toggleFavorite(e, f.id, f.isFavorite)} className="btn-active p-2 pl-0 transition-colors">
+                                <IconStar className={`w-6 h-6 ${f.isFavorite ? 'text-amber-400' : 'text-zinc-700'}`} fill={f.isFavorite ? "currentColor" : "none"} />
+                              </button>
+                              {f.isFavorite && (
+                                <div className="flex flex-col gap-1 mr-2">
+                                  <button type="button" onClick={(e) => moveFavorite(e, f.id, -1)} disabled={favoriteFoods[0]?.id === f.id} className="btn-active w-6 h-5 rounded bg-zinc-900 text-[10px] font-bold text-zinc-400 disabled:opacity-20">↑</button>
+                                  <button type="button" onClick={(e) => moveFavorite(e, f.id, 1)} disabled={favoriteFoods[favoriteFoods.length - 1]?.id === f.id} className="btn-active w-6 h-5 rounded bg-zinc-900 text-[10px] font-bold text-zinc-400 disabled:opacity-20">↓</button>
+                                </div>
+                              )}
+                            </div>
                             <div className="flex-1" onClick={() => { setEditingFoodId(f.id); setEditValue({ ...f, fats: f.fats || 0, carbs: f.carbs || 0 }); }}>
                               <span className="text-sm font-medium border-b border-zinc-800/50 pb-0.5">{f.name}</span>
                               <div className="flex gap-3 text-[10px] font-bold uppercase mt-1.5 opacity-80">
