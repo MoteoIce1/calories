@@ -20,17 +20,179 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 
   <style>
-    body { background-color: #000; margin: 0; padding: 0; overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    :root {
+      --bg-deep: #050814;
+      --bg-ink: #08111f;
+      --surface: rgba(18, 28, 45, 0.78);
+      --surface-strong: rgba(24, 37, 58, 0.9);
+      --surface-soft: rgba(31, 45, 67, 0.7);
+      --line: rgba(142, 167, 195, 0.14);
+      --line-strong: rgba(142, 167, 195, 0.24);
+      --text-muted: #8da0b8;
+      --accent: #5fbfaf;
+      --accent-strong: #479e92;
+      --accent-soft: rgba(95, 191, 175, 0.16);
+      --violet: #a78bfa;
+      --amber: #d6a34f;
+      --danger: #e06d6d;
+      --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    body {
+      background:
+        radial-gradient(circle at 18% -8%, rgba(95, 191, 175, 0.18), transparent 32rem),
+        radial-gradient(circle at 90% 12%, rgba(167, 139, 250, 0.12), transparent 30rem),
+        linear-gradient(160deg, var(--bg-deep) 0%, #07111d 48%, #050713 100%);
+      margin: 0;
+      padding: 0;
+      overscroll-behavior-y: none;
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #eef5f8;
+    }
     ::-webkit-scrollbar { width: 0px; background: transparent; }
     .safe-pb { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
     
-    .btn-active:active:not(:disabled) { transform: scale(0.96); opacity: 0.8; }
-    .list-item-active:active { background-color: #27272a !important; }
+    .app-shell {
+      background:
+        linear-gradient(180deg, rgba(8, 16, 30, 0.96) 0%, rgba(6, 11, 22, 0.98) 100%),
+        var(--bg-ink) !important;
+      border-color: rgba(142, 167, 195, 0.12) !important;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+
+    .app-shell::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 30% 0%, rgba(95, 191, 175, 0.12), transparent 22rem),
+        radial-gradient(circle at 95% 18%, rgba(167, 139, 250, 0.09), transparent 20rem);
+      opacity: 0.85;
+    }
+
+    .app-shell > * { position: relative; }
+    .app-header,
+    .bottom-nav {
+      background: rgba(6, 12, 24, 0.76) !important;
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+    }
+
+    .btn-active {
+      transition: transform 260ms var(--ease-out), opacity 260ms var(--ease-out), background-color 260ms var(--ease-out), border-color 260ms var(--ease-out), box-shadow 260ms var(--ease-out), color 260ms var(--ease-out);
+      will-change: transform;
+    }
+
+    .btn-active:hover:not(:disabled) { transform: translateY(-1px); }
+    .btn-active:active:not(:disabled) { transform: scale(0.965); opacity: 0.82; }
+    .list-item-active { transition: transform 260ms var(--ease-out), background-color 260ms var(--ease-out), border-color 260ms var(--ease-out), box-shadow 260ms var(--ease-out); }
+    .list-item-active:active { background-color: var(--surface-soft) !important; transform: scale(0.985); }
+
+    .card-enter { animation: floatIn 520ms var(--ease-out) both; }
+    .card-enter:nth-child(2) { animation-delay: 45ms; }
+    .card-enter:nth-child(3) { animation-delay: 90ms; }
+    .card-enter:nth-child(4) { animation-delay: 135ms; }
+
+    .progress-track {
+      background: rgba(2, 8, 18, 0.62) !important;
+      box-shadow: inset 0 1px 4px rgba(0,0,0,0.35);
+    }
+
+    .progress-fill {
+      box-shadow: 0 0 18px rgba(95, 191, 175, 0.28);
+      transition: width 900ms var(--ease-out), background-color 360ms var(--ease-out), box-shadow 360ms var(--ease-out) !important;
+    }
+
+    .modal-card { animation: modalIn 360ms var(--ease-out) both; }
+
+    .bg-\[\#09090b\] { background: transparent !important; }
+    .bg-\[\#18181b\] {
+      background: linear-gradient(145deg, rgba(18, 28, 45, 0.86), rgba(13, 21, 36, 0.78)) !important;
+      box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255,255,255,0.035);
+    }
+    .bg-\[\#27272a\],
+    .bg-zinc-800,
+    .bg-zinc-900 {
+      background-color: var(--surface-soft) !important;
+    }
+    .bg-zinc-900\/40 { background-color: rgba(9, 18, 32, 0.46) !important; }
+    .bg-zinc-900\/50 { background-color: rgba(95, 191, 175, 0.11) !important; }
+    .bg-zinc-800\/60 { background-color: rgba(31, 45, 67, 0.74) !important; }
+    .border-zinc-900,
+    [class*="border-zinc-800"],
+    [class*="border-zinc-700"] { border-color: var(--line) !important; }
+    .text-zinc-500,
+    .text-zinc-400 { color: var(--text-muted) !important; }
+    .text-zinc-600,
+    .text-zinc-700 { color: #667993 !important; }
+    .text-emerald-300,
+    .text-emerald-400,
+    .text-emerald-500 { color: #73d7c8 !important; }
+    .text-indigo-400,
+    .text-indigo-500 { color: #b5a2ff !important; }
+    .text-blue-400,
+    .text-blue-500 { color: #82bce8 !important; }
+    .text-amber-400,
+    .text-amber-500 { color: #ddb466 !important; }
+    .text-red-400,
+    .text-red-500 { color: var(--danger) !important; }
+    .bg-emerald-500,
+    .bg-emerald-600 {
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong)) !important;
+      box-shadow: 0 12px 28px rgba(71, 158, 146, 0.24);
+    }
+    .bg-emerald-900\/20,
+    .bg-emerald-900\/30,
+    .bg-emerald-900\/40 { background-color: var(--accent-soft) !important; }
+    .border-emerald-500,
+    .border-emerald-700\/50,
+    .focus\:border-emerald-500:focus { border-color: rgba(115, 215, 200, 0.62) !important; }
+    .bg-indigo-500,
+    .bg-indigo-600 {
+      background: linear-gradient(135deg, #9a86e8, #7668c9) !important;
+      box-shadow: 0 12px 28px rgba(118, 104, 201, 0.22);
+    }
+    .bg-blue-500,
+    .bg-blue-600 {
+      background: linear-gradient(135deg, #6aa9d3, #4d82b0) !important;
+      box-shadow: 0 12px 28px rgba(77, 130, 176, 0.22);
+    }
+    .bg-amber-500 { background: linear-gradient(135deg, #d6a34f, #b9823d) !important; }
+    .bg-red-500 { background: linear-gradient(135deg, #e06d6d, #b95362) !important; }
+
+    input, select {
+      transition: border-color 240ms var(--ease-out), background-color 240ms var(--ease-out), box-shadow 240ms var(--ease-out), transform 240ms var(--ease-out);
+    }
+
+    input:focus, select:focus {
+      box-shadow: 0 0 0 4px rgba(95, 191, 175, 0.1);
+    }
+
+    @keyframes floatIn {
+      from { opacity: 0; transform: translateY(14px) scale(0.985); filter: blur(8px); }
+      to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+    }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: translateY(18px) scale(0.96); filter: blur(8px); }
+      to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
     
     input[type="number"]::-webkit-inner-spin-button, 
     input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     
-    .loader { border: 3px solid #27272a; border-top: 3px solid #10b981; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+    .loader { border: 3px solid rgba(142, 167, 195, 0.18); border-top: 3px solid var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; box-shadow: 0 0 28px rgba(95, 191, 175, 0.16); }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     
     @media print {
@@ -151,8 +313,8 @@
             <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">{label}</p>
             <span className={`text-[11px] font-bold ${colorClass}`}>{Math.round(current)} / {goal || 0}</span>
           </div>
-          <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-1">
-            <div className={`h-full transition-all duration-500 ${bgClass}`} style={{ width: `${progress}%` }}></div>
+          <div className="progress-track h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-1">
+            <div className={`progress-fill h-full transition-all duration-500 ${bgClass}`} style={{ width: `${progress}%` }}></div>
           </div>
           <p className="text-[9px] text-zinc-500 font-bold uppercase text-right opacity-80">Ост: {remaining}</p>
         </div>
@@ -232,15 +394,15 @@
       const delta = Math.round((last - first) * 10) / 10;
 
       return (
-        <div className="bg-zinc-900/40 rounded-2xl border border-zinc-800/40 p-3 mb-4">
+        <div className="card-enter bg-zinc-900/40 rounded-2xl border border-zinc-800/40 p-3 mb-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">Динамика веса</span>
             <span className={`text-[11px] font-bold ${delta > 0 ? 'text-red-400' : delta < 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>{delta > 0 ? '+' : ''}{delta} кг</span>
           </div>
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block">
-            <line x1={padX} y1={yFor((yMin + yMax) / 2)} x2={W - padX} y2={yFor((yMin + yMax) / 2)} stroke="#27272a" strokeWidth="1" />
-            <polyline points={line} fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-            {points.map((p, idx) => <circle key={idx} cx={xFor(p.i)} cy={yFor(p.v)} r="3" fill="#10b981" />)}
+            <line x1={padX} y1={yFor((yMin + yMax) / 2)} x2={W - padX} y2={yFor((yMin + yMax) / 2)} stroke="rgba(142, 167, 195, 0.18)" strokeWidth="1" />
+            <polyline points={line} fill="none" stroke="#5fbfaf" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            {points.map((p, idx) => <circle key={idx} cx={xFor(p.i)} cy={yFor(p.v)} r="3" fill="#73d7c8" />)}
             <text x={padX} y={H - 2} fontSize="9" fill="#71717a">{dates[points[0].i]}</text>
             <text x={W - padX} y={H - 2} textAnchor="end" fontSize="9" fill="#71717a">{dates[points[points.length - 1].i]}</text>
           </svg>
@@ -1053,14 +1215,14 @@
 
       if (!uid) {
         return (
-          <div className="flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 items-center justify-center px-8">
+          <div className="app-shell flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 items-center justify-center px-8 relative overflow-hidden">
             <div className="w-full">
               <div className="flex flex-col items-center mb-8">
                 <div className="w-16 h-16 rounded-2xl bg-emerald-600/20 border border-emerald-700/40 flex items-center justify-center mb-4 text-3xl">🥗</div>
                 <h1 className="text-2xl font-bold">Трекер диеты</h1>
                 <p className="text-zinc-500 text-sm mt-1">{authMode === 'register' ? 'Создание аккаунта' : 'Вход в аккаунт'}</p>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-3 card-enter">
                 <input type="email" autoCapitalize="none" autoCorrect="off" placeholder="E-mail" className="w-full bg-[#18181b] rounded-2xl p-4 outline-none text-zinc-200 border border-zinc-800 focus:border-emerald-500" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} />
                 <input type="password" placeholder="Пароль (минимум 6 символов)" className="w-full bg-[#18181b] rounded-2xl p-4 outline-none text-zinc-200 border border-zinc-800 focus:border-emerald-500" value={authPass} onChange={(e) => setAuthPass(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') doAuth(); }} />
                 {authError && <p className="text-red-400 text-xs px-1">{authError}</p>}
@@ -1341,17 +1503,17 @@
       }
 
       return (
-        <div className="flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900 relative">
-            <header className="shrink-0 pt-8 px-6 pb-4 bg-[#09090b] flex justify-between items-center z-10">
+        <div className="app-shell flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900 relative overflow-hidden">
+            <header className="app-header shrink-0 pt-8 px-6 pb-4 bg-[#09090b] flex justify-between items-center z-10">
               <div>
                 <h1 className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : 'База'}</h1>
               </div>
               <div className="flex items-center gap-2">
                 {activeTab === 'directory' && (
-                  <button onClick={forceRefreshApp} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all"><IconRefresh className="w-5 h-5" /></button>
+                  <button onClick={forceRefreshApp} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50"><IconRefresh className="w-5 h-5" /></button>
                 )}
                 {activeTab === 'diary' && (
-                  <button onClick={() => setShowExportModal(true)} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all"><IconDownload className="w-5 h-5" /></button>
+                  <button onClick={() => setShowExportModal(true)} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50"><IconDownload className="w-5 h-5" /></button>
                 )}
               </div>
             </header>
@@ -1359,7 +1521,7 @@
             <main ref={scrollContainerRef} className="flex-1 overflow-y-auto px-5 pt-2 pb-8">
               {activeTab === 'diary' && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
+                  <div className="card-enter flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
                     <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(getLocalDateString(d));}} className="btn-active p-3 text-zinc-400"><IconChevronLeft className="w-5 h-5" /></button>
                     <div className="relative font-bold text-sm text-zinc-200 flex items-center justify-center cursor-pointer px-4">
                       {displayDate(currentDate)}
@@ -1368,7 +1530,7 @@
                     <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()+1); setCurrentDate(getLocalDateString(d));}} disabled={currentDate === getLocalDateString(new Date())} className="btn-active p-3 text-zinc-400 disabled:opacity-20"><IconChevronRight className="w-5 h-5" /></button>
                   </div>
 
-                  <div className="bg-[#18181b] rounded-3xl p-5 shadow-xl border border-zinc-800/50">
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 shadow-xl border border-zinc-800/50">
                     <div className="flex justify-between items-end mb-3">
                       <div>
                         <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-widest">Калории</p>
@@ -1382,8 +1544,8 @@
                         <p className="text-[10px] uppercase font-bold mt-1 tracking-widest opacity-80">{calsLabel}</p>
                       </div>
                     </div>
-                    <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-5">
-                      <div className={`h-full transition-all duration-500 ${isOver ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${progressCals}%` }}></div>
+                    <div className="progress-track h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-5">
+                      <div className={`progress-fill h-full transition-all duration-500 ${isOver ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${progressCals}%` }}></div>
                     </div>
 
                     <div className="mt-4 mb-4 flex items-center justify-between bg-zinc-900/40 p-3 rounded-2xl border border-zinc-800/40">
@@ -1438,7 +1600,7 @@
                     </div>
                   </div>
 
-                  <form onSubmit={handleAddLog} className="bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-2">
+                  <form onSubmit={handleAddLog} className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-2">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</span>
                       <button type="button" onClick={copyPreviousDay} className="btn-active text-[10px] font-bold text-emerald-400 bg-emerald-900/20 px-3 py-1.5 rounded-lg transition-all">Копировать вчера</button>
@@ -1487,7 +1649,7 @@
 
                   <div className="space-y-3 pt-2">
                     {currentDayLogs.map(log => (
-                      <div key={log.id} className="list-item-active bg-[#18181b] rounded-2xl p-4 flex justify-between items-center border border-zinc-800/30 transition-colors">
+                      <div key={log.id} className="card-enter list-item-active bg-[#18181b] rounded-2xl p-4 flex justify-between items-center border border-zinc-800/30 transition-colors">
                         <div className="flex-1 cursor-pointer pr-4 overflow-hidden" onClick={() => { if(editingLogId !== log.id) { setEditingLogId(log.id); setEditValue({ grams: log.grams }); setModifier({ type: null, value: '' }); }}}>
                           {editingLogId === log.id ? (
                             <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
@@ -1535,7 +1697,7 @@
 
               {activeTab === 'directory' && (
                 <div className="space-y-6">
-                  <div className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><IconTarget className="w-4 h-4" /> Ваши цели</h2>
                     <div className="grid grid-cols-2 gap-3 mb-3">
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ (ЦЕЛЬ)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.calories} onChange={(e) => handleDraftGoalChange('calories', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
@@ -1549,7 +1711,7 @@
                     {hasUnsavedGoals && <button onClick={() => setShowGoalModal(true)} className="btn-active w-full bg-indigo-600 text-white p-4 rounded-xl font-bold mt-4 shadow-lg shadow-indigo-900/30 transition-all">💾 Сохранить цели</button>}
                   </div>
 
-                  <form onSubmit={handleAddFood} className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
+                  <form onSubmit={handleAddFood} className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Добавить продукт (на 100г)</h2>
                     <input type="text" placeholder="Название" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.name} onChange={(e) => setNewFood({...newFood, name: e.target.value})} required />
                     <div className="grid grid-cols-2 gap-3">
@@ -1562,7 +1724,7 @@
                   </form>
 
                   {false && (
-                  <div className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Резервное копирование</h2>
                     <button onClick={downloadBackup} className="btn-active w-full bg-zinc-800 text-zinc-200 rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2"><IconDownload className="w-5 h-5" /> Скачать бэкап (JSON)</button>
                     <label className="btn-active w-full bg-zinc-800 text-zinc-200 rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2 cursor-pointer">
@@ -1588,7 +1750,7 @@
                       <div
                         key={f.id}
                         data-favorite-id={isReorderingFavorites && f.isFavorite ? f.id : undefined}
-                        className={`list-item-active bg-[#18181b] rounded-xl p-3 border transition-colors ${isReorderingFavorites ? 'select-none' : ''} ${draggingFavoriteId === f.id ? 'border-emerald-500/70 opacity-60' : 'border-zinc-800/30'}`}
+                        className={`card-enter list-item-active bg-[#18181b] rounded-xl p-3 border transition-colors ${isReorderingFavorites ? 'select-none' : ''} ${draggingFavoriteId === f.id ? 'border-emerald-500/70 opacity-60' : 'border-zinc-800/30'}`}
                         style={isReorderingFavorites ? { WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' } : undefined}
                       >
                         {editingFoodId === f.id ? (
@@ -1641,7 +1803,7 @@
                     ))}
                   </div>
 
-                  <div className="bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Аккаунт</h2>
                     <p className="text-xs text-zinc-500 break-all">{auth.currentUser ? auth.currentUser.email : ''}</p>
                     <button onClick={() => { if (confirm('Выйти из аккаунта?')) auth.signOut(); }} className="btn-active w-full bg-zinc-800 text-red-400 rounded-xl p-4 font-bold transition-all">Выйти</button>
@@ -1650,7 +1812,7 @@
               )}
             </main>
 
-            <nav className="shrink-0 bg-[#09090b] flex justify-around pb-2 pt-2 safe-pb relative z-40 border-t border-zinc-900">
+            <nav className="bottom-nav shrink-0 bg-[#09090b] flex justify-around pb-2 pt-2 safe-pb relative z-40 border-t border-zinc-900">
               <button onClick={() => setActiveTab('diary')} className={`btn-active w-32 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'diary' ? 'text-emerald-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
                 <IconCalendar className="w-6 h-6" /><span className="text-[10px] font-bold mt-1 uppercase tracking-widest">Дневник</span>
               </button>
@@ -1662,7 +1824,7 @@
             {/* Модалки */}
             {showExportModal && (
               <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                <div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm">
+                <div className="modal-card bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm">
                   <h3 className="text-lg font-bold mb-4 text-center">Выгрузка данных</h3>
                   <div className="space-y-4 mb-6">
                     <div>
@@ -1693,7 +1855,7 @@
 
             {showGoalModal && (
               <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                <div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm">
+                <div className="modal-card bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm">
                   <h3 className="text-lg font-bold mb-3 text-center">Применить цели?</h3>
                   <p className="text-zinc-400 text-sm mb-6 text-center leading-relaxed">Выберите, с какого момента изменятся цели по КБЖУ</p>
                   <div className="flex flex-col gap-3">
