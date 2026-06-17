@@ -2,7 +2,8 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#050403">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -21,28 +22,38 @@
 
   <style>
     :root {
-      --bg-deep: #050814;
-      --bg-ink: #08111f;
-      --surface: rgba(18, 28, 45, 0.78);
-      --surface-strong: rgba(24, 37, 58, 0.9);
-      --surface-soft: rgba(31, 45, 67, 0.7);
-      --line: rgba(142, 167, 195, 0.14);
-      --line-strong: rgba(142, 167, 195, 0.24);
-      --text-muted: #8da0b8;
-      --accent: #5fbfaf;
-      --accent-strong: #479e92;
-      --accent-soft: rgba(95, 191, 175, 0.16);
-      --violet: #a78bfa;
-      --amber: #d6a34f;
+      --bg-deep: #050403;
+      --bg-ink: #090807;
+      --surface: rgba(20, 18, 15, 0.82);
+      --surface-strong: rgba(30, 26, 20, 0.94);
+      --surface-soft: rgba(38, 33, 25, 0.76);
+      --line: rgba(214, 176, 98, 0.16);
+      --line-strong: rgba(214, 176, 98, 0.3);
+      --text-muted: #a79b88;
+      --accent: #d8b66c;
+      --accent-strong: #b88a3d;
+      --accent-soft: rgba(216, 182, 108, 0.15);
+      --violet: #9f8ad7;
+      --amber: #d8b66c;
       --danger: #e06d6d;
       --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
     }
 
+    html,
+    body,
+    #root {
+      min-height: 100%;
+      background:
+        radial-gradient(circle at 50% -12%, rgba(216, 182, 108, 0.2), transparent 30rem),
+        radial-gradient(circle at 100% 8%, rgba(120, 88, 42, 0.18), transparent 28rem),
+        linear-gradient(160deg, #050403 0%, #0b0907 48%, #030303 100%);
+    }
+
     body {
       background:
-        radial-gradient(circle at 18% -8%, rgba(95, 191, 175, 0.18), transparent 32rem),
-        radial-gradient(circle at 90% 12%, rgba(167, 139, 250, 0.12), transparent 30rem),
-        linear-gradient(160deg, var(--bg-deep) 0%, #07111d 48%, #050713 100%);
+        radial-gradient(circle at 50% -12%, rgba(216, 182, 108, 0.2), transparent 30rem),
+        radial-gradient(circle at 100% 8%, rgba(120, 88, 42, 0.18), transparent 28rem),
+        linear-gradient(160deg, var(--bg-deep) 0%, #0b0907 48%, #030303 100%);
       margin: 0;
       padding: 0;
       overscroll-behavior-y: none;
@@ -55,10 +66,10 @@
     
     .app-shell {
       background:
-        linear-gradient(180deg, rgba(8, 16, 30, 0.96) 0%, rgba(6, 11, 22, 0.98) 100%),
+        linear-gradient(180deg, rgba(10, 9, 7, 0.92) 0%, rgba(5, 5, 5, 0.98) 100%),
         var(--bg-ink) !important;
-      border-color: rgba(142, 167, 195, 0.12) !important;
-      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255,255,255,0.04);
+      border-color: rgba(216, 182, 108, 0.12) !important;
+      box-shadow: 0 28px 90px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255,255,255,0.045);
     }
 
     .app-shell::before {
@@ -67,17 +78,31 @@
       inset: 0;
       pointer-events: none;
       background:
-        radial-gradient(circle at 30% 0%, rgba(95, 191, 175, 0.12), transparent 22rem),
-        radial-gradient(circle at 95% 18%, rgba(167, 139, 250, 0.09), transparent 20rem);
+        radial-gradient(circle at 42% -8%, rgba(216, 182, 108, 0.18), transparent 24rem),
+        radial-gradient(circle at 95% 18%, rgba(88, 61, 27, 0.18), transparent 20rem),
+        linear-gradient(180deg, rgba(255,255,255,0.03), transparent 18rem);
       opacity: 0.85;
     }
 
     .app-shell > * { position: relative; }
     .app-header,
     .bottom-nav {
-      background: rgba(6, 12, 24, 0.76) !important;
-      backdrop-filter: blur(22px);
-      -webkit-backdrop-filter: blur(22px);
+      background: rgba(5, 5, 5, 0.72) !important;
+      backdrop-filter: blur(24px) saturate(1.15);
+      -webkit-backdrop-filter: blur(24px) saturate(1.15);
+    }
+
+    .app-header {
+      padding-top: max(2rem, calc(env(safe-area-inset-top) + 0.75rem)) !important;
+      border-bottom: 1px solid rgba(216, 182, 108, 0.06);
+    }
+
+    .app-header h1 {
+      background: linear-gradient(135deg, #fff7df 0%, #e5c77d 42%, #9f7332 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      letter-spacing: -0.03em;
     }
 
     .btn-active {
@@ -96,12 +121,12 @@
     .card-enter:nth-child(4) { animation-delay: 135ms; }
 
     .progress-track {
-      background: rgba(2, 8, 18, 0.62) !important;
+      background: rgba(0, 0, 0, 0.62) !important;
       box-shadow: inset 0 1px 4px rgba(0,0,0,0.35);
     }
 
     .progress-fill {
-      box-shadow: 0 0 18px rgba(95, 191, 175, 0.28);
+      box-shadow: 0 0 22px rgba(216, 182, 108, 0.26);
       transition: width 900ms var(--ease-out), background-color 360ms var(--ease-out), box-shadow 360ms var(--ease-out) !important;
     }
 
@@ -109,46 +134,47 @@
 
     .bg-\[\#09090b\] { background: transparent !important; }
     .bg-\[\#18181b\] {
-      background: linear-gradient(145deg, rgba(18, 28, 45, 0.86), rgba(13, 21, 36, 0.78)) !important;
-      box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255,255,255,0.035);
+      background:
+        linear-gradient(145deg, rgba(28, 24, 18, 0.9), rgba(12, 11, 9, 0.82)) !important;
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255,255,255,0.045);
     }
     .bg-\[\#27272a\],
     .bg-zinc-800,
     .bg-zinc-900 {
       background-color: var(--surface-soft) !important;
     }
-    .bg-zinc-900\/40 { background-color: rgba(9, 18, 32, 0.46) !important; }
-    .bg-zinc-900\/50 { background-color: rgba(95, 191, 175, 0.11) !important; }
-    .bg-zinc-800\/60 { background-color: rgba(31, 45, 67, 0.74) !important; }
+    .bg-zinc-900\/40 { background-color: rgba(0, 0, 0, 0.42) !important; }
+    .bg-zinc-900\/50 { background-color: rgba(216, 182, 108, 0.12) !important; }
+    .bg-zinc-800\/60 { background-color: rgba(38, 33, 25, 0.74) !important; }
     .border-zinc-900,
     [class*="border-zinc-800"],
     [class*="border-zinc-700"] { border-color: var(--line) !important; }
     .text-zinc-500,
     .text-zinc-400 { color: var(--text-muted) !important; }
     .text-zinc-600,
-    .text-zinc-700 { color: #667993 !important; }
+    .text-zinc-700 { color: #756b5b !important; }
     .text-emerald-300,
     .text-emerald-400,
-    .text-emerald-500 { color: #73d7c8 !important; }
+    .text-emerald-500 { color: #e4c875 !important; }
     .text-indigo-400,
-    .text-indigo-500 { color: #b5a2ff !important; }
+    .text-indigo-500 { color: #b9a5e6 !important; }
     .text-blue-400,
-    .text-blue-500 { color: #82bce8 !important; }
+    .text-blue-500 { color: #8fb6d6 !important; }
     .text-amber-400,
-    .text-amber-500 { color: #ddb466 !important; }
+    .text-amber-500 { color: #e4c875 !important; }
     .text-red-400,
     .text-red-500 { color: var(--danger) !important; }
     .bg-emerald-500,
     .bg-emerald-600 {
-      background: linear-gradient(135deg, var(--accent), var(--accent-strong)) !important;
-      box-shadow: 0 12px 28px rgba(71, 158, 146, 0.24);
+      background: linear-gradient(135deg, #f0d98b 0%, var(--accent) 42%, var(--accent-strong) 100%) !important;
+      box-shadow: 0 14px 34px rgba(184, 138, 61, 0.28);
     }
     .bg-emerald-900\/20,
     .bg-emerald-900\/30,
     .bg-emerald-900\/40 { background-color: var(--accent-soft) !important; }
     .border-emerald-500,
     .border-emerald-700\/50,
-    .focus\:border-emerald-500:focus { border-color: rgba(115, 215, 200, 0.62) !important; }
+    .focus\:border-emerald-500:focus { border-color: rgba(228, 200, 117, 0.66) !important; }
     .bg-indigo-500,
     .bg-indigo-600 {
       background: linear-gradient(135deg, #9a86e8, #7668c9) !important;
@@ -159,7 +185,7 @@
       background: linear-gradient(135deg, #6aa9d3, #4d82b0) !important;
       box-shadow: 0 12px 28px rgba(77, 130, 176, 0.22);
     }
-    .bg-amber-500 { background: linear-gradient(135deg, #d6a34f, #b9823d) !important; }
+    .bg-amber-500 { background: linear-gradient(135deg, #f0d98b, #b9823d) !important; }
     .bg-red-500 { background: linear-gradient(135deg, #e06d6d, #b95362) !important; }
 
     input, select {
@@ -167,7 +193,7 @@
     }
 
     input:focus, select:focus {
-      box-shadow: 0 0 0 4px rgba(95, 191, 175, 0.1);
+      box-shadow: 0 0 0 4px rgba(216, 182, 108, 0.12);
     }
 
     @keyframes floatIn {
@@ -192,7 +218,7 @@
     input[type="number"]::-webkit-inner-spin-button, 
     input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     
-    .loader { border: 3px solid rgba(142, 167, 195, 0.18); border-top: 3px solid var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; box-shadow: 0 0 28px rgba(95, 191, 175, 0.16); }
+    .loader { border: 3px solid rgba(216, 182, 108, 0.18); border-top: 3px solid var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; box-shadow: 0 0 30px rgba(216, 182, 108, 0.18); }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     
     @media print {
@@ -401,8 +427,8 @@
           </div>
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block">
             <line x1={padX} y1={yFor((yMin + yMax) / 2)} x2={W - padX} y2={yFor((yMin + yMax) / 2)} stroke="rgba(142, 167, 195, 0.18)" strokeWidth="1" />
-            <polyline points={line} fill="none" stroke="#5fbfaf" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-            {points.map((p, idx) => <circle key={idx} cx={xFor(p.i)} cy={yFor(p.v)} r="3" fill="#73d7c8" />)}
+            <polyline points={line} fill="none" stroke="#d8b66c" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            {points.map((p, idx) => <circle key={idx} cx={xFor(p.i)} cy={yFor(p.v)} r="3" fill="#e4c875" />)}
             <text x={padX} y={H - 2} fontSize="9" fill="#71717a">{dates[points[0].i]}</text>
             <text x={W - padX} y={H - 2} textAnchor="end" fontSize="9" fill="#71717a">{dates[points[points.length - 1].i]}</text>
           </svg>
