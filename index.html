@@ -20,6 +20,17 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 
+  <script>
+    (() => {
+      let theme = 'night';
+      try {
+        theme = localStorage.getItem('tracker-theme') || theme;
+      } catch (e) {}
+      document.documentElement.dataset.theme = theme;
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'day' ? '#f5efe4' : '#050403');
+    })();
+  </script>
+
   <style>
     :root {
       --bg-deep: #050403;
@@ -48,6 +59,16 @@
         radial-gradient(circle at 50% -12%, rgba(216, 182, 108, 0.2), transparent 30rem),
         radial-gradient(circle at 100% 8%, rgba(120, 88, 42, 0.18), transparent 28rem),
         linear-gradient(160deg, #050403 0%, #0b0907 48%, #030303 100%);
+    }
+
+    html[data-theme="day"],
+    html[data-theme="day"] body,
+    html[data-theme="day"] #root {
+      background-color: #f5efe4 !important;
+      background:
+        radial-gradient(circle at 50% -12%, rgba(88, 130, 108, 0.2), transparent 30rem),
+        radial-gradient(circle at 100% 10%, rgba(199, 121, 78, 0.16), transparent 28rem),
+        linear-gradient(160deg, #f8f1e6 0%, #efe3d1 52%, #e5d6bf 100%) !important;
     }
 
     html {
@@ -97,6 +118,13 @@
         linear-gradient(160deg, #050403 0%, #0b0907 48%, #030303 100%);
     }
 
+    html[data-theme="day"] body::before {
+      background:
+        radial-gradient(circle at 50% -12%, rgba(88, 130, 108, 0.2), transparent 30rem),
+        radial-gradient(circle at 100% 10%, rgba(199, 121, 78, 0.16), transparent 28rem),
+        linear-gradient(160deg, #f8f1e6 0%, #efe3d1 52%, #e5d6bf 100%);
+    }
+
     .h-\[100dvh\],
     .app-shell {
       height: -webkit-fill-available !important;
@@ -117,6 +145,15 @@
       box-shadow: 0 28px 90px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255,255,255,0.045);
     }
 
+    html[data-theme="day"] .app-shell {
+      background:
+        linear-gradient(180deg, rgba(255, 248, 236, 0.92) 0%, rgba(239, 227, 209, 0.96) 100%),
+        #f3eadc !important;
+      border-color: rgba(82, 75, 64, 0.12) !important;
+      box-shadow: 0 28px 80px rgba(92, 66, 38, 0.22), inset 0 1px 0 rgba(255,255,255,0.7);
+      color: #211c17 !important;
+    }
+
     .app-shell::before {
       content: "";
       position: absolute;
@@ -129,12 +166,26 @@
       opacity: 0.85;
     }
 
+    html[data-theme="day"] .app-shell::before {
+      background:
+        radial-gradient(circle at 42% -8%, rgba(88, 130, 108, 0.2), transparent 24rem),
+        radial-gradient(circle at 95% 18%, rgba(199, 121, 78, 0.13), transparent 20rem),
+        linear-gradient(180deg, rgba(255,255,255,0.55), transparent 18rem);
+      opacity: 0.95;
+    }
+
     .app-shell > * { position: relative; }
     .app-header,
     .bottom-nav {
       background: rgba(5, 5, 5, 0.72) !important;
       backdrop-filter: blur(24px) saturate(1.15);
       -webkit-backdrop-filter: blur(24px) saturate(1.15);
+    }
+
+    html[data-theme="day"] .app-header,
+    html[data-theme="day"] .bottom-nav {
+      background: rgba(250, 242, 229, 0.78) !important;
+      border-color: rgba(82, 75, 64, 0.1) !important;
     }
 
     .bottom-nav::after {
@@ -148,6 +199,10 @@
       pointer-events: none;
     }
 
+    html[data-theme="day"] .bottom-nav::after {
+      background: rgba(250, 242, 229, 0.9);
+    }
+
     .app-header {
       padding-top: max(2rem, calc(env(safe-area-inset-top) + 0.75rem)) !important;
       border-bottom: 1px solid rgba(216, 182, 108, 0.06);
@@ -159,6 +214,28 @@
       background-clip: text;
       color: transparent;
       letter-spacing: -0.03em;
+    }
+
+    html[data-theme="day"] .app-header h1 {
+      background: linear-gradient(135deg, #1f2f29 0%, #587f69 48%, #bd7550 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+
+    .theme-toggle {
+      min-width: 2.75rem;
+      background: rgba(38, 33, 25, 0.76) !important;
+      border: 1px solid var(--line) !important;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+
+    .theme-toggle span {
+      display: block;
+      transition: transform 300ms var(--ease-out);
+    }
+
+    .theme-toggle:active span {
+      transform: rotate(-12deg) scale(0.92);
     }
 
     .btn-active {
@@ -193,6 +270,12 @@
       background:
         linear-gradient(145deg, rgba(28, 24, 18, 0.9), rgba(12, 11, 9, 0.82)) !important;
       box-shadow: 0 20px 48px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255,255,255,0.045);
+    }
+
+    html[data-theme="day"] .bg-\[\#18181b\] {
+      background:
+        linear-gradient(145deg, rgba(255, 250, 242, 0.92), rgba(236, 224, 207, 0.84)) !important;
+      box-shadow: 0 18px 42px rgba(92, 66, 38, 0.13), inset 0 1px 0 rgba(255,255,255,0.78);
     }
     .bg-\[\#27272a\],
     .bg-zinc-800,
@@ -243,6 +326,53 @@
     }
     .bg-amber-500 { background: linear-gradient(135deg, #f0d98b, #b9823d) !important; }
     .bg-red-500 { background: linear-gradient(135deg, #e06d6d, #b95362) !important; }
+
+    html[data-theme="day"] .progress-track { background: rgba(87, 75, 60, 0.16) !important; }
+    html[data-theme="day"] .bg-\[\#27272a\],
+    html[data-theme="day"] .bg-zinc-800,
+    html[data-theme="day"] .bg-zinc-900 { background-color: rgba(255, 252, 246, 0.66) !important; }
+    html[data-theme="day"] .bg-zinc-900\/40 { background-color: rgba(96, 84, 66, 0.08) !important; }
+    html[data-theme="day"] .bg-zinc-900\/50 { background-color: rgba(88, 130, 108, 0.14) !important; }
+    html[data-theme="day"] .bg-zinc-800\/60 { background-color: rgba(255, 252, 246, 0.72) !important; }
+    html[data-theme="day"] [class*="border-zinc-800"],
+    html[data-theme="day"] [class*="border-zinc-700"],
+    html[data-theme="day"] .border-zinc-900 { border-color: rgba(82, 75, 64, 0.13) !important; }
+    html[data-theme="day"] .text-zinc-100,
+    html[data-theme="day"] .text-zinc-200,
+    html[data-theme="day"] .text-zinc-300 { color: #27221c !important; }
+    html[data-theme="day"] .text-zinc-400,
+    html[data-theme="day"] .text-zinc-500 { color: #786c5c !important; }
+    html[data-theme="day"] .text-zinc-600,
+    html[data-theme="day"] .text-zinc-700,
+    html[data-theme="day"] .text-zinc-800 { color: #9a8b76 !important; }
+    html[data-theme="day"] .text-emerald-300,
+    html[data-theme="day"] .text-emerald-400,
+    html[data-theme="day"] .text-emerald-500 { color: #4f7a64 !important; }
+    html[data-theme="day"] .text-amber-400,
+    html[data-theme="day"] .text-amber-500 { color: #b86e43 !important; }
+    html[data-theme="day"] .text-indigo-400,
+    html[data-theme="day"] .text-indigo-500 { color: #7062a9 !important; }
+    html[data-theme="day"] .text-blue-400,
+    html[data-theme="day"] .text-blue-500 { color: #4e7894 !important; }
+    html[data-theme="day"] .bg-emerald-500,
+    html[data-theme="day"] .bg-emerald-600 {
+      background: linear-gradient(135deg, #86a891 0%, #5f8a73 48%, #4c765f 100%) !important;
+      box-shadow: 0 14px 32px rgba(76, 118, 95, 0.24);
+    }
+    html[data-theme="day"] .bg-emerald-900\/20,
+    html[data-theme="day"] .bg-emerald-900\/30,
+    html[data-theme="day"] .bg-emerald-900\/40 { background-color: rgba(88, 130, 108, 0.14) !important; }
+    html[data-theme="day"] .border-emerald-500,
+    html[data-theme="day"] .border-emerald-700\/50,
+    html[data-theme="day"] .focus\:border-emerald-500:focus { border-color: rgba(88, 130, 108, 0.56) !important; }
+    html[data-theme="day"] .theme-toggle {
+      background: rgba(255, 252, 246, 0.72) !important;
+      border-color: rgba(82, 75, 64, 0.13) !important;
+    }
+    html[data-theme="day"] input,
+    html[data-theme="day"] select {
+      color: #27221c !important;
+    }
 
     input, select {
       transition: border-color 240ms var(--ease-out), background-color 240ms var(--ease-out), box-shadow 240ms var(--ease-out), transform 240ms var(--ease-out);
@@ -571,6 +701,22 @@
 
       const scrollContainerRef = useRef(null);
       const initialGoalsRef = useRef(false);
+      const [theme, setTheme] = useState(() => {
+        try {
+          return localStorage.getItem('tracker-theme') || document.documentElement.dataset.theme || 'night';
+        } catch (e) {
+          return 'night';
+        }
+      });
+
+      useEffect(() => {
+        const nextTheme = theme === 'day' ? 'day' : 'night';
+        document.documentElement.dataset.theme = nextTheme;
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', nextTheme === 'day' ? '#f5efe4' : '#050403');
+        try {
+          localStorage.setItem('tracker-theme', nextTheme);
+        } catch (e) {}
+      }, [theme]);
 
       // Авторизация: следим за состоянием входа
       useEffect(() => {
@@ -1592,6 +1738,15 @@
                 <h1 className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : 'База'}</h1>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTheme(theme === 'day' ? 'night' : 'day')}
+                  className="theme-toggle btn-active p-2 rounded-xl text-zinc-300 transition-all"
+                  title={theme === 'day' ? 'Включить ночную тему' : 'Включить дневную тему'}
+                  aria-label={theme === 'day' ? 'Включить ночную тему' : 'Включить дневную тему'}
+                >
+                  <span className="text-lg leading-none">{theme === 'day' ? '☀️' : '🌙'}</span>
+                </button>
                 {activeTab === 'directory' && (
                   <button onClick={forceRefreshApp} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50"><IconRefresh className="w-5 h-5" /></button>
                 )}
