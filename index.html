@@ -211,6 +211,41 @@
       );
     };
 
+    const MiniWeightChart = ({ data, dates }) => {
+      const points = (data || [])
+        .map((v, i) => ({ v: Number(v), i, raw: v }))
+        .filter(p => p.raw !== null && p.raw !== undefined && p.raw !== '' && !isNaN(p.v));
+      if (points.length < 2) return null;
+
+      const W = 320, H = 86, padX = 10, padY = 12;
+      const values = points.map(p => p.v);
+      const min = Math.min(...values), max = Math.max(...values);
+      const range = max - min || 1;
+      const yMin = min - range * 0.12, yMax = max + range * 0.12;
+      const xFor = (i) => padX + (data.length <= 1 ? (W - padX * 2) / 2 : (i / (data.length - 1)) * (W - padX * 2));
+      const yFor = (v) => padY + (H - padY * 2) - ((v - yMin) / (yMax - yMin)) * (H - padY * 2);
+      const line = points.map(p => `${xFor(p.i).toFixed(1)},${yFor(p.v).toFixed(1)}`).join(' ');
+      const first = points[0].v;
+      const last = points[points.length - 1].v;
+      const delta = Math.round((last - first) * 10) / 10;
+
+      return (
+        <div className="bg-zinc-900/40 rounded-2xl border border-zinc-800/40 p-3 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">Динамика веса</span>
+            <span className={`text-[11px] font-bold ${delta > 0 ? 'text-red-400' : delta < 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>{delta > 0 ? '+' : ''}{delta} кг</span>
+          </div>
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block">
+            <line x1={padX} y1={yFor((yMin + yMax) / 2)} x2={W - padX} y2={yFor((yMin + yMax) / 2)} stroke="#27272a" strokeWidth="1" />
+            <polyline points={line} fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            {points.map((p, idx) => <circle key={idx} cx={xFor(p.i)} cy={yFor(p.v)} r="3" fill="#10b981" />)}
+            <text x={padX} y={H - 2} fontSize="9" fill="#71717a">{dates[points[0].i]}</text>
+            <text x={W - padX} y={H - 2} textAnchor="end" fontSize="9" fill="#71717a">{dates[points[points.length - 1].i]}</text>
+          </svg>
+        </div>
+      );
+    };
+
     const getLocalDateString = (dateObj) => {
       const year = dateObj.getFullYear();
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -274,6 +309,7 @@
       const [editValue, setEditValue] = useState({});
       const [modifier, setModifier] = useState({ type: null, value: '' });
       const [draggingFavoriteId, setDraggingFavoriteId] = useState(null);
+      const [isReorderingFavorites, setIsReorderingFavorites] = useState(false);
 
       const [showExportModal, setShowExportModal] = useState(false);
       const [showGoalModal, setShowGoalModal] = useState(false);
@@ -679,6 +715,12 @@
         setDraggingFavoriteId(null);
       };
 
+      const moveFavoritePointer = (clientX, clientY) => {
+        if (!draggingFavoriteId) return;
+        const target = document.elementFromPoint(clientX, clientY)?.closest('[data-favorite-id]');
+        reorderFavorite(draggingFavoriteId, target?.dataset.favoriteId);
+      };
+
       const forceRefreshApp = () => window.location.href = window.location.pathname + '?v=' + Date.now();
 
       const toggleWorkout = () => {
@@ -785,6 +827,12 @@
       ];
       const visibleFoods = sortedFoods.filter(f => f.name.toLowerCase().includes(foodSearch.toLowerCase()));
       const showFoodSuggestions = foodSearch.trim().length > 0;
+      const recentWeightDates = Object.keys(dailyMetrics)
+        .filter(date => date <= currentDate && dailyMetrics[date]?.weight)
+        .sort()
+        .slice(-14);
+      const recentWeightValues = recentWeightDates.map(date => dailyMetrics[date]?.weight);
+      const recentWeightLabels = recentWeightDates.map(date => date.slice(5));
 
       const allDatesSet = new Set([
          ...Object.keys(dailyLogs).filter(d => d >= exportStart && d <= exportEnd),
@@ -928,6 +976,54 @@
         wk.dW = (i > 0 && wk.wAvg !== null && weeklySummary[i - 1].wAvg !== null) ? Math.round((wk.wAvg - weeklySummary[i - 1].wAvg) * 10) / 10 : null;
       });
 
+      // --- Инсайты для PDF: лучшие дни, шаги, тренировки, недельный тренд ---
+      const dayStats = filteredDatesForPdf.map(date => {
+        const g = getEffectiveGoals(date);
+        const bSteps = g.baseSteps || 6000;
+        const bMaint = g.maintenance || 2300;
+        const logs = dailyLogs[date] || [];
+        const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
+        const steps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
+        const burned = bMaint + Math.round((steps - bSteps) * 0.04);
+        return { date, cals, steps, burned, deficit: burned - cals, workout: !!dailyWorkouts[date] };
+      });
+      const bestDeficitDays = [...dayStats].sort((a, b) => b.deficit - a.deficit).slice(0, 3);
+      const worstBalanceDays = [...dayStats].sort((a, b) => a.deficit - b.deficit).slice(0, 3);
+      const avgPeriodSteps = dayStats.length ? Math.round(dayStats.reduce((s, d) => s + d.steps, 0) / dayStats.length) : 0;
+      const avgOf = (arr, field) => arr.length ? Math.round(arr.reduce((s, d) => s + d[field], 0) / arr.length) : null;
+      const highStepDays = dayStats.filter(d => d.steps >= avgPeriodSteps);
+      const lowStepDays = dayStats.filter(d => d.steps < avgPeriodSteps);
+      const highStepAvgDeficit = avgOf(highStepDays, 'deficit');
+      const lowStepAvgDeficit = avgOf(lowStepDays, 'deficit');
+      const stepDeficitDelta = highStepAvgDeficit !== null && lowStepAvgDeficit !== null ? highStepAvgDeficit - lowStepAvgDeficit : null;
+      const workoutDays = dayStats.filter(d => d.workout);
+      const restDays = dayStats.filter(d => !d.workout);
+      const workoutAvgDeficit = avgOf(workoutDays, 'deficit');
+      const restAvgDeficit = avgOf(restDays, 'deficit');
+      const workoutAvgCals = avgOf(workoutDays, 'cals');
+      const restAvgCals = avgOf(restDays, 'cals');
+      const workoutAvgSteps = avgOf(workoutDays, 'steps');
+      const restAvgSteps = avgOf(restDays, 'steps');
+      const latestWeek = weeklySummary.length ? weeklySummary[weeklySummary.length - 1] : null;
+      const latestWeekTrend = latestWeek?.dW === null || latestWeek?.dW === undefined
+        ? null
+        : latestWeek.dW <= -0.2 ? 'вниз'
+        : latestWeek.dW >= 0.2 ? 'вверх'
+        : 'стоит';
+      const projectionConfidence = (() => {
+        if (!projectionDate) return null;
+        if (datesWithMetrics.length >= 14 && daysBetweenWeigh >= 14 && fatWeeklyRate !== null && Math.abs(fatWeeklyRate) >= 0.15) return 'высокая';
+        if (datesWithMetrics.length >= 7 && daysBetweenWeigh >= 7) return 'средняя';
+        return 'низкая';
+      })();
+      const projectionConfidenceText = projectionConfidence === 'высокая'
+        ? 'данных достаточно: 14+ дней и устойчивый тренд по жиру.'
+        : projectionConfidence === 'средняя'
+          ? 'данных уже хватает для ориентира, но тренд еще может шуметь.'
+          : projectionConfidence === 'низкая'
+            ? 'данных мало, воспринимай дату как грубую прикидку.'
+            : '';
+
       // --- Белок на кг массы тела (по последнему известному весу) ---
       const latestWeight = (() => {
         const ds = Object.keys(dailyMetrics).filter(d => dailyMetrics[d]?.weight).sort();
@@ -989,6 +1085,7 @@
                     <p><strong>Суммарно съедено:</strong> {totalPeriodCals} ккал</p>
                     <p><strong>Суммарно потрачено:</strong> {totalPeriodBurned} ккал</p>
                     <p><strong>Пройдено шагов:</strong> {totalPeriodSteps}</p>
+                    {avgPeriodSteps > 0 && <p><strong>Средние шаги:</strong> {avgPeriodSteps} / день</p>}
                  </div>
                  <div style={{ minWidth: '200px' }}>
                     <p><strong>Баланс ККАЛ:</strong> {periodDefText}</p>
@@ -1003,12 +1100,70 @@
               <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 5px 0', color: '#1e40af' }}>Дисциплина и прогноз:</h2>
               <p><strong>Дней с записями:</strong> {filteredDatesForPdf.length} из {rangeDayCount} ({adherence}%)</p>
               <p><strong>Текущий стрик:</strong> {streak} дн. подряд</p>
+              {latestWeekTrend && <p><strong>Тренд веса за последнюю неделю:</strong> {latestWeekTrend} ({latestWeek.dW > 0 ? '+' : ''}{latestWeek.dW} кг к прошлой неделе)</p>}
               {projectionDate
                 ? <p><strong>Прогноз до {targetFat}% жира:</strong> ~{projectionDate} (≈{Math.round(daysToGoal / 7)} нед.) <span style={{ color: '#555' }}>— при темпе {fatWeeklyRate} %/нед</span></p>
                 : (latestSmoothedFat !== null && latestSmoothedFat <= targetFat
                     ? <p><strong>Цель по жиру достигнута:</strong> {latestSmoothedFat}% ≤ {targetFat}% 🎉</p>
                     : <p style={{ color: '#555' }}><em>Прогноз по жиру появится, когда жир пойдёт вниз по тренду (нужно 14+ дней замеров).</em></p>)}
-              {projectionDate && <p style={{ color: '#555', fontSize: '11px' }}><em>Грубая линейная оценка — у тела темп нелинеен и к цели замедлится.</em></p>}
+              {projectionDate && <p style={{ color: '#555', fontSize: '11px' }}><em>Доверие к прогнозу: {projectionConfidence}. {projectionConfidenceText} Грубая линейная оценка — у тела темп нелинеен и к цели замедлится.</em></p>}
+            </div>
+          )}
+
+          {dayStats.length > 0 && (
+            <div style={{ backgroundColor: '#fff7ed', border: '1px solid #fed7aa', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 8px 0', color: '#9a3412' }}>Лучшие и сложные дни:</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <h3 style={{ fontSize: '12px', margin: '0 0 5px 0', color: '#166534' }}>Лучший дефицит</h3>
+                  {bestDeficitDays.map(d => (
+                    <p key={d.date} style={{ margin: '3px 0' }}><strong>{d.date}:</strong> {d.deficit > 0 ? '+' : ''}{d.deficit} ккал, {d.steps} шагов{d.workout ? ' · тренировка' : ''}</p>
+                  ))}
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '12px', margin: '0 0 5px 0', color: '#991b1b' }}>Самый слабый баланс</h3>
+                  {worstBalanceDays.map(d => (
+                    <p key={d.date} style={{ margin: '3px 0' }}><strong>{d.date}:</strong> {d.deficit > 0 ? '+' : ''}{d.deficit} ккал, {d.cals} ккал еды{d.workout ? ' · тренировка' : ''}</p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {dayStats.length > 1 && (
+            <div style={{ backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 8px 0', color: '#334155' }}>Что помогало:</h2>
+              <p><strong>Шаги и дефицит:</strong> дни выше среднего по шагам давали в среднем {highStepAvgDeficit !== null ? `${highStepAvgDeficit > 0 ? '+' : ''}${highStepAvgDeficit}` : '—'} ккал баланса, ниже среднего — {lowStepAvgDeficit !== null ? `${lowStepAvgDeficit > 0 ? '+' : ''}${lowStepAvgDeficit}` : '—'} ккал.</p>
+              {stepDeficitDelta !== null && <p style={{ color: stepDeficitDelta > 0 ? '#166534' : '#991b1b' }}><em>Разница от шагов: {stepDeficitDelta > 0 ? '+' : ''}{stepDeficitDelta} ккал/день в пользу более активных дней.</em></p>}
+              {(workoutDays.length > 0 || restDays.length > 0) && (
+                <table style={{ borderCollapse: 'collapse', textAlign: 'center', width: '100%', fontSize: '12px', marginTop: '8px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#e2e8f0' }}>
+                      <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Тип дня</th>
+                      <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Дней</th>
+                      <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Ср. дефицит</th>
+                      <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Ср. ккал</th>
+                      <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Ср. шаги</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '4px' }}>С тренировкой</td>
+                      <td style={{ border: '1px solid #cbd5e1' }}>{workoutDays.length}</td>
+                      <td style={{ border: '1px solid #cbd5e1' }}>{workoutAvgDeficit !== null ? `${workoutAvgDeficit > 0 ? '+' : ''}${workoutAvgDeficit}` : '—'}</td>
+                      <td style={{ border: '1px solid #cbd5e1' }}>{workoutAvgCals !== null ? workoutAvgCals : '—'}</td>
+                      <td style={{ border: '1px solid #cbd5e1' }}>{workoutAvgSteps !== null ? workoutAvgSteps : '—'}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ border: '1px solid #cbd5e1', padding: '4px' }}>Без тренировки</td>
+                      <td style={{ border: '1px solid #cbd5e1' }}>{restDays.length}</td>
+                      <td style={{ border: '1px solid #cbd5e1' }}>{restAvgDeficit !== null ? `${restAvgDeficit > 0 ? '+' : ''}${restAvgDeficit}` : '—'}</td>
+                      <td style={{ border: '1px solid #cbd5e1' }}>{restAvgCals !== null ? restAvgCals : '—'}</td>
+                      <td style={{ border: '1px solid #cbd5e1' }}>{restAvgSteps !== null ? restAvgSteps : '—'}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
             </div>
           )}
 
@@ -1259,6 +1414,8 @@
                         </div>
                       ))}
                     </div>
+
+                    <MiniWeightChart data={recentWeightValues} dates={recentWeightLabels} />
                     
                     <div className="flex flex-col gap-3 mt-4 border-t border-zinc-800/50 pt-4">
                       <MacroBar label="Белок" current={totalPro} goal={activeGoals.protein} colorClass="text-indigo-400" bgClass="bg-indigo-500" />
@@ -1278,7 +1435,14 @@
                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</span>
                       <button type="button" onClick={copyPreviousDay} className="btn-active text-[10px] font-bold text-emerald-400 bg-emerald-900/20 px-3 py-1.5 rounded-lg transition-all">Копировать вчера</button>
                     </div>
-                    <input type="text" placeholder="🔍 Поиск продукта..." className="bg-[#27272a] rounded-2xl p-3 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500" value={foodSearch} onChange={(e) => setFoodSearch(e.target.value)} />
+                    <div className="relative">
+                      <input type="text" placeholder="🔍 Поиск продукта..." className="w-full bg-[#27272a] rounded-2xl p-3 pr-14 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500" value={foodSearch} onChange={(e) => setFoodSearch(e.target.value)} />
+                      {foodSearch && (
+                        <button type="button" onClick={() => { setFoodSearch(''); setSelectedFoodId(''); }} className="btn-active absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-zinc-800 text-zinc-300 text-2xl leading-none flex items-center justify-center border border-zinc-700/40">
+                          ×
+                        </button>
+                      )}
+                    </div>
                     {favoriteFoods.length > 0 && (
                       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
                         {favoriteFoods.map(f => (
@@ -1403,14 +1567,21 @@
                   )}
 
                   <div className="space-y-2">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 px-1">База продуктов ({foods.length})</h2>
+                    <div className="flex items-center justify-between gap-3 px-1 mb-2">
+                      <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">База продуктов ({foods.length})</h2>
+                      {favoriteFoods.length > 1 && (
+                        <button type="button" onClick={() => { setIsReorderingFavorites(!isReorderingFavorites); setDraggingFavoriteId(null); }} className={`btn-active px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all ${isReorderingFavorites ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-900 text-zinc-400 border-zinc-800'}`}>
+                          {isReorderingFavorites ? 'Готово' : 'Изменить порядок'}
+                        </button>
+                      )}
+                    </div>
+                    {isReorderingFavorites && <p className="text-[10px] text-zinc-500 px-1 pb-1">Перетаскивай избранные продукты за ручку ☰. Обычные продукты не двигаются.</p>}
                     {sortedFoods.map(f => (
                       <div
                         key={f.id}
-                        data-favorite-id={f.isFavorite ? f.id : undefined}
-                        onDragOver={(e) => { if (f.isFavorite && draggingFavoriteId) e.preventDefault(); }}
-                        onDrop={(e) => { e.preventDefault(); reorderFavorite(draggingFavoriteId, f.id); setDraggingFavoriteId(null); }}
-                        className={`list-item-active bg-[#18181b] rounded-xl p-3 border transition-colors ${draggingFavoriteId === f.id ? 'border-emerald-500/70 opacity-60' : 'border-zinc-800/30'}`}
+                        data-favorite-id={isReorderingFavorites && f.isFavorite ? f.id : undefined}
+                        className={`list-item-active bg-[#18181b] rounded-xl p-3 border transition-colors ${isReorderingFavorites ? 'select-none' : ''} ${draggingFavoriteId === f.id ? 'border-emerald-500/70 opacity-60' : 'border-zinc-800/30'}`}
+                        style={isReorderingFavorites ? { WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' } : undefined}
                       >
                         {editingFoodId === f.id ? (
                           <div className="space-y-3">
@@ -1429,24 +1600,24 @@
                               <button onClick={(e) => toggleFavorite(e, f.id, f.isFavorite)} className="btn-active p-2 pl-0 transition-colors">
                                 <IconStar className={`w-6 h-6 ${f.isFavorite ? 'text-amber-400' : 'text-zinc-700'}`} fill={f.isFavorite ? "currentColor" : "none"} />
                               </button>
-                              {f.isFavorite && (
+                              {isReorderingFavorites && f.isFavorite && (
                                 <button
                                   type="button"
-                                  draggable
                                   onClick={(e) => e.stopPropagation()}
-                                  onDragStart={(e) => { e.stopPropagation(); setDraggingFavoriteId(f.id); e.dataTransfer.effectAllowed = 'move'; }}
-                                  onDragEnd={() => setDraggingFavoriteId(null)}
-                                  onTouchStart={(e) => { e.stopPropagation(); setDraggingFavoriteId(f.id); }}
-                                  onTouchMove={(e) => { if (draggingFavoriteId) e.preventDefault(); }}
-                                  onTouchEnd={(e) => { e.stopPropagation(); if (e.changedTouches[0]) finishFavoriteTouchDrag(e.changedTouches[0]); }}
-                                  className="btn-active mr-2 px-2 py-2 rounded-lg bg-zinc-900 text-zinc-500 active:text-zinc-200 cursor-grab"
+                                  onContextMenu={(e) => e.preventDefault()}
+                                  onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setDraggingFavoriteId(f.id); e.currentTarget.setPointerCapture?.(e.pointerId); }}
+                                  onPointerMove={(e) => { if (draggingFavoriteId) { e.preventDefault(); moveFavoritePointer(e.clientX, e.clientY); } }}
+                                  onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.releasePointerCapture?.(e.pointerId); setDraggingFavoriteId(null); }}
+                                  onPointerCancel={() => setDraggingFavoriteId(null)}
+                                  className="btn-active mr-2 px-3 py-3 rounded-xl bg-zinc-900 text-zinc-400 active:text-zinc-100 cursor-grab touch-none"
+                                  style={{ WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none', touchAction: 'none' }}
                                   title="Перетащить избранное"
                                 >
                                   ☰
                                 </button>
                               )}
                             </div>
-                            <div className="flex-1" onClick={() => { setEditingFoodId(f.id); setEditValue({ ...f, fats: f.fats || 0, carbs: f.carbs || 0 }); }}>
+                            <div className="flex-1" onClick={() => { if (!isReorderingFavorites) { setEditingFoodId(f.id); setEditValue({ ...f, fats: f.fats || 0, carbs: f.carbs || 0 }); } }}>
                               <span className="text-sm font-medium border-b border-zinc-800/50 pb-0.5">{f.name}</span>
                               <div className="flex gap-3 text-[10px] font-bold uppercase mt-1.5 opacity-80">
                                 <span className="text-emerald-500">{f.calories}</span>
