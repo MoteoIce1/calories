@@ -184,7 +184,6 @@
     .list-item-active { transition: transform 260ms var(--ease-out), background-color 260ms var(--ease-out), border-color 260ms var(--ease-out), box-shadow 260ms var(--ease-out); }
     .list-item-active:active { background-color: var(--surface-soft) !important; transform: scale(0.985); }
 
-    .tab-panel { animation: tabIn 420ms var(--ease-out) both; }
     .card-enter { animation: floatIn 560ms var(--ease-out) both; }
     .card-enter:nth-child(2) { animation-delay: 45ms; }
     .card-enter:nth-child(3) { animation-delay: 90ms; }
@@ -414,11 +413,6 @@
     @keyframes floatIn {
       from { opacity: 0; transform: translateY(14px) scale(0.985); filter: blur(8px); }
       to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-    }
-
-    @keyframes tabIn {
-      from { opacity: 0; transform: translateY(10px); filter: blur(6px); }
-      to { opacity: 1; transform: translateY(0); filter: blur(0); }
     }
 
     @keyframes titleIn {
@@ -1783,7 +1777,7 @@
 
             <main ref={scrollContainerRef} className="flex-1 overflow-y-auto px-3 pt-2 pb-8">
               {activeTab === 'diary' && (
-                <div className="tab-panel space-y-4">
+                <div className="space-y-4">
                   <div className="card-enter flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
                     <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(getLocalDateString(d));}} className="btn-active p-3 text-zinc-400"><IconChevronLeft className="w-5 h-5" /></button>
                     <div className="relative font-bold text-sm text-zinc-200 flex items-center justify-center cursor-pointer px-4">
@@ -1877,7 +1871,7 @@
                       )}
                     </div>
                     {favoriteFoods.length > 0 && (
-                      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                      <div className="flex gap-2 overflow-x-auto pt-1 pb-2 -mx-1 px-1">
                         {favoriteFoods.map(f => (
                           <button type="button" key={f.id} onClick={() => setSelectedFoodId(selectedFoodId === f.id ? '' : f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
                         ))}
@@ -1959,7 +1953,7 @@
               )}
 
               {activeTab === 'directory' && (
-                <div className="tab-panel space-y-6">
+                <div className="space-y-6">
                   <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><IconTarget className="w-4 h-4" /> Ваши цели</h2>
                     <div className="grid grid-cols-2 gap-3 mb-3">
