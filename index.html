@@ -171,19 +171,21 @@
       background-clip: text;
       color: transparent;
       letter-spacing: -0.03em;
+      animation: titleIn 360ms var(--ease-out) both;
     }
 
     .btn-active {
-      transition: transform 260ms var(--ease-out), opacity 260ms var(--ease-out), background-color 260ms var(--ease-out), border-color 260ms var(--ease-out), box-shadow 260ms var(--ease-out), color 260ms var(--ease-out);
+      transition: transform 260ms var(--ease-out), opacity 260ms var(--ease-out), background-color 260ms var(--ease-out), border-color 260ms var(--ease-out), box-shadow 260ms var(--ease-out), color 260ms var(--ease-out), filter 260ms var(--ease-out);
       will-change: transform;
     }
 
-    .btn-active:hover:not(:disabled) { transform: translateY(-1px); }
+    .btn-active:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.04); }
     .btn-active:active:not(:disabled) { transform: scale(0.965); opacity: 0.82; }
     .list-item-active { transition: transform 260ms var(--ease-out), background-color 260ms var(--ease-out), border-color 260ms var(--ease-out), box-shadow 260ms var(--ease-out); }
     .list-item-active:active { background-color: var(--surface-soft) !important; transform: scale(0.985); }
 
-    .card-enter { animation: floatIn 520ms var(--ease-out) both; }
+    .tab-panel { animation: tabIn 420ms var(--ease-out) both; }
+    .card-enter { animation: floatIn 560ms var(--ease-out) both; }
     .card-enter:nth-child(2) { animation-delay: 45ms; }
     .card-enter:nth-child(3) { animation-delay: 90ms; }
     .card-enter:nth-child(4) { animation-delay: 135ms; }
@@ -195,10 +197,27 @@
 
     .progress-fill {
       box-shadow: 0 0 22px rgba(127, 142, 216, 0.2);
-      transition: width 900ms var(--ease-out), background-color 360ms var(--ease-out), box-shadow 360ms var(--ease-out) !important;
+      background-size: 180% 100% !important;
+      transition: width 900ms var(--ease-out), background-position 700ms var(--ease-out), background-color 360ms var(--ease-out), box-shadow 360ms var(--ease-out) !important;
+      animation: gradientDrift 5s ease-in-out infinite alternate;
     }
 
     .modal-card { animation: modalIn 360ms var(--ease-out) both; }
+
+    .food-suggestions {
+      animation: dropdownIn 260ms var(--ease-out) both;
+      transform-origin: top center;
+    }
+
+    .bottom-nav .btn-active svg,
+    .btn-active svg {
+      transition: transform 260ms var(--ease-out);
+    }
+
+    .bottom-nav .btn-active:active svg,
+    .btn-active:active svg {
+      transform: scale(0.9) rotate(-3deg);
+    }
 
     .report-modern {
       background:
@@ -380,11 +399,41 @@
 
     input:focus, select:focus {
       box-shadow: 0 0 0 4px rgba(127, 142, 216, 0.12);
+      transform: translateY(-1px);
+    }
+
+    input::placeholder {
+      transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out);
+    }
+
+    input:focus::placeholder {
+      opacity: 0.55;
+      transform: translateX(2px);
     }
 
     @keyframes floatIn {
       from { opacity: 0; transform: translateY(14px) scale(0.985); filter: blur(8px); }
       to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+    }
+
+    @keyframes tabIn {
+      from { opacity: 0; transform: translateY(10px); filter: blur(6px); }
+      to { opacity: 1; transform: translateY(0); filter: blur(0); }
+    }
+
+    @keyframes titleIn {
+      from { opacity: 0; transform: translateY(4px); filter: blur(4px); }
+      to { opacity: 1; transform: translateY(0); filter: blur(0); }
+    }
+
+    @keyframes dropdownIn {
+      from { opacity: 0; transform: translateY(-6px) scaleY(0.96); filter: blur(5px); }
+      to { opacity: 1; transform: translateY(0) scaleY(1); filter: blur(0); }
+    }
+
+    @keyframes gradientDrift {
+      from { background-position: 0% 50%; }
+      to { background-position: 100% 50%; }
     }
 
     @keyframes modalIn {
@@ -1720,7 +1769,7 @@
         <div className="app-shell flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900 relative overflow-hidden">
             <header className="app-header shrink-0 pt-8 px-4 pb-4 bg-[#09090b] flex justify-between items-center z-10">
               <div>
-                <h1 className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : 'База'}</h1>
+                <h1 key={activeTab} className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : 'База'}</h1>
               </div>
               <div className="flex items-center gap-2">
                 {activeTab === 'directory' && (
@@ -1734,7 +1783,7 @@
 
             <main ref={scrollContainerRef} className="flex-1 overflow-y-auto px-3 pt-2 pb-8">
               {activeTab === 'diary' && (
-                <div className="space-y-4">
+                <div className="tab-panel space-y-4">
                   <div className="card-enter flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
                     <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(getLocalDateString(d));}} className="btn-active p-3 text-zinc-400"><IconChevronLeft className="w-5 h-5" /></button>
                     <div className="relative font-bold text-sm text-zinc-200 flex items-center justify-center cursor-pointer px-4">
@@ -1835,7 +1884,7 @@
                       </div>
                     )}
                     {showFoodSuggestions && (
-                      <div className="max-h-56 overflow-y-auto rounded-2xl border border-zinc-700/40 bg-[#18181b] divide-y divide-zinc-800/70">
+                      <div className="food-suggestions max-h-56 overflow-y-auto rounded-2xl border border-zinc-700/40 bg-[#18181b] divide-y divide-zinc-800/70">
                         {selectedFoodId && (
                           <button type="button" onClick={() => setSelectedFoodId('')} className="btn-active w-full text-left px-4 py-3 text-sm font-bold text-zinc-500">
                             Не выбрано
@@ -1910,7 +1959,7 @@
               )}
 
               {activeTab === 'directory' && (
-                <div className="space-y-6">
+                <div className="tab-panel space-y-6">
                   <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><IconTarget className="w-4 h-4" /> Ваши цели</h2>
                     <div className="grid grid-cols-2 gap-3 mb-3">
