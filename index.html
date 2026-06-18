@@ -208,6 +208,30 @@
       transform-origin: top center;
     }
 
+    .reorder-item {
+      transition: transform 260ms var(--ease-out), opacity 220ms var(--ease-out), border-color 220ms var(--ease-out), box-shadow 260ms var(--ease-out), background-color 220ms var(--ease-out);
+      will-change: transform;
+    }
+
+    .reorder-item-active {
+      transform: translateY(-4px) scale(1.025) rotate(-0.4deg);
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.36), 0 0 0 1px rgba(154, 166, 232, 0.24);
+      opacity: 0.92 !important;
+      z-index: 20;
+    }
+
+    .drag-handle {
+      transition: transform 240ms var(--ease-out), box-shadow 240ms var(--ease-out), background-color 240ms var(--ease-out), color 240ms var(--ease-out);
+    }
+
+    .drag-handle-active {
+      transform: scale(1.08);
+      box-shadow: 0 10px 24px rgba(127, 142, 216, 0.2);
+      background: linear-gradient(135deg, rgba(127, 142, 216, 0.32), rgba(163, 101, 123, 0.24)) !important;
+      color: #f7f7fb !important;
+      cursor: grabbing;
+    }
+
     .bottom-nav .btn-active svg,
     .btn-active svg {
       transition: transform 260ms var(--ease-out);
@@ -2007,7 +2031,7 @@
                       <div
                         key={f.id}
                         data-favorite-id={isReorderingFavorites && f.isFavorite ? f.id : undefined}
-                        className={`card-enter list-item-active bg-[#18181b] rounded-xl p-3 border transition-colors ${isReorderingFavorites ? 'select-none' : ''} ${draggingFavoriteId === f.id ? 'border-emerald-500/70 opacity-60' : 'border-zinc-800/30'}`}
+                        className={`card-enter list-item-active reorder-item bg-[#18181b] rounded-xl p-3 border ${isReorderingFavorites ? 'select-none' : ''} ${draggingFavoriteId === f.id ? 'reorder-item-active border-emerald-500/70' : 'border-zinc-800/30'}`}
                         style={isReorderingFavorites ? { WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' } : undefined}
                       >
                         {editingFoodId === f.id ? (
@@ -2036,7 +2060,7 @@
                                   onPointerMove={(e) => { if (draggingFavoriteId) { e.preventDefault(); moveFavoritePointer(e.clientX, e.clientY); } }}
                                   onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.releasePointerCapture?.(e.pointerId); setDraggingFavoriteId(null); }}
                                   onPointerCancel={() => setDraggingFavoriteId(null)}
-                                  className="btn-active mr-2 px-3 py-3 rounded-xl bg-zinc-900 text-zinc-400 active:text-zinc-100 cursor-grab touch-none"
+                                  className={`btn-active drag-handle mr-2 px-3 py-3 rounded-xl bg-zinc-900 text-zinc-400 active:text-zinc-100 cursor-grab touch-none ${draggingFavoriteId === f.id ? 'drag-handle-active' : ''}`}
                                   style={{ WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none', touchAction: 'none' }}
                                   title="Перетащить избранное"
                                 >
