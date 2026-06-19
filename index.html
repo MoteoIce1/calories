@@ -2465,7 +2465,7 @@
                   <button type="button" onClick={() => setBodyPhotoZoom(prev => !prev)} className="btn-active rounded-full bg-white/12 border border-white/10 px-4 py-2 text-xs font-black backdrop-blur-md">{bodyPhotoZoom ? 'Обычный' : 'Ближе'}</button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-px flex-1 min-h-0 bg-zinc-900">
+                <div className="grid grid-rows-2 gap-px flex-1 min-h-0 bg-zinc-900">
                   {[compareBodyA, compareBodyB].map((entry, idx) => (
                     <div key={entry?.id || idx} className="relative overflow-hidden bg-black flex items-center justify-center" onClick={() => setBodyPhotoZoom(prev => !prev)}>
                       {entry?.photos?.[0] ? (
