@@ -584,6 +584,25 @@
       { id: 'h18', name: 'Яйцо куриное (на 100г)', calories: 155, protein: 13, fats: 11, carbs: 1, isFavorite: false },
     ];
 
+    const BODY_MEASURE_FIELDS = [
+      { key: 'waist', label: 'Талия', unit: 'см' },
+      { key: 'chest', label: 'Грудь', unit: 'см' },
+      { key: 'neck', label: 'Шея', unit: 'см' },
+      { key: 'hips', label: 'Бёдра', unit: 'см' },
+      { key: 'bicepsRelaxed', label: 'Бицепс расслабл.', unit: 'см' },
+      { key: 'bicepsFlexed', label: 'Бицепс напряж.', unit: 'см' },
+      { key: 'thigh', label: 'Бедро (нога)', unit: 'см' },
+    ];
+
+    const EMPTY_BODY_MEASURES = BODY_MEASURE_FIELDS.reduce((acc, field) => ({ ...acc, [field.key]: '' }), {});
+
+    const INITIAL_BODY_ENTRIES = [
+      { id: 'body-2026-03-02', date: '2026-03-02', measures: { waist: 96, chest: 99, neck: 36, hips: 96, bicepsRelaxed: 32, bicepsFlexed: 37, thigh: 52 }, photos: [] },
+      { id: 'body-2026-04-15', date: '2026-04-15', measures: { waist: 94, chest: 95, neck: 38, hips: 92, bicepsRelaxed: 34, bicepsFlexed: 37, thigh: 51 }, photos: [] },
+      { id: 'body-2026-05-09', date: '2026-05-09', measures: { waist: 91, chest: 94, neck: 36, hips: 94, bicepsRelaxed: 33, bicepsFlexed: 37, thigh: 52 }, photos: [] },
+      { id: 'body-2026-05-26', date: '2026-05-26', measures: { waist: 88, chest: 94, neck: 37, hips: 91, bicepsRelaxed: 34, bicepsFlexed: 37, thigh: 56 }, photos: [] },
+    ];
+
     const MacroBar = ({ label, current, goal, colorClass, bgClass }) => {
       const numGoal = Number(goal) || 1;
       const progress = Math.min(100, (current / numGoal) * 100);
@@ -741,6 +760,10 @@
       const [authBusy, setAuthBusy] = useState(false);
       
       const [foods, setFoods] = useState([]);
+      const [bodyEntries, setBodyEntries] = useState(INITIAL_BODY_ENTRIES);
+      const [bodyDraft, setBodyDraft] = useState({ date: getLocalDateString(new Date()), measures: { ...EMPTY_BODY_MEASURES }, photos: [] });
+      const [compareBodyIds, setCompareBodyIds] = useState(['body-2026-03-02', 'body-2026-05-26']);
+      const [dismissedBodyReminderDate, setDismissedBodyReminderDate] = useState(() => localStorage.getItem('body-reminder-dismissed') || '');
       const [dailyLogs, setDailyLogs] = useState({});
       const [dailySteps, setDailySteps] = useState({});
       const [dailyMetrics, setDailyMetrics] = useState({});
@@ -815,6 +838,7 @@
         if (data.goals) profilePayload.goals = data.goals;
         if (data.dailyGoals) profilePayload.dailyGoals = data.dailyGoals;
         if (data.foods) profilePayload.foods = data.foods;
+        if (data.bodyEntries) profilePayload.bodyEntries = data.bodyEntries;
         if (Object.keys(profilePayload).length) await profileRef(uid).set(profilePayload, { merge: true });
         const dates = new Set([
           ...Object.keys(data.dailyLogs || {}),
@@ -871,8 +895,15 @@
             }
             setDailyGoals(data.dailyGoals || {});
             setFoods(data.foods && data.foods.length ? data.foods : HARDCODED_FOODS);
+            if (Array.isArray(data.bodyEntries)) setBodyEntries(data.bodyEntries);
+            else {
+              setBodyEntries(INITIAL_BODY_ENTRIES);
+              profileRef(uid).set({ bodyEntries: INITIAL_BODY_ENTRIES }, { merge: true }).catch(() => {});
+            }
           } else {
             setFoods(HARDCODED_FOODS);
+            setBodyEntries(INITIAL_BODY_ENTRIES);
+            profileRef(uid).set({ bodyEntries: INITIAL_BODY_ENTRIES }, { merge: true }).catch(() => {});
           }
           setIsLoading(false);
         }, (error) => { console.log("Firebase error", error); setIsLoading(false); });
@@ -1121,6 +1152,84 @@
         if (profileDoc) profileDoc.set({ foods: updatedFoods }, { merge: true });
       };
 
+      const saveBodyEntries = (entries) => {
+        const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+        setBodyEntries(sorted);
+        if (profileDoc) profileDoc.set({ bodyEntries: sorted }, { merge: true });
+      };
+
+      const compressPhoto = (file) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const maxSide = 900;
+            const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.72));
+          };
+          img.onerror = reject;
+          img.src = reader.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const handleBodyPhotoFiles = async (files) => {
+        const selected = Array.from(files || []).slice(0, 4);
+        if (!selected.length) return;
+        try {
+          const photos = await Promise.all(selected.map(compressPhoto));
+          setBodyDraft(prev => ({ ...prev, photos: [...prev.photos, ...photos].slice(0, 4) }));
+        } catch (err) {
+          alert('Не удалось добавить фото: ' + err.message);
+        }
+      };
+
+      const handleBodyMeasureChange = (field, value) => {
+        const normalized = value === '' ? '' : Math.max(0, Math.round(evaluateMath(value) * 10) / 10);
+        setBodyDraft(prev => ({ ...prev, measures: { ...prev.measures, [field]: normalized } }));
+      };
+
+      const addBodyEntry = (e) => {
+        e.preventDefault();
+        if (!bodyDraft.date) return;
+        const measures = {};
+        BODY_MEASURE_FIELDS.forEach(field => {
+          const value = Number(bodyDraft.measures[field.key]);
+          if (!isNaN(value) && value > 0) measures[field.key] = value;
+        });
+        if (!Object.keys(measures).length && !bodyDraft.photos.length) {
+          alert('Добавь хотя бы одну мерку или фото.');
+          return;
+        }
+        const entry = {
+          id: `body-${bodyDraft.date}-${Date.now()}`,
+          date: bodyDraft.date,
+          measures,
+          photos: bodyDraft.photos || [],
+        };
+        saveBodyEntries([...bodyEntries, entry]);
+        setBodyDraft({ date: getLocalDateString(new Date()), measures: { ...EMPTY_BODY_MEASURES }, photos: [] });
+        setDismissedBodyReminderDate('');
+        localStorage.removeItem('body-reminder-dismissed');
+      };
+
+      const deleteBodyEntry = (id) => {
+        if (!confirm('Удалить замеры и фото за эту дату?')) return;
+        saveBodyEntries(bodyEntries.filter(entry => entry.id !== id));
+      };
+
+      const dismissBodyReminder = () => {
+        const today = getLocalDateString(new Date());
+        setDismissedBodyReminderDate(today);
+        localStorage.setItem('body-reminder-dismissed', today);
+      };
+
       const deleteFood = (e, id) => { e.stopPropagation(); saveFoods(foods.filter(x => x.id !== id)); };
 
       const toggleFavorite = (e, id, currentStatus) => {
@@ -1228,7 +1337,7 @@
       };
 
       const downloadBackup = () => {
-        const data = { goals, dailyGoals, foods, dailyLogs, dailySteps, dailyMetrics, dailyWorkouts, _exportedAt: new Date().toISOString() };
+        const data = { goals, dailyGoals, foods, bodyEntries, dailyLogs, dailySteps, dailyMetrics, dailyWorkouts, _exportedAt: new Date().toISOString() };
         triggerDownload(JSON.stringify(data, null, 2), `backup_${getLocalDateString(new Date())}.json`, 'application/json');
       };
 
@@ -1278,6 +1387,16 @@
       ];
       const visibleFoods = sortedFoods.filter(f => f.name.toLowerCase().includes(foodSearch.toLowerCase()));
       const showFoodSuggestions = foodSearch.trim().length > 0;
+      const sortedBodyEntries = [...bodyEntries].sort((a, b) => b.date.localeCompare(a.date));
+      const bodyEntryOptions = [...bodyEntries].sort((a, b) => a.date.localeCompare(b.date));
+      const latestBodyEntry = bodyEntryOptions[bodyEntryOptions.length - 1];
+      const latestBodyDate = latestBodyEntry?.date;
+      const daysSinceBodyEntry = latestBodyDate ? Math.floor((new Date(getLocalDateString(new Date())) - new Date(latestBodyDate)) / 86400000) : 999;
+      const showBodyReminder = daysSinceBodyEntry >= 14 && dismissedBodyReminderDate !== getLocalDateString(new Date());
+      const compareBodyA = bodyEntries.find(entry => entry.id === compareBodyIds[0]) || bodyEntryOptions[0];
+      const compareBodyB = bodyEntries.find(entry => entry.id === compareBodyIds[1]) || bodyEntryOptions[bodyEntryOptions.length - 1];
+      const comparePhotoA = compareBodyA?.photos?.[0];
+      const comparePhotoB = compareBodyB?.photos?.[0];
       const recentWeightDates = Object.keys(dailyMetrics)
         .filter(date => date <= currentDate && dailyMetrics[date]?.weight)
         .sort()
@@ -1786,7 +1905,7 @@
         <div className="app-shell flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900 relative overflow-hidden">
             <header className="app-header shrink-0 pt-8 px-4 pb-4 bg-[#09090b] flex justify-between items-center z-10">
               <div>
-                <h1 key={activeTab} className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : 'База'}</h1>
+                <h1 key={activeTab} className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : activeTab === 'progress' ? 'Прогресс' : 'База'}</h1>
               </div>
               <div className="flex items-center gap-2">
                 {activeTab === 'directory' && (
@@ -1975,6 +2094,148 @@
                 </div>
               )}
 
+              {activeTab === 'progress' && (
+                <div className="space-y-4">
+                  {showBodyReminder && (
+                    <div className="card-enter bg-amber-500/10 border border-amber-400/30 rounded-3xl p-4 flex gap-3 items-start">
+                      <div className="w-10 h-10 rounded-2xl bg-amber-400/15 flex items-center justify-center text-lg">⏱</div>
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-amber-100">Пора обновить мерки и фото</p>
+                        <p className="text-xs text-amber-200/70 mt-1">Последняя запись была {latestBodyDate ? displayDate(latestBodyDate).toLowerCase() : 'давно'}. Лучше фиксировать прогресс раз в 2 недели.</p>
+                      </div>
+                      <button type="button" onClick={dismissBodyReminder} className="btn-active text-[10px] font-bold text-amber-100/70 bg-amber-950/40 rounded-xl px-3 py-2">Сегодня позже</button>
+                    </div>
+                  )}
+
+                  <form onSubmit={addBodyEntry} className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-sm font-bold text-zinc-100">Новая запись</h2>
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mt-1">Мерки тела и фото</p>
+                      </div>
+                      <div className="relative bg-zinc-900 rounded-xl px-3 py-2 border border-zinc-800/70">
+                        <span className="text-xs font-bold text-zinc-200">{displayDate(bodyDraft.date)}</span>
+                        <input type="date" className="absolute inset-0 opacity-0" value={bodyDraft.date} max={getLocalDateString(new Date())} onChange={(e) => setBodyDraft(prev => ({ ...prev, date: e.target.value }))} />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {BODY_MEASURE_FIELDS.map(field => (
+                        <label key={field.key} className="bg-[#27272a] rounded-2xl p-3 border border-zinc-700/50">
+                          <span className="block text-[9px] text-zinc-500 uppercase font-bold tracking-widest mb-2 leading-tight">{field.label}</span>
+                          <div className="flex items-baseline gap-1">
+                            <input type="number" step="0.1" inputMode="decimal" className="w-full bg-transparent text-lg font-black text-zinc-100 outline-none" value={bodyDraft.measures[field.key]} onChange={(e) => handleBodyMeasureChange(field.key, e.target.value)} onFocus={(e) => e.target.select()} />
+                            <span className="text-[10px] text-zinc-500 font-bold">{field.unit}</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="bg-zinc-900/50 rounded-2xl p-3 border border-zinc-800/60">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-bold text-zinc-200">Фото прогресса</p>
+                          <p className="text-[10px] text-zinc-500 mt-1">До 4 фото на запись, они сжимаются перед сохранением.</p>
+                        </div>
+                        <label className="btn-active shrink-0 rounded-xl bg-indigo-500/20 text-indigo-200 px-3 py-2 text-[10px] font-bold uppercase tracking-widest border border-indigo-400/20">
+                          Добавить
+                          <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { handleBodyPhotoFiles(e.target.files); e.target.value = ''; }} />
+                        </label>
+                      </div>
+                      {bodyDraft.photos.length > 0 && (
+                        <div className="grid grid-cols-4 gap-2 mt-3">
+                          {bodyDraft.photos.map((photo, idx) => (
+                            <div key={idx} className="relative aspect-[3/4] rounded-xl overflow-hidden border border-zinc-700/60 bg-zinc-950">
+                              <img src={photo} className="w-full h-full object-cover" />
+                              <button type="button" onClick={() => setBodyDraft(prev => ({ ...prev, photos: prev.photos.filter((_, i) => i !== idx) }))} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 text-white text-xs">×</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <button type="submit" className="btn-active w-full bg-gradient-to-r from-indigo-500 via-violet-500 to-rose-500 text-white rounded-2xl p-4 font-black transition-all">Сохранить замеры</button>
+                  </form>
+
+                  {bodyEntryOptions.length >= 2 && (
+                    <div className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
+                      <div>
+                        <h2 className="text-sm font-bold text-zinc-100">Сравнение</h2>
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mt-1">Выбери две записи</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[0, 1].map(idx => (
+                          <select key={idx} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none" value={compareBodyIds[idx] || ''} onChange={(e) => setCompareBodyIds(prev => idx === 0 ? [e.target.value, prev[1]] : [prev[0], e.target.value])}>
+                            {bodyEntryOptions.map(entry => <option key={entry.id} value={entry.id}>{displayDate(entry.date)}</option>)}
+                          </select>
+                        ))}
+                      </div>
+
+                      {(comparePhotoA || comparePhotoB) && (
+                        <div className="grid grid-cols-2 gap-3">
+                          {[compareBodyA, compareBodyB].map((entry, idx) => (
+                            <div key={entry?.id || idx} className="rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-800">
+                              <div className="aspect-[3/4] bg-zinc-900">
+                                {entry?.photos?.[0] ? <img src={entry.photos[0]} className="w-full h-full object-cover" /> : <div className="h-full flex items-center justify-center text-[10px] text-zinc-600 font-bold uppercase">Нет фото</div>}
+                              </div>
+                              <p className="p-2 text-center text-[10px] font-bold text-zinc-400">{entry ? displayDate(entry.date) : '—'}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {compareBodyA && compareBodyB && (
+                        <div className="space-y-2">
+                          {BODY_MEASURE_FIELDS.map(field => {
+                            const a = Number(compareBodyA.measures?.[field.key]);
+                            const b = Number(compareBodyB.measures?.[field.key]);
+                            const hasBoth = !isNaN(a) && !isNaN(b) && a > 0 && b > 0;
+                            const delta = hasBoth ? Math.round((b - a) * 10) / 10 : null;
+                            return (
+                              <div key={field.key} className="flex items-center justify-between bg-zinc-900/50 rounded-2xl p-3 border border-zinc-800/50">
+                                <span className="text-xs font-bold text-zinc-300">{field.label}</span>
+                                <div className="text-right">
+                                  <span className="text-xs text-zinc-500">{hasBoth ? `${a} → ${b} см` : '—'}</span>
+                                  {hasBoth && <span className={`ml-2 text-sm font-black ${delta < 0 ? 'text-emerald-400' : delta > 0 ? 'text-rose-400' : 'text-zinc-500'}`}>{delta > 0 ? '+' : ''}{delta}</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    <h2 className="px-1 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">История ({bodyEntries.length})</h2>
+                    {sortedBodyEntries.map(entry => (
+                      <div key={entry.id} className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div>
+                            <p className="text-sm font-black text-zinc-100">{displayDate(entry.date)}</p>
+                            <p className="text-[10px] text-zinc-500 mt-1">{entry.photos?.length || 0} фото</p>
+                          </div>
+                          <button type="button" onClick={() => deleteBodyEntry(entry.id)} className="btn-active text-zinc-700 active:text-red-400 p-2"><IconTrash className="w-5 h-5" /></button>
+                        </div>
+                        {entry.photos?.length > 0 && (
+                          <div className="grid grid-cols-4 gap-2 mb-3">
+                            {entry.photos.map((photo, idx) => <img key={idx} src={photo} className="aspect-[3/4] w-full object-cover rounded-xl border border-zinc-700/60" />)}
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-2">
+                          {BODY_MEASURE_FIELDS.map(field => entry.measures?.[field.key] ? (
+                            <div key={field.key} className="bg-zinc-900/50 rounded-xl p-2 border border-zinc-800/40">
+                              <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest leading-tight">{field.label}</p>
+                              <p className="text-sm font-black text-zinc-200 mt-1">{entry.measures[field.key]} см</p>
+                            </div>
+                          ) : null)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {activeTab === 'directory' && (
                 <div className="space-y-6">
                   <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
@@ -2093,10 +2354,13 @@
             </main>
 
             <nav className="bottom-nav shrink-0 bg-[#09090b] flex justify-around pb-2 pt-2 safe-pb relative z-40 border-t border-zinc-900">
-              <button onClick={() => setActiveTab('diary')} className={`btn-active w-32 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'diary' ? 'text-emerald-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
+              <button onClick={() => setActiveTab('diary')} className={`btn-active w-24 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'diary' ? 'text-emerald-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
                 <IconCalendar className="w-6 h-6" /><span className="text-[10px] font-bold mt-1 uppercase tracking-widest">Дневник</span>
               </button>
-              <button onClick={() => setActiveTab('directory')} className={`btn-active w-32 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'directory' ? 'text-indigo-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
+              <button onClick={() => setActiveTab('progress')} className={`btn-active w-24 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'progress' ? 'text-violet-300 bg-zinc-900/50' : 'text-zinc-600'}`}>
+                <span className="text-xl leading-6">📷</span><span className="text-[10px] font-bold mt-1 uppercase tracking-widest">Прогресс</span>
+              </button>
+              <button onClick={() => setActiveTab('directory')} className={`btn-active w-24 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'directory' ? 'text-indigo-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
                 <IconBook className="w-6 h-6" /><span className="text-[10px] font-bold mt-1 uppercase tracking-widest">База</span>
               </button>
             </nav>
