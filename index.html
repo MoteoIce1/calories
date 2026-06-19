@@ -631,7 +631,7 @@
       );
     };
 
-    const ProgressChart = ({ title, data, dates, color, showAverage }) => {
+    const ProgressChart = ({ title, data, dates, color, showAverage, averageMode = 'moving7' }) => {
       if (!data || data.length < 2) return null;
       const validPoints = data
         .map((v, i) => ({ v: Number(v), i, raw: data[i] }))
@@ -655,9 +655,14 @@
 
       let avgLine = null;
       if (showAverage) {
-        const avg = movingAverage(data, 7);
-        const avgPts = avg.map((v, i) => ({ v, i })).filter(p => p.v !== null);
-        if (avgPts.length >= 2) avgLine = avgPts.map(p => `${xFor(p.i).toFixed(1)},${yFor(p.v).toFixed(1)}`).join(' ');
+        if (averageMode === 'period') {
+          const avgValue = values.reduce((sum, v) => sum + v, 0) / values.length;
+          avgLine = `${xFor(0).toFixed(1)},${yFor(avgValue).toFixed(1)} ${xFor(n - 1).toFixed(1)},${yFor(avgValue).toFixed(1)}`;
+        } else {
+          const avg = movingAverage(data, 7);
+          const avgPts = avg.map((v, i) => ({ v, i })).filter(p => p.v !== null);
+          if (avgPts.length >= 2) avgLine = avgPts.map(p => `${xFor(p.i).toFixed(1)},${yFor(p.v).toFixed(1)}`).join(' ');
+        }
       }
 
       const yTicks = [yMax, (yMax + yMin) / 2, yMin];
@@ -680,7 +685,7 @@
             <text x={padL} y={H - 7} textAnchor="start" fontSize="8" fill="#64748b">{dates[validPoints[0].i]}</text>
             <text x={W - padR} y={H - 7} textAnchor="end" fontSize="8" fill="#64748b">{dates[validPoints[validPoints.length - 1].i]}</text>
           </svg>
-          {showAverage && <p className="text-[8px] text-slate-500 mt-1 text-center">Линия — среднее за 7 дней, точки — замеры</p>}
+          {showAverage && <p className="text-[8px] text-slate-500 mt-1 text-center">{averageMode === 'period' ? 'Линия — среднее за выбранный период, точки — дни' : 'Линия — среднее за 7 дней, точки — замеры'}</p>}
         </div>
       );
     };
@@ -1481,6 +1486,31 @@
       const allLean = datesWithMetrics.map(d => dailyMetrics[d]?.leanMass);
       const allFatMass = datesWithMetrics.map(d => dailyMetrics[d]?.fatMass);
       const chartDates = datesWithMetrics.map(d => d.slice(5)); 
+      const stepsChartDates = allExportDates;
+      const allSteps = stepsChartDates.map(date => {
+        const g = getEffectiveGoals(date);
+        return dailySteps[date] !== undefined ? dailySteps[date] : (g.baseSteps || 6000);
+      });
+      const stepChartLabels = stepsChartDates.map(d => d.slice(5));
+      const bodyEntriesForPdf = bodyEntries
+        .filter(entry => entry.measures && Object.keys(entry.measures).length)
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const bodyMeasureDates = bodyEntriesForPdf.map(entry => entry.date.slice(5));
+      const bodyMeasureColors = ['#8b5cf6', '#3b82f6', '#14b8a6', '#f59e0b', '#a855f7', '#ec4899', '#10b981'];
+      const bodyMeasureSeries = BODY_MEASURE_FIELDS.map((field, idx) => ({
+        ...field,
+        color: bodyMeasureColors[idx % bodyMeasureColors.length],
+        data: bodyEntriesForPdf.map(entry => entry.measures?.[field.key])
+      })).filter(series => series.data.filter(v => v !== null && v !== undefined && v !== '' && !isNaN(Number(v))).length >= 2);
+      const bodyMeasureSummary = BODY_MEASURE_FIELDS.map((field) => {
+        const values = bodyEntriesForPdf
+          .map(entry => ({ date: entry.date, value: Number(entry.measures?.[field.key]) }))
+          .filter(point => !isNaN(point.value) && point.value > 0);
+        if (!values.length) return null;
+        const first = values[0];
+        const last = values[values.length - 1];
+        return { ...field, first, last, delta: Math.round((last.value - first.value) * 10) / 10 };
+      }).filter(Boolean);
 
       const getFirstValid = (arr) => arr.find(v => v !== null && v !== undefined && !isNaN(v) && v !== '');
       const getLastValid = (arr) => [...arr].reverse().find(v => v !== null && v !== undefined && !isNaN(v) && v !== '');
@@ -1842,6 +1872,43 @@
             </div>
           )}
 
+          {bodyMeasureSummary.length > 0 && (
+            <div style={{ marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: '10px 0 8px 0', color: '#005f73' }}>Замеры тела:</h3>
+              <table style={{ borderCollapse: 'collapse', textAlign: 'center', width: '100%', fontSize: '12px', marginBottom: '12px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#e2e8f0' }}>
+                    <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Показатель</th>
+                    <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Начало</th>
+                    <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Конец</th>
+                    <th style={{ padding: '5px', border: '1px solid #cbd5e1' }}>Разница</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bodyMeasureSummary.map(item => {
+                    const decreaseGood = !['bicepsRelaxed', 'bicepsFlexed'].includes(item.key);
+                    const good = item.delta === 0 ? null : decreaseGood ? item.delta < 0 : item.delta > 0;
+                    return (
+                      <tr key={item.key}>
+                        <td style={{ border: '1px solid #cbd5e1', padding: '5px', textAlign: 'left' }}>{item.label}</td>
+                        <td style={{ border: '1px solid #cbd5e1' }}>{item.first.value} см <span style={{ color: '#64748b' }}>({item.first.date.slice(5)})</span></td>
+                        <td style={{ border: '1px solid #cbd5e1' }}>{item.last.value} см <span style={{ color: '#64748b' }}>({item.last.date.slice(5)})</span></td>
+                        <td style={{ border: '1px solid #cbd5e1', fontWeight: 'bold', color: good === null ? '#555' : good ? '#10b981' : '#ef4444' }}>{item.delta > 0 ? '+' : ''}{item.delta} см</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {bodyMeasureSeries.length > 0 && (
+                <div className="grid grid-cols-1 print:grid-cols-2 sm:grid-cols-2 gap-4 w-full">
+                  {bodyMeasureSeries.map(series => (
+                    <ProgressChart key={series.key} title={`${series.label} (см)`} data={series.data} dates={bodyMeasureDates} color={series.color} showAverage={false} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {datesWithMetrics.length > 1 && (
             <div style={{ marginBottom: '20px' }}>
                <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 10px 0', color: '#005f73' }}>Графики прогресса:</h3>
@@ -1852,6 +1919,15 @@
                   <ProgressChart title="БЖМ (кг)" data={allLean} dates={chartDates} color="#8b5cf6" />
                   <ProgressChart title="Масса жира (кг)" data={allFatMass} dates={chartDates} color="#f59e0b" />
                </div>
+            </div>
+          )}
+
+          {allSteps.length > 1 && (
+            <div style={{ marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 10px 0', color: '#005f73' }}>Шаги и тренд:</h3>
+              <div className="grid grid-cols-1 gap-4 w-full">
+                <ProgressChart title="Шаги за день" data={allSteps} dates={stepChartLabels} color="#10b981" showAverage={true} averageMode="period" />
+              </div>
             </div>
           )}
 
@@ -2481,9 +2557,9 @@
                       ) : (
                         <div className="px-3 text-center text-xs font-bold text-zinc-500">Нет фото</div>
                       )}
-                      <div className="absolute left-2 bottom-3 right-2 rounded-2xl bg-black/25 px-3 py-2 backdrop-blur-sm">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-white/55">{idx === 0 ? 'Было' : 'Стало'}</p>
-                        <p className="text-[10px] font-bold text-white/40 mt-0.5">{entry ? displayDate(entry.date) : '—'}</p>
+                      <div className="absolute left-3 top-3 inline-flex flex-col rounded-2xl bg-black/25 px-3 py-2 backdrop-blur-sm">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-white/55 leading-none">{idx === 0 ? 'Было' : 'Стало'}</p>
+                        <p className="text-[9px] font-bold text-white/35 mt-1 leading-none">{entry ? displayDate(entry.date) : '—'}</p>
                       </div>
                     </div>
                   ))}
