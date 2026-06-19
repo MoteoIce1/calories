@@ -773,6 +773,8 @@
       const [bodyEntries, setBodyEntries] = useState(INITIAL_BODY_ENTRIES);
       const [bodyDraft, setBodyDraft] = useState({ date: getLocalDateString(new Date()), measures: { ...EMPTY_BODY_MEASURES }, photos: [] });
       const [compareBodyIds, setCompareBodyIds] = useState(['body-2026-03-02', 'body-2026-05-26']);
+      const [showBodyPhotoCompare, setShowBodyPhotoCompare] = useState(false);
+      const [bodyPhotoZoom, setBodyPhotoZoom] = useState(false);
       const [dismissedBodyReminderDate, setDismissedBodyReminderDate] = useState(() => localStorage.getItem('body-reminder-dismissed') || '');
       const [dailyLogs, setDailyLogs] = useState({});
       const [dailySteps, setDailySteps] = useState({});
@@ -2203,7 +2205,7 @@
                       <div className="space-y-2">
                         <div className="flex items-center justify-between px-1">
                           <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Сравнение фото</p>
-                          <p className="text-[10px] text-zinc-600">слева / справа</p>
+                          <button type="button" onClick={() => { setBodyPhotoZoom(false); setShowBodyPhotoCompare(true); }} className="btn-active text-[10px] font-bold text-violet-200 bg-violet-500/15 border border-violet-400/15 rounded-xl px-3 py-2">На весь экран</button>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           {[compareBodyA, compareBodyB].map((entry, idx) => (
@@ -2452,6 +2454,35 @@
                     <button onClick={() => confirmGoalSave('all')} className="btn-active w-full p-4 rounded-xl bg-zinc-800 font-bold text-zinc-200 transition-all">Применить ко всей истории</button>
                     <button onClick={() => setShowGoalModal(false)} className="btn-active w-full p-4 rounded-xl border border-zinc-800 text-zinc-500 font-bold mt-2 transition-all">Отмена</button>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {showBodyPhotoCompare && (
+              <div className="fixed inset-0 z-[70] bg-black text-white flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+                <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-3" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
+                  <button type="button" onClick={() => setShowBodyPhotoCompare(false)} className="btn-active rounded-full bg-black/60 border border-white/10 px-4 py-2 text-xs font-black backdrop-blur-md">Закрыть</button>
+                  <button type="button" onClick={() => setBodyPhotoZoom(prev => !prev)} className="btn-active rounded-full bg-white/12 border border-white/10 px-4 py-2 text-xs font-black backdrop-blur-md">{bodyPhotoZoom ? 'Обычный' : 'Ближе'}</button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-px flex-1 min-h-0 bg-zinc-900">
+                  {[compareBodyA, compareBodyB].map((entry, idx) => (
+                    <div key={entry?.id || idx} className="relative overflow-hidden bg-black flex items-center justify-center" onClick={() => setBodyPhotoZoom(prev => !prev)}>
+                      {entry?.photos?.[0] ? (
+                        <img
+                          src={entry.photos[0]}
+                          className={`h-full w-full object-cover transition-transform duration-300 ${bodyPhotoZoom ? 'scale-150' : 'scale-100'}`}
+                          style={{ transformOrigin: 'center center' }}
+                        />
+                      ) : (
+                        <div className="px-3 text-center text-xs font-bold text-zinc-500">Нет фото</div>
+                      )}
+                      <div className="absolute left-2 bottom-3 right-2 rounded-2xl bg-black/55 px-3 py-2 backdrop-blur-md">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-white/80">{idx === 0 ? 'Было' : 'Стало'}</p>
+                        <p className="text-[10px] font-bold text-white/60 mt-0.5">{entry ? displayDate(entry.date) : '—'}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
