@@ -1283,23 +1283,6 @@
         setShowBodyEditor(prev => !prev);
       };
 
-      const addPhotosToBodyEntry = async (entryId, files) => {
-        const entry = bodyEntries.find(item => item.id === entryId);
-        if (!entry) return;
-        const slotsLeft = Math.max(0, 3 - countBodyPhotos(entry.photos));
-        const selected = Array.from(files || []).slice(0, slotsLeft);
-        if (!selected.length) {
-          alert('На одну запись можно добавить до 3 фото: анфас, бок и спина.');
-          return;
-        }
-        try {
-          const photos = await Promise.all(selected.map(compressPhoto));
-          saveBodyEntries(bodyEntries.map(item => item.id === entryId ? { ...item, photos: fillBodyPhotoSlots(item.photos, photos) } : item));
-        } catch (err) {
-          alert('Не удалось добавить фото: ' + err.message);
-        }
-      };
-
       const removeBodyEntryPhoto = (entryId, photoIndex) => {
         saveBodyEntries(bodyEntries.map(item => item.id === entryId ? { ...item, photos: (item.photos || []).map((photo, idx) => idx === photoIndex ? null : photo) } : item));
       };
@@ -2501,11 +2484,7 @@
                             <p className="text-sm font-black text-zinc-100">{displayDate(entry.date)}</p>
                             <p className="text-[10px] text-zinc-500 mt-1">{countBodyPhotos(entry.photos)} фото</p>
                           </div>
-                          <div className="shrink-0 flex items-center gap-1">
-                            <label className="btn-active rounded-xl bg-indigo-500/15 text-indigo-200 px-3 py-2 text-[10px] font-bold border border-indigo-400/15">
-                              Фото
-                              <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addPhotosToBodyEntry(entry.id, e.target.files); e.target.value = ''; }} />
-                            </label>
+                          <div className="shrink-0">
                             <button type="button" onClick={() => deleteBodyEntry(entry.id)} className="btn-active text-zinc-700 active:text-red-400 p-2"><IconTrash className="w-5 h-5" /></button>
                           </div>
                         </div>
