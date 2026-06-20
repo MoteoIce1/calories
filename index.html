@@ -605,6 +605,7 @@
     ];
 
     const EMPTY_BODY_MEASURES = BODY_MEASURE_FIELDS.reduce((acc, field) => ({ ...acc, [field.key]: '' }), {});
+    const BODY_PHOTO_LABELS = ['Анфас', 'Бок', 'Спина'];
 
     const INITIAL_BODY_ENTRIES = [
       { id: 'body-2026-03-02', date: '2026-03-02', measures: { waist: 96, chest: 99, neck: 36, hips: 96, bicepsRelaxed: 32, bicepsFlexed: 37, thigh: 52 }, photos: [] },
@@ -690,7 +691,7 @@
       );
     };
 
-    const MiniWeightChart = ({ data, dates }) => {
+    const MiniWeightChart = ({ title = 'Динамика веса', data, dates, color = '#8c78c6', unit = 'кг' }) => {
       const points = (data || [])
         .map((v, i) => ({ v: Number(v), i, raw: v }))
         .filter(p => p.raw !== null && p.raw !== undefined && p.raw !== '' && !isNaN(p.v));
@@ -711,12 +712,12 @@
       return (
         <div className="card-enter bg-zinc-900/40 rounded-2xl border border-zinc-800/40 p-3 mb-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">Динамика веса</span>
-            <span className={`text-[11px] font-bold ${delta > 0 ? 'text-red-400' : delta < 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>{delta > 0 ? '+' : ''}{delta} кг</span>
+            <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">{title}</span>
+            <span className={`text-[11px] font-bold ${delta > 0 ? 'text-red-400' : delta < 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>{delta > 0 ? '+' : ''}{delta} {unit}</span>
           </div>
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block">
             <line x1={padX} y1={yFor((yMin + yMax) / 2)} x2={W - padX} y2={yFor((yMin + yMax) / 2)} stroke="rgba(142, 167, 195, 0.18)" strokeWidth="1" />
-            <polyline points={line} fill="none" stroke="#8c78c6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            <polyline points={line} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
             {points.map((p, idx) => <circle key={idx} cx={xFor(p.i)} cy={yFor(p.v)} r="3" fill="#aeb8ff" />)}
             <text x={padX} y={H - 2} fontSize="9" fill="#71717a">{dates[points[0].i]}</text>
             <text x={W - padX} y={H - 2} textAnchor="end" fontSize="9" fill="#71717a">{dates[points[points.length - 1].i]}</text>
@@ -777,7 +778,9 @@
       const [foods, setFoods] = useState([]);
       const [bodyEntries, setBodyEntries] = useState(INITIAL_BODY_ENTRIES);
       const [bodyDraft, setBodyDraft] = useState({ date: getLocalDateString(new Date()), measures: { ...EMPTY_BODY_MEASURES }, photos: [] });
-      const [compareBodyIds, setCompareBodyIds] = useState(['body-2026-03-02', 'body-2026-05-26']);
+      const [compareBodyIds, setCompareBodyIds] = useState(['', '']);
+      const [comparePhotoIndexes, setComparePhotoIndexes] = useState([0, 0]);
+      const [showBodyEditor, setShowBodyEditor] = useState(false);
       const [showBodyPhotoCompare, setShowBodyPhotoCompare] = useState(false);
       const [bodyPhotoZoom, setBodyPhotoZoom] = useState(false);
       const [singleBodyPhoto, setSingleBodyPhoto] = useState(null);
@@ -1177,6 +1180,9 @@
         if (profileDoc) profileDoc.set({ bodyEntries: sorted }, { merge: true });
       };
 
+      const getBodyPhotoSrc = (photo) => typeof photo === 'string' ? photo : photo?.src;
+      const getBodyPhotoLabel = (photo, idx) => typeof photo === 'string' ? (BODY_PHOTO_LABELS[idx] || `Фото ${idx + 1}`) : (photo?.label || BODY_PHOTO_LABELS[idx] || `Фото ${idx + 1}`);
+
       const compressPhoto = (file) => new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
@@ -1199,11 +1205,12 @@
       });
 
       const handleBodyPhotoFiles = async (files) => {
-        const selected = Array.from(files || []).slice(0, 4);
+        const selected = Array.from(files || []).slice(0, 3 - bodyDraft.photos.length);
         if (!selected.length) return;
         try {
-          const photos = await Promise.all(selected.map(compressPhoto));
-          setBodyDraft(prev => ({ ...prev, photos: [...prev.photos, ...photos].slice(0, 4) }));
+          const startIndex = bodyDraft.photos.length;
+          const photos = (await Promise.all(selected.map(compressPhoto))).map((src, idx) => ({ src, label: BODY_PHOTO_LABELS[startIndex + idx] || `Фото ${startIndex + idx + 1}` }));
+          setBodyDraft(prev => ({ ...prev, photos: [...prev.photos, ...photos].slice(0, 3) }));
         } catch (err) {
           alert('Не удалось добавить фото: ' + err.message);
         }
@@ -1212,15 +1219,16 @@
       const addPhotosToBodyEntry = async (entryId, files) => {
         const entry = bodyEntries.find(item => item.id === entryId);
         if (!entry) return;
-        const slotsLeft = Math.max(0, 4 - (entry.photos?.length || 0));
+        const slotsLeft = Math.max(0, 3 - (entry.photos?.length || 0));
         const selected = Array.from(files || []).slice(0, slotsLeft);
         if (!selected.length) {
-          alert('На одну запись можно добавить до 4 фото.');
+          alert('На одну запись можно добавить до 3 фото: анфас, бок и спина.');
           return;
         }
         try {
-          const photos = await Promise.all(selected.map(compressPhoto));
-          saveBodyEntries(bodyEntries.map(item => item.id === entryId ? { ...item, photos: [...(item.photos || []), ...photos].slice(0, 4) } : item));
+          const startIndex = entry.photos?.length || 0;
+          const photos = (await Promise.all(selected.map(compressPhoto))).map((src, idx) => ({ src, label: BODY_PHOTO_LABELS[startIndex + idx] || `Фото ${startIndex + idx + 1}` }));
+          saveBodyEntries(bodyEntries.map(item => item.id === entryId ? { ...item, photos: [...(item.photos || []), ...photos].slice(0, 3) } : item));
         } catch (err) {
           alert('Не удалось добавить фото: ' + err.message);
         }
@@ -1435,12 +1443,24 @@
       const showBodyReminder = daysSinceBodyEntry >= 14 && dismissedBodyReminderDate !== getLocalDateString(new Date());
       const compareBodyA = bodyEntries.find(entry => entry.id === compareBodyIds[0]) || bodyEntryOptions[0];
       const compareBodyB = bodyEntries.find(entry => entry.id === compareBodyIds[1]) || bodyEntryOptions[bodyEntryOptions.length - 1];
+      const comparePhotoA = compareBodyA?.photos?.[comparePhotoIndexes[0]] || compareBodyA?.photos?.[0];
+      const comparePhotoB = compareBodyB?.photos?.[comparePhotoIndexes[1]] || compareBodyB?.photos?.[0];
       const recentWeightDates = Object.keys(dailyMetrics)
         .filter(date => date <= currentDate && dailyMetrics[date]?.weight)
         .sort()
         .slice(-14);
       const recentWeightValues = recentWeightDates.map(date => dailyMetrics[date]?.weight);
       const recentWeightLabels = recentWeightDates.map(date => date.slice(5));
+      const metricChartDates = Object.keys(dailyMetrics)
+        .filter(date => dailyMetrics[date] && Object.keys(dailyMetrics[date]).some(field => dailyMetrics[date][field]))
+        .sort();
+      const metricChartLabels = metricChartDates.map(date => date.slice(5));
+      const metricChartSeries = [
+        { key: 'weight', title: 'Вес', unit: 'кг', color: '#8c78c6' },
+        { key: 'fatPercent', title: 'Жир', unit: '%', color: '#e06d6d' },
+        { key: 'leanMass', title: 'БЖМ', unit: 'кг', color: '#7f8ed8' },
+        { key: 'fatMass', title: 'Масса жира', unit: 'кг', color: '#c6a56d' },
+      ].map(series => ({ ...series, data: metricChartDates.map(date => dailyMetrics[date]?.[series.key]) }));
 
       const allDatesSet = new Set([
          ...Object.keys(dailyLogs).filter(d => d >= exportStart && d <= exportEnd),
@@ -2065,7 +2085,7 @@
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button type="button" onClick={refreshCurrentDayVitals} disabled={isRefreshingDay || !uid} className="btn-active w-10 h-10 rounded-xl bg-zinc-800 text-zinc-300 flex items-center justify-center border border-zinc-700/30 disabled:opacity-40 transition-all" title="Обновить шаги и замеры">
+                        <button type="button" onClick={refreshCurrentDayVitals} disabled={isRefreshingDay || !uid} className="btn-active w-10 h-10 rounded-xl bg-zinc-800 text-zinc-300 flex items-center justify-center border border-zinc-700/30 disabled:opacity-40 transition-all" title="Обновить шаги">
                           <IconRefresh className={`w-5 h-5 ${isRefreshingDay ? 'animate-spin' : ''}`} />
                         </button>
                         <input type="number" className="w-24 bg-zinc-800 rounded-xl p-2 text-center text-sm font-bold outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={todaySteps} onChange={(e) => handleUpdateSteps(e.target.value)} onFocus={(e) => e.target.select()} />
@@ -2082,19 +2102,6 @@
                       </div>
                     </button>
 
-                    <div className="grid grid-cols-4 gap-2 mb-4">
-                      {['weight', 'fatPercent', 'leanMass', 'fatMass'].map((field, i) => (
-                        <div key={field} className="bg-[#27272a] rounded-xl p-2 flex flex-col items-center border border-zinc-700/50">
-                          <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest mb-1 text-center leading-tight">
-                            {field === 'weight' ? 'Вес' : field === 'fatPercent' ? 'Жир %' : field === 'leanMass' ? 'БЖМ' : 'Жир кг'}
-                          </span>
-                          <input type="number" step="0.1" className="w-full bg-transparent text-center text-sm font-bold text-zinc-200 outline-none" value={dailyMetrics[currentDate]?.[field] || ''} onChange={(e) => handleUpdateMetrics(field, e.target.value)} onFocus={(e) => e.target.select()} />
-                        </div>
-                      ))}
-                    </div>
-
-                    <MiniWeightChart data={recentWeightValues} dates={recentWeightLabels} />
-                    
                     <div className="flex flex-col gap-3 mt-4 border-t border-zinc-800/50 pt-4">
                       <MacroBar label="Белок" current={totalPro} goal={activeGoals.protein} colorClass="text-indigo-400" bgClass="bg-indigo-500" />
                       <MacroBar label="Жиры" current={totalFats} goal={activeGoals.fats} colorClass="text-amber-400" bgClass="bg-amber-500" />
@@ -2216,6 +2223,54 @@
                     </div>
                   )}
 
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <h2 className="text-sm font-bold text-zinc-100">Показатели тела</h2>
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mt-1">Вес, жир, БЖМ</p>
+                      </div>
+                      <div className="relative shrink-0 bg-zinc-900 rounded-xl px-3 py-2 border border-zinc-800/70">
+                        <span className="text-xs font-bold text-zinc-200">{displayDate(currentDate)}</span>
+                        <input type="date" className="absolute inset-0 opacity-0" value={currentDate} max={getLocalDateString(new Date())} onChange={(e) => { if(e.target.value) setCurrentDate(e.target.value); }} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                      {['weight', 'fatPercent', 'leanMass', 'fatMass'].map((field) => (
+                        <div key={field} className="bg-[#27272a] rounded-xl p-2 flex flex-col items-center border border-zinc-700/50">
+                          <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest mb-1 text-center leading-tight">
+                            {field === 'weight' ? 'Вес' : field === 'fatPercent' ? 'Жир %' : field === 'leanMass' ? 'БЖМ' : 'Жир кг'}
+                          </span>
+                          <input type="number" step="0.1" className="w-full bg-transparent text-center text-sm font-bold text-zinc-200 outline-none" value={dailyMetrics[currentDate]?.[field] || ''} onChange={(e) => handleUpdateMetrics(field, e.target.value)} onFocus={(e) => e.target.select()} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {metricChartSeries.some(series => series.data.filter(v => v !== null && v !== undefined && v !== '' && !isNaN(Number(v))).length >= 2) && (
+                    <div className="space-y-3">
+                      <h2 className="px-1 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Графики тела</h2>
+                      {metricChartSeries.map(series => (
+                        <MiniWeightChart key={series.key} title={series.title} data={series.data} dates={metricChartLabels} color={series.color} unit={series.unit} />
+                      ))}
+                    </div>
+                  )}
+
+                  {bodyMeasureSeries.length > 0 && (
+                    <div className="space-y-3">
+                      <h2 className="px-1 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Графики замеров</h2>
+                      {bodyMeasureSeries.map(series => (
+                        <MiniWeightChart key={series.key} title={series.label} data={series.data} dates={bodyMeasureDates} color={series.color} unit="см" />
+                      ))}
+                    </div>
+                  )}
+
+                  <button type="button" onClick={() => setShowBodyEditor(prev => !prev)} className="btn-active w-full rounded-3xl bg-zinc-900/70 border border-zinc-800/70 p-4 flex items-center justify-between">
+                    <span className="text-sm font-black text-zinc-100">{showBodyEditor ? 'Скрыть фото и замеры' : 'Открыть фото и замеры'}</span>
+                    <span className="text-lg text-zinc-500">{showBodyEditor ? '−' : '+'}</span>
+                  </button>
+
+                  {showBodyEditor && (
+                  <>
                   <form onSubmit={addBodyEntry} className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
@@ -2244,7 +2299,7 @@
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-xs font-bold text-zinc-200">Фото прогресса</p>
-                          <p className="text-[10px] text-zinc-500 mt-1">До 4 фото на запись, они сжимаются перед сохранением.</p>
+                          <p className="text-[10px] text-zinc-500 mt-1">До 3 фото: анфас, бок, спина. Они сжимаются перед сохранением.</p>
                         </div>
                         <label className="btn-active shrink-0 rounded-xl bg-indigo-500/20 text-indigo-200 px-3 py-2 text-[10px] font-bold uppercase tracking-widest border border-indigo-400/20">
                           Добавить
@@ -2252,10 +2307,11 @@
                         </label>
                       </div>
                       {bodyDraft.photos.length > 0 && (
-                        <div className="grid grid-cols-4 gap-2 mt-3">
+                        <div className="grid grid-cols-3 gap-2 mt-3">
                           {bodyDraft.photos.map((photo, idx) => (
                             <div key={idx} className="relative aspect-[3/4] rounded-xl overflow-hidden border border-zinc-700/60 bg-zinc-950">
-                              <img src={photo} className="w-full h-full object-cover" />
+                              <img src={getBodyPhotoSrc(photo)} className="w-full h-full object-cover" />
+                              <span className="absolute left-1 bottom-1 rounded-full bg-black/60 px-2 py-0.5 text-[8px] font-bold text-white/80">{getBodyPhotoLabel(photo, idx)}</span>
                               <button type="button" onClick={() => setBodyDraft(prev => ({ ...prev, photos: prev.photos.filter((_, i) => i !== idx) }))} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 text-white text-xs">×</button>
                             </div>
                           ))}
@@ -2274,8 +2330,16 @@
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         {[0, 1].map(idx => (
-                          <select key={idx} className="w-full min-w-0 bg-zinc-900 border border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none" value={compareBodyIds[idx] || ''} onChange={(e) => setCompareBodyIds(prev => idx === 0 ? [e.target.value, prev[1]] : [prev[0], e.target.value])}>
+                          <select key={idx} className="w-full min-w-0 bg-zinc-900 border border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none" value={compareBodyIds[idx] || (idx === 0 ? compareBodyA?.id : compareBodyB?.id) || ''} onChange={(e) => { setCompareBodyIds(prev => idx === 0 ? [e.target.value, prev[1]] : [prev[0], e.target.value]); setComparePhotoIndexes(prev => idx === 0 ? [0, prev[1]] : [prev[0], 0]); }}>
                             {bodyEntryOptions.map(entry => <option key={entry.id} value={entry.id}>{displayDate(entry.date)}</option>)}
+                          </select>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[compareBodyA, compareBodyB].map((entry, idx) => (
+                          <select key={idx} className="w-full min-w-0 bg-zinc-900/70 border border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none" value={comparePhotoIndexes[idx]} onChange={(e) => setComparePhotoIndexes(prev => idx === 0 ? [Number(e.target.value), prev[1]] : [prev[0], Number(e.target.value)])}>
+                            {(entry?.photos || []).map((photo, photoIdx) => <option key={photoIdx} value={photoIdx}>{getBodyPhotoLabel(photo, photoIdx)}</option>)}
+                            {!(entry?.photos || []).length && <option value="0">Нет фото</option>}
                           </select>
                         ))}
                       </div>
@@ -2286,13 +2350,13 @@
                           <button type="button" onClick={() => { setBodyPhotoZoom(false); setShowBodyPhotoCompare(true); }} className="btn-active text-[10px] font-bold text-violet-200 bg-violet-500/15 border border-violet-400/15 rounded-xl px-3 py-2">На весь экран</button>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
-                          {[compareBodyA, compareBodyB].map((entry, idx) => (
+                          {[[compareBodyA, comparePhotoA], [compareBodyB, comparePhotoB]].map(([entry, photo], idx) => (
                             <div key={entry?.id || idx} className="rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-800">
                               <div className="aspect-[9/16] bg-zinc-900 relative">
-                                {entry?.photos?.[0] ? <img src={entry.photos[0]} className="w-full h-full object-contain" /> : <div className="h-full flex items-center justify-center text-[10px] text-zinc-600 font-bold uppercase text-center px-2">Нет фото</div>}
+                                {getBodyPhotoSrc(photo) ? <img src={getBodyPhotoSrc(photo)} className="w-full h-full object-contain" /> : <div className="h-full flex items-center justify-center text-[10px] text-zinc-600 font-bold uppercase text-center px-2">Нет фото</div>}
                                 <span className="absolute left-2 top-2 rounded-full bg-black/30 px-2 py-1 text-[9px] font-black text-white/65">{idx === 0 ? 'Было' : 'Стало'}</span>
                               </div>
-                              <p className="p-2 text-center text-[10px] font-bold text-zinc-400">{entry ? displayDate(entry.date) : '—'}</p>
+                              <p className="p-2 text-center text-[10px] font-bold text-zinc-400">{entry ? `${displayDate(entry.date)} · ${getBodyPhotoLabel(photo, comparePhotoIndexes[idx])}` : '—'}</p>
                             </div>
                           ))}
                         </div>
@@ -2338,12 +2402,13 @@
                           </div>
                         </div>
                         {entry.photos?.length > 0 && (
-                          <div className="grid grid-cols-4 gap-2 mb-3">
+                          <div className="grid grid-cols-3 gap-2 mb-3">
                             {entry.photos.map((photo, idx) => (
                               <div key={idx} className="relative aspect-[3/4] rounded-xl overflow-hidden border border-zinc-700/60 bg-zinc-950">
-                                <button type="button" onClick={() => { setSingleBodyPhotoZoom(false); setSingleBodyPhoto({ src: photo, date: entry.date }); }} className="block w-full h-full">
-                                  <img src={photo} className="w-full h-full object-cover" />
+                                <button type="button" onClick={() => { setSingleBodyPhotoZoom(false); setSingleBodyPhoto({ src: getBodyPhotoSrc(photo), date: entry.date, label: getBodyPhotoLabel(photo, idx) }); }} className="block w-full h-full">
+                                  <img src={getBodyPhotoSrc(photo)} className="w-full h-full object-cover" />
                                 </button>
+                                <span className="absolute left-1 bottom-1 rounded-full bg-black/60 px-2 py-0.5 text-[8px] font-bold text-white/80">{getBodyPhotoLabel(photo, idx)}</span>
                                 <button type="button" onClick={() => removeBodyEntryPhoto(entry.id, idx)} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white text-[10px]">×</button>
                               </div>
                             ))}
@@ -2360,6 +2425,8 @@
                       </div>
                     ))}
                   </div>
+                  </>
+                  )}
                 </div>
               )}
 
@@ -2546,11 +2613,11 @@
                 </div>
 
                 <div className="grid grid-rows-2 gap-px flex-1 min-h-0 bg-zinc-900">
-                  {[compareBodyA, compareBodyB].map((entry, idx) => (
+                  {[[compareBodyA, comparePhotoA], [compareBodyB, comparePhotoB]].map(([entry, photo], idx) => (
                     <div key={entry?.id || idx} className="relative overflow-hidden bg-black flex items-center justify-center" onClick={() => setBodyPhotoZoom(prev => !prev)}>
-                      {entry?.photos?.[0] ? (
+                      {getBodyPhotoSrc(photo) ? (
                         <img
-                          src={entry.photos[0]}
+                          src={getBodyPhotoSrc(photo)}
                           className={`h-full w-full object-contain transition-transform duration-300 ${bodyPhotoZoom ? 'scale-125' : 'scale-100'}`}
                           style={{ transformOrigin: 'center center' }}
                         />
@@ -2559,7 +2626,7 @@
                       )}
                       <div className="absolute left-3 top-14 inline-flex flex-col rounded-2xl bg-black/25 px-3 py-2 backdrop-blur-sm">
                         <p className="text-[10px] font-black uppercase tracking-widest text-white/55 leading-none">{idx === 0 ? 'Было' : 'Стало'}</p>
-                        <p className="text-[9px] font-bold text-white/35 mt-1 leading-none">{entry ? displayDate(entry.date) : '—'}</p>
+                        <p className="text-[9px] font-bold text-white/35 mt-1 leading-none">{entry ? `${displayDate(entry.date)} · ${getBodyPhotoLabel(photo, comparePhotoIndexes[idx])}` : '—'}</p>
                       </div>
                     </div>
                   ))}
@@ -2575,7 +2642,7 @@
                 </div>
                 <button type="button" onClick={() => setSingleBodyPhotoZoom(prev => !prev)} className="relative flex-1 min-h-0 p-0 bg-black overflow-hidden">
                   <img src={singleBodyPhoto.src} className={`w-full h-full object-contain transition-transform duration-300 ${singleBodyPhotoZoom ? 'scale-125' : 'scale-100'}`} />
-                  <span className="absolute left-3 bottom-4 rounded-full bg-black/25 border border-white/5 px-3 py-1.5 text-[10px] font-bold text-white/45 backdrop-blur-sm">{displayDate(singleBodyPhoto.date)}</span>
+                  <span className="absolute left-3 bottom-4 rounded-full bg-black/25 border border-white/5 px-3 py-1.5 text-[10px] font-bold text-white/45 backdrop-blur-sm">{displayDate(singleBodyPhoto.date)} · {singleBodyPhoto.label || 'Фото'}</span>
                 </button>
               </div>
             )}
