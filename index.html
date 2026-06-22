@@ -2286,14 +2286,13 @@
                   </div>
 
                   <form ref={mealFormRef} onSubmit={handleAddLog} className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center">
                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</span>
-                      <button type="button" onClick={(e) => { e.stopPropagation(); copyPreviousDay(); }} className="btn-active text-[10px] font-bold text-emerald-400 bg-emerald-900/20 px-3 py-1.5 rounded-lg transition-all">Копировать вчера</button>
                     </div>
 
                     {/* Избранное — отдельная строка сверху */}
                     {favoriteFoods.length > 0 && (
-                      <div className="hscroll-fade flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="hscroll-fade flex gap-2 overflow-x-auto py-2 -my-2 px-1 -mx-1" onClick={(e) => e.stopPropagation()}>
                         {favoriteFoods.map(f => (
                           <button type="button" key={f.id} onClick={() => selectedFoodId === f.id ? clearFoodSelection() : selectFood(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
                         ))}
@@ -2328,9 +2327,9 @@
                     </div>
 
                     {/* «Не выбрано» — вне прокрутки (за ней ничего не видно); справа прокручиваемый список не‑избранных продуктов */}
-                    <div className="flex items-start gap-2 -mx-1 px-1" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-2 -mx-1 px-1" onClick={(e) => e.stopPropagation()}>
                       <button type="button" onClick={clearFoodSelection} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${!selectedFoodId ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-emerald-300 border-emerald-700/40'}`}>Не выбрано</button>
-                      <div ref={mealListScrollRef} className="hscroll-fade flex gap-2 overflow-x-auto pb-1 min-w-0">
+                      <div ref={mealListScrollRef} className="hscroll-fade flex gap-2 overflow-x-auto py-2 -my-2 pl-1 -ml-1 min-w-0">
                         {mealListFoods.map(f => (
                           <button type="button" key={f.id} onClick={() => selectFood(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
                         ))}
