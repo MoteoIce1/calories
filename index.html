@@ -897,7 +897,6 @@
       const scrollContainerRef = useRef(null);
       const bodyEditorScrollRef = useRef(null);
       const mealFormRef = useRef(null);
-      const foodSuggestRef = useRef(null);
       const foodSearchRef = useRef(null);
       const gramsInputRef = useRef(null);
       const initialGoalsRef = useRef(false);
@@ -1141,134 +1140,16 @@
         gramsInputRef.current?.blur();
       };
 
-      const kbTrackRef = useRef(null);
-      // iOS рисует над клавиатурой системную панель (стрелки + «Готово») ~44px, убрать её из веба нельзя.
-      // На iOS visualViewport.height её не вычитает, поэтому учитываем сами; на Android/десктопе панели нет.
-      const IS_IOS = typeof navigator !== 'undefined' && (/iP(hone|od|ad)/.test(navigator.platform) || (/Mac/.test(navigator.platform) && navigator.maxTouchPoints > 1));
-      const KB_ACCESSORY = IS_IOS ? 26 : 0;
-      const KB_GAP = 4; // небольшой воздух между полем и панелью/клавиатурой
-
-      const keepMealFormAboveKeyboard = () => {
-        const container = scrollContainerRef.current;
-        const form = mealFormRef.current;
-        const vv = window.visualViewport;
-        if (!container || !form || !vv) return;
-
-        // Сбрасываем прошлый трекер, чтобы не наслаивались анимации.
-        if (kbTrackRef.current) kbTrackRef.current();
-
-        let cancelled = false;
-        let raf = 0;
-        let lastListVvH = -1;
-        let stable = 0;
-        const t0 = performance.now();
-
-        // Высоту списка подсказок подстраиваем только когда меняется visualViewport (открытие клавиатуры),
-        // чтобы не было рефлоу каждый кадр. Список остаётся виден ("Не выбрано" + продукты) и скроллится внутри.
-        const syncListHeight = () => {
-          const list = foodSuggestRef.current;
-          if (!list || Math.abs(vv.height - lastListVvH) < 2) return;
-          lastListVvH = vv.height;
-          // Желаемая высота — ровно "Не выбрано" + 2 продукта (по реальной высоте первых 3 строк),
-          // остальное скроллится внутри списка.
-          let want = 0;
-          const kids = list.children;
-          for (let i = 0; i < Math.min(3, kids.length); i++) want += kids[i].offsetHeight;
-          want += 2; // запас на разделители
-          // Но не больше, чем влезает над клавиатурой (на маленьких экранах ужимаем сильнее).
-          const otherH = form.getBoundingClientRect().height - list.getBoundingClientRect().height;
-          const available = vv.height - KB_ACCESSORY - KB_GAP * 2 - otherH;
-          const h = Math.max(96, Math.min(want || 168, available));
-          list.style.maxHeight = h + 'px';
-          list.style.minHeight = h + 'px';
-        };
-
-        // Цель фиксирована относительно экрана: низ формы — над панелью iOS/клавиатурой.
-        // Снизу добавляем запас, чтобы скролла всегда хватало дойти до этой точки из любого положения.
-        const computeTarget = () => {
-          const kbOverlap = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
-          container.style.paddingBottom = (kbOverlap + KB_ACCESSORY + 32) + 'px';
-          syncListHeight();
-          const formBottom = form.getBoundingClientRect().bottom;
-          const visibleBottom = vv.offsetTop + vv.height - KB_ACCESSORY - KB_GAP;
-          const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
-          return Math.max(0, Math.min(maxScroll, container.scrollTop + (formBottom - visibleBottom)));
-        };
-
-        // Следящая анимация: каждый кадр сами пишем scrollTop (перекрывая нативный скролл браузера)
-        // и плавно тянем к цели. Цель поднимается вместе с клавиатурой → движение одно и плавное,
-        // а финальная точка всегда одна и та же независимо от стартовой позиции скролла.
-        const follow = (now) => {
-          if (cancelled) return;
-          const target = computeTarget();
-          const cur = container.scrollTop;
-          const diff = target - cur;
-          if (Math.abs(diff) < 0.5) { container.scrollTop = target; stable++; }
-          else { container.scrollTop = cur + diff * 0.2; stable = 0; }
-          const elapsed = now - t0;
-          if (stable >= 4 && elapsed > 360) return;   // дошли и стабильно — стоп
-          if (elapsed > 1300) return;                 // жёсткий предел
-          raf = requestAnimationFrame(follow);
-        };
-        raf = requestAnimationFrame(follow);
-
-        // Держим цикл живым на время открытия клавиатуры (когда приходят события resize).
-        const onResize = () => { stable = 0; if (!cancelled) { cancelAnimationFrame(raf); raf = requestAnimationFrame(follow); } };
-        vv.addEventListener('resize', onResize);
-
-        const cancel = () => {
-          cancelled = true;
-          cancelAnimationFrame(raf);
-          vv.removeEventListener('resize', onResize);
-        };
-        kbTrackRef.current = cancel;
-      };
-
-      // Полный сброс — только когда фокус ушёл со всех полей формы (а не при переходе поиск → вес).
-      const releaseKbTrackIfBlurred = () => setTimeout(() => {
-        const active = document.activeElement;
-        if (active === foodSearchRef.current || active === gramsInputRef.current) return;
-        setFoodSearchFocused(false);
-        if (kbTrackRef.current) { kbTrackRef.current(); kbTrackRef.current = null; }
-        const container = scrollContainerRef.current;
-        if (!container) return;
-        // Плавно сворачиваем нижний запас в такт закрытию клавиатуры, а не убираем рывком.
-        const startPad = parseFloat(container.style.paddingBottom) || 0;
-        if (startPad <= 0) { container.style.paddingBottom = ''; return; }
-        const t0 = performance.now();
-        const dur = 280;
-        const ease = (t) => 1 - Math.pow(1 - t, 3); // easeOutCubic
-        const step = (now) => {
-          const p = Math.min(1, (now - t0) / dur);
-          container.style.paddingBottom = (startPad * (1 - ease(p))) + 'px';
-          const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
-          if (container.scrollTop > maxScroll) container.scrollTop = maxScroll; // без скачка скролла
-          if (p < 1) requestAnimationFrame(step);
-          else container.style.paddingBottom = '';
-        };
-        requestAnimationFrame(step);
-        // Высоту списка не сбрасываем здесь: при наличии запроса он остаётся смонтированным
-        // (значение восстановится само при следующем открытии нового элемента).
-      }, 180);
-
       const selectFood = (foodId) => {
         setSelectedFoodId(foodId);
-        setFoodSearch('');
-        setFoodSearchFocused(false);
-        foodSearchRef.current?.blur();
-        // Переходим на поле граммов без задержки, чтобы клавиатура не прыгала
-        gramsInputRef.current?.focus();
-        // Позиционируем форму после того, как поле граммов получит фокус (микротаск)
-        Promise.resolve().then(() => keepMealFormAboveKeyboard());
+        // Нативно переводим фокус на вес (как в базе) — без спец. логики скролла/клавиатуры.
+        setTimeout(() => gramsInputRef.current?.focus(), 0);
       };
 
+      // Сброс выбора на «Не выбрано» (тап по чипу «Не выбрано» или в любом месте экрана).
       const clearFoodSelection = () => {
         setSelectedFoodId('');
         setFoodSearch('');
-        // Переходим на поле поиска без лишних задержек
-        setFoodSearchFocused(true);
-        foodSearchRef.current?.focus();
-        Promise.resolve().then(() => keepMealFormAboveKeyboard());
       };
 
       const handleAddLog = (e) => {
@@ -1691,16 +1572,8 @@
         ...foods.filter(f => !f.isFavorite).sort((a, b) => a.name.localeCompare(b.name, 'ru')),
       ];
       const visibleFoods = searchFoodsByName(sortedFoods, foodSearch);
-      const showFoodSuggestions = !selectedFoodId && (foodSearchFocused || foodSearch.trim().length > 0);
-      const suggestionFoods = foodSearch.trim()
-        ? visibleFoods
-        : sortedFoods.slice(0, 40);
-      const foodSearchHint = (() => {
-        const q = foodSearch.trim();
-        if (!q) return '';
-        if (q.length <= 2) return 'Введите больше букв или ищите с начала названия';
-        return 'Ничего не найдено';
-      })();
+      // Горизонтальный список продуктов под поиском: всегда виден, фильтруется по мере ввода в поиск.
+      const mealListFoods = foodSearch.trim() ? visibleFoods : sortedFoods;
       const selectedFood = selectedFoodId ? foods.find(f => f.id === selectedFoodId) : null;
       const sortedBodyEntries = [...bodyEntries].sort((a, b) => b.date.localeCompare(a.date));
       const bodyEntryOptions = [...bodyEntries].sort((a, b) => a.date.localeCompare(b.date));
@@ -2329,7 +2202,7 @@
               </div>
             </header>
 
-            <main ref={scrollContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden px-3 pt-2 pb-8">
+            <main ref={scrollContainerRef} onClick={() => { if (selectedFoodId) setSelectedFoodId(''); }} className="flex-1 overflow-y-auto overflow-x-hidden px-3 pt-2 pb-8">
               {activeTab === 'diary' && (
                 <div className="space-y-4">
                   <div className="card-enter flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
@@ -2398,42 +2271,29 @@
                     </div>
                   </div>
 
-                  <form ref={mealFormRef} onSubmit={handleAddLog} className={`card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-2 ${foodSearchFocused ? 'meal-form-search-active' : ''}`}>
-                    <div className="flex items-center justify-between mb-1">
+                  <form ref={mealFormRef} onSubmit={handleAddLog} className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</span>
-                      <button type="button" onClick={copyPreviousDay} className="btn-active text-[10px] font-bold text-emerald-400 bg-emerald-900/20 px-3 py-1.5 rounded-lg transition-all">Копировать вчера</button>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); copyPreviousDay(); }} className="btn-active text-[10px] font-bold text-emerald-400 bg-emerald-900/20 px-3 py-1.5 rounded-lg transition-all">Копировать вчера</button>
                     </div>
-                    {selectedFood && (
-                      <div className="flex items-center justify-between gap-3 bg-emerald-900/25 border border-emerald-700/35 rounded-2xl px-4 py-3">
-                        <div className="min-w-0">
-                          <span className="text-[10px] text-emerald-400 uppercase font-bold tracking-widest">Выбрано</span>
-                          <p className="font-bold text-sm text-emerald-200 truncate">{selectedFood.isFavorite ? '⭐️ ' : ''}{selectedFood.name}</p>
-                          <p className="text-[10px] text-zinc-500 mt-0.5">{selectedFood.calories} ккал / 100 г</p>
-                        </div>
-                        <button type="button" onClick={clearFoodSelection} className="btn-active shrink-0 w-10 h-10 rounded-xl bg-zinc-800 text-zinc-300 text-xl leading-none flex items-center justify-center border border-zinc-700/40" title="Сбросить выбор">×</button>
+
+                    {/* Избранное — отдельная строка сверху */}
+                    {favoriteFoods.length > 0 && (
+                      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" onClick={(e) => e.stopPropagation()}>
+                        {favoriteFoods.map(f => (
+                          <button type="button" key={f.id} onClick={() => selectedFoodId === f.id ? clearFoodSelection() : selectFood(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
+                        ))}
                       </div>
                     )}
-                    {!selectedFoodId && (
-                    <>
-                      {showFoodSuggestions && (
-                        <div ref={foodSuggestRef} className="food-suggestions min-h-[min(168px,38dvh)] max-h-[min(240px,38dvh)] overflow-y-auto rounded-2xl border border-zinc-700/40 bg-[#18181b] divide-y divide-zinc-800/70 overscroll-contain -webkit-overflow-scrolling-touch">
-                          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={clearFoodSelection} className="btn-active w-full text-left px-4 py-3 text-sm font-bold text-emerald-300 bg-emerald-900/30">
-                            Не выбрано
-                          </button>
-                          {suggestionFoods.length > 0 ? suggestionFoods.map(f => (
-                            <button type="button" onMouseDown={(e) => e.preventDefault()} key={f.id} onClick={() => selectFood(f.id)} className={`btn-active w-full text-left px-4 py-3 transition-colors ${selectedFoodId === f.id ? 'bg-emerald-900/40 text-emerald-300' : 'text-zinc-200'}`}>
-                              <span className="font-bold text-sm">{f.isFavorite ? '⭐️ ' : ''}{f.name}</span>
-                              <span className="block text-[10px] text-zinc-500 mt-1">{f.calories} ккал · Б {f.protein} · Ж {f.fats} · У {f.carbs}</span>
-                            </button>
-                          )) : (
-                            <div className="px-4 py-3 text-sm text-zinc-500">{foodSearchHint}</div>
-                          )}
-                          {!foodSearch.trim() && sortedFoods.length > suggestionFoods.length && (
-                            <div className="px-4 py-2 text-[10px] text-zinc-500 text-center bg-[#141416]">Начните вводить название для поиска по всей базе</div>
-                          )}
-                        </div>
-                      )}
-                    <div className="relative">
+
+                    {/* Вес + плюс */}
+                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                      <input ref={gramsInputRef} type="number" step="0.1" inputMode="decimal" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-base border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => e.target.select()} required />
+                      <button type="submit" disabled={!selectedFoodId || !gramsInput} className="btn-active w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-35 disabled:shadow-none"><IconPlus className="w-6 h-6 text-white" /></button>
+                    </div>
+
+                    {/* Поиск */}
+                    <div className="relative" onClick={(e) => e.stopPropagation()}>
                       <input
                         ref={foodSearchRef}
                         type="search"
@@ -2445,11 +2305,6 @@
                         className="w-full bg-[#27272a] rounded-2xl p-3 pr-14 outline-none text-zinc-200 text-base border border-zinc-700/30 focus:border-emerald-500"
                         value={foodSearch}
                         onChange={(e) => setFoodSearch(e.target.value)}
-                        onFocus={() => {
-                          setFoodSearchFocused(true);
-                          keepMealFormAboveKeyboard();
-                        }}
-                        onBlur={releaseKbTrackIfBlurred}
                       />
                       {foodSearch && (
                         <button type="button" onClick={() => { setFoodSearch(''); foodSearchRef.current?.focus(); }} className="btn-active absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-zinc-800 text-zinc-300 text-2xl leading-none flex items-center justify-center border border-zinc-700/40" title="Очистить поиск">
@@ -2457,18 +2312,16 @@
                         </button>
                       )}
                     </div>
-                    </>
-                    )}
-                    {!selectedFoodId && favoriteFoods.length > 0 && !foodSearchFocused && (
-                      <div className="flex gap-2 overflow-x-auto pt-1 pb-1 -mx-1 px-1">
-                        {favoriteFoods.map(f => (
-                          <button type="button" key={f.id} onClick={() => selectedFoodId === f.id ? clearFoodSelection() : selectFood(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <input ref={gramsInputRef} type="number" step="0.1" inputMode="decimal" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-base border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => { e.target.select(); keepMealFormAboveKeyboard(); }} onBlur={releaseKbTrackIfBlurred} required />
-                      <button type="submit" disabled={!selectedFoodId || !gramsInput} className="btn-active w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-35 disabled:shadow-none"><IconPlus className="w-6 h-6 text-white" /></button>
+
+                    {/* Горизонтальный список продуктов: всегда виден, «Не выбрано» закреплено слева, фильтруется по поиску */}
+                    <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" onClick={(e) => e.stopPropagation()}>
+                      <button type="button" onClick={clearFoodSelection} className={`btn-active sticky left-0 z-10 shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${!selectedFoodId ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-[#18181b] text-emerald-300 border-emerald-700/40'}`}>Не выбрано</button>
+                      {mealListFoods.map(f => (
+                        <button type="button" key={f.id} onClick={() => selectFood(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.isFavorite ? '⭐️ ' : ''}{f.name}</button>
+                      ))}
+                      {mealListFoods.length === 0 && (
+                        <span className="self-center text-xs text-zinc-500 px-2 py-2 whitespace-nowrap">Ничего не найдено</span>
+                      )}
                     </div>
                   </form>
 
