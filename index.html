@@ -548,6 +548,9 @@
     const profileRef = (uid) => db.collection('users').doc(uid);
     const dayRef = (uid, date) => db.collection('users').doc(uid).collection('days').doc(date);
     const daysCol = (uid) => db.collection('users').doc(uid).collection('days');
+    // Замеры тела — отдельный документ на запись (фото base64 в одном документе профиля упирались в лимит Firestore 1 МБ).
+    const bodyCol = (uid) => db.collection('users').doc(uid).collection('body');
+    const bodyDocRef = (uid, id) => db.collection('users').doc(uid).collection('body').doc(id);
     const legacyRef = db.collection('users').doc('main_profile'); // старая единая структура (для переноса)
 
     // Регистрируем service worker для офлайн-работы (кешируется оболочка и библиотеки с CDN)
@@ -945,8 +948,16 @@
         if (data.goals) profilePayload.goals = data.goals;
         if (data.dailyGoals) profilePayload.dailyGoals = data.dailyGoals;
         if (data.foods) profilePayload.foods = data.foods;
-        if (data.bodyEntries) profilePayload.bodyEntries = data.bodyEntries;
         if (Object.keys(profilePayload).length) await profileRef(uid).set(profilePayload, { merge: true });
+        // Замеры тела импортируем по одному документу в подколлекцию body (фото не влезают в лимит профиля).
+        if (Array.isArray(data.bodyEntries) && data.bodyEntries.length) {
+          for (let i = 0; i < data.bodyEntries.length; i += 400) {
+            const batch = db.batch();
+            data.bodyEntries.slice(i, i + 400).forEach((e) => { if (e && e.id) batch.set(bodyDocRef(uid, e.id), e); });
+            await batch.commit();
+          }
+          await profileRef(uid).set({ bodyMigrated: true }, { merge: true });
+        }
         const dates = new Set([
           ...Object.keys(data.dailyLogs || {}),
           ...Object.keys(data.dailySteps || {}),
@@ -1002,15 +1013,9 @@
             }
             setDailyGoals(data.dailyGoals || {});
             setFoods(data.foods && data.foods.length ? data.foods : HARDCODED_FOODS);
-            if (Array.isArray(data.bodyEntries)) setBodyEntries(data.bodyEntries);
-            else {
-              setBodyEntries(INITIAL_BODY_ENTRIES);
-              profileRef(uid).set({ bodyEntries: INITIAL_BODY_ENTRIES }, { merge: true }).catch(() => {});
-            }
+            // bodyEntries теперь живут в подколлекции body (см. отдельный слушатель и миграцию ниже).
           } else {
             setFoods(HARDCODED_FOODS);
-            setBodyEntries(INITIAL_BODY_ENTRIES);
-            profileRef(uid).set({ bodyEntries: INITIAL_BODY_ENTRIES }, { merge: true }).catch(() => {});
           }
           setIsLoading(false);
         }, (error) => { console.log("Firebase error", error); setIsLoading(false); });
@@ -1032,6 +1037,45 @@
           setDailyLogs(logs); setDailySteps(steps); setDailyMetrics(metrics); setDailyWorkouts(workouts);
         }, (e) => console.log("days listener error", e));
         return () => unsubscribe();
+      }, [uid]);
+
+      // Замеры тела: каждая запись — отдельный документ подколлекции body.
+      useEffect(() => {
+        if (!uid) return;
+        const unsubscribe = bodyCol(uid).onSnapshot((snap) => {
+          const entries = [];
+          snap.forEach((doc) => entries.push({ id: doc.id, ...doc.data() }));
+          entries.sort((a, b) => a.date.localeCompare(b.date));
+          setBodyEntries(entries);
+        }, (e) => console.log("body listener error", e));
+        return () => unsubscribe();
+      }, [uid]);
+
+      // Одноразовая миграция: старый массив profile.bodyEntries (или сиды) -> подколлекция body.
+      // Идемпотентно (фиксированные id), флаг bodyMigrated защищает от повторного запуска на других устройствах.
+      useEffect(() => {
+        if (!uid) return;
+        let cancelled = false;
+        (async () => {
+          try {
+            const profSnap = await profileRef(uid).get();
+            const pdata = profSnap.exists ? profSnap.data() : {};
+            if (cancelled || pdata.bodyMigrated) return;
+            const colSnap = await bodyCol(uid).get();
+            if (cancelled) return;
+            if (!colSnap.empty) { profileRef(uid).set({ bodyMigrated: true }, { merge: true }).catch(() => {}); return; }
+            const legacy = Array.isArray(pdata.bodyEntries) ? pdata.bodyEntries : null;
+            const source = (legacy && legacy.length) ? legacy : INITIAL_BODY_ENTRIES;
+            const batch = db.batch();
+            source.forEach((e) => batch.set(bodyDocRef(uid, e.id), e));
+            await batch.commit();
+            if (cancelled) return;
+            const upd = { bodyMigrated: true };
+            if (legacy) upd.bodyEntries = firebase.firestore.FieldValue.delete();
+            profileRef(uid).set(upd, { merge: true }).catch(() => {});
+          } catch (e) { console.log('body migration error', e); }
+        })();
+        return () => { cancelled = true; };
       }, [uid]);
 
       useEffect(() => {
@@ -1328,10 +1372,14 @@
         if (profileDoc) profileDoc.set({ foods: updatedFoods }, { merge: true });
       };
 
-      const saveBodyEntries = (entries) => {
-        const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
-        setBodyEntries(sorted);
-        if (profileDoc) profileDoc.set({ bodyEntries: sorted }, { merge: true });
+      // Сохранение/удаление одной записи замеров в подколлекции body (ошибки записи показываем — больше не молчим).
+      const persistBodyEntry = (entry) => {
+        setBodyEntries(prev => [...prev.filter(e => e.id !== entry.id), entry].sort((a, b) => a.date.localeCompare(b.date)));
+        if (uid) bodyDocRef(uid, entry.id).set(entry).catch(err => alert('Не удалось сохранить запись замеров: ' + err.message));
+      };
+      const removeBodyEntryDoc = (id) => {
+        setBodyEntries(prev => prev.filter(e => e.id !== id));
+        if (uid) bodyDocRef(uid, id).delete().catch(err => alert('Не удалось удалить запись: ' + err.message));
       };
 
       const getBodyPhotoSrc = (photo) => typeof photo === 'string' ? photo : photo?.src;
@@ -1400,7 +1448,9 @@
         if (!file) return;
         try {
           const src = await compressPhoto(file);
-          saveBodyEntries(bodyEntries.map(item => item.id === entryId ? { ...item, photos: setBodyPhotoAtSlot(item.photos, slotIndex, src) } : item));
+          const entry = bodyEntries.find(item => item.id === entryId);
+          if (!entry) return;
+          persistBodyEntry({ ...entry, photos: setBodyPhotoAtSlot(entry.photos, slotIndex, src) });
         } catch (err) {
           alert('Не удалось добавить фото: ' + err.message);
         }
@@ -1412,7 +1462,9 @@
       };
 
       const removeBodyEntryPhoto = (entryId, photoIndex) => {
-        saveBodyEntries(bodyEntries.map(item => item.id === entryId ? { ...item, photos: (item.photos || []).map((photo, idx) => idx === photoIndex ? null : photo) } : item));
+        const entry = bodyEntries.find(item => item.id === entryId);
+        if (!entry) return;
+        persistBodyEntry({ ...entry, photos: (entry.photos || []).map((photo, idx) => idx === photoIndex ? null : photo) });
       };
 
       const handleBodyMeasureChange = (field, value) => {
@@ -1438,7 +1490,7 @@
           measures,
           photos: bodyDraft.photos || [],
         };
-        saveBodyEntries([...bodyEntries, entry]);
+        persistBodyEntry(entry);
         setBodyDraft({ date: getLocalDateString(new Date()), measures: { ...EMPTY_BODY_MEASURES }, photos: [] });
         setDismissedBodyReminderDate('');
         localStorage.removeItem('body-reminder-dismissed');
@@ -1446,7 +1498,7 @@
 
       const deleteBodyEntry = (id) => {
         if (!confirm('Удалить замеры и фото за эту дату?')) return;
-        saveBodyEntries(bodyEntries.filter(entry => entry.id !== id));
+        removeBodyEntryDoc(id);
       };
 
       const dismissBodyReminder = () => {
