@@ -568,6 +568,64 @@
       }
     };
 
+    const normalizeFoodSearchQuery = (query) => query.toLowerCase().trim().replace(/\s+/g, ' ');
+
+    const getFoodNameWords = (name) => name.toLowerCase().split(/[\s,()\/\-–—+]+/).filter(Boolean);
+
+    const scoreFoodNameMatch = (name, query) => {
+      const normalizedName = name.toLowerCase();
+      const normalizedQuery = normalizeFoodSearchQuery(query);
+      if (!normalizedQuery) return 0;
+      if (normalizedName === normalizedQuery) return 1000;
+      if (normalizedName.startsWith(normalizedQuery)) return 900 - (normalizedName.length - normalizedQuery.length);
+
+      const words = getFoodNameWords(name);
+      let bestWordPrefix = -1;
+      for (const word of words) {
+        if (word === normalizedQuery) bestWordPrefix = Math.max(bestWordPrefix, 860);
+        else if (word.startsWith(normalizedQuery)) bestWordPrefix = Math.max(bestWordPrefix, 800 - (word.length - normalizedQuery.length));
+      }
+      if (bestWordPrefix >= 0) return bestWordPrefix;
+
+      if (normalizedQuery.length <= 2) return -1;
+
+      for (const word of words) {
+        const wordIndex = word.indexOf(normalizedQuery);
+        if (wordIndex === 0) continue;
+        if (wordIndex > 0) return 500 - wordIndex;
+      }
+
+      if (normalizedQuery.length >= 3) {
+        const substringIndex = normalizedName.indexOf(normalizedQuery);
+        if (substringIndex >= 0) return 350 - substringIndex;
+      }
+
+      if (normalizedQuery.length >= 3) {
+        let queryIndex = 0;
+        for (let i = 0; i < normalizedName.length && queryIndex < normalizedQuery.length; i++) {
+          if (normalizedName[i] === normalizedQuery[queryIndex]) queryIndex++;
+        }
+        if (queryIndex === normalizedQuery.length) return 180;
+      }
+
+      return -1;
+    };
+
+    const searchFoodsByName = (foods, query, limit = 40) => {
+      const normalizedQuery = normalizeFoodSearchQuery(query);
+      if (!normalizedQuery) return foods.slice(0, limit);
+      return foods
+        .map(food => ({ food, score: scoreFoodNameMatch(food.name, normalizedQuery) }))
+        .filter(item => item.score >= 0)
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          if (a.food.isFavorite !== b.food.isFavorite) return a.food.isFavorite ? -1 : 1;
+          return a.food.name.localeCompare(b.food.name, 'ru');
+        })
+        .slice(0, limit)
+        .map(item => item.food);
+    };
+
     // Скользящее среднее по последним N валидным точкам (сглаживает шум веса/воды)
     const movingAverage = (data, windowSize = 7) => {
       const result = [];
@@ -1539,11 +1597,17 @@
         ...favoriteFoods,
         ...foods.filter(f => !f.isFavorite).sort((a, b) => a.name.localeCompare(b.name, 'ru')),
       ];
-      const visibleFoods = sortedFoods.filter(f => f.name.toLowerCase().includes(foodSearch.toLowerCase().trim()));
+      const visibleFoods = searchFoodsByName(sortedFoods, foodSearch);
       const showFoodSuggestions = foodSearchFocused || foodSearch.trim().length > 0;
       const suggestionFoods = foodSearch.trim()
         ? visibleFoods
         : sortedFoods.slice(0, 40);
+      const foodSearchHint = (() => {
+        const q = foodSearch.trim();
+        if (!q) return '';
+        if (q.length <= 2) return 'Введите больше букв или ищите с начала названия';
+        return 'Ничего не найдено';
+      })();
       const selectedFood = selectedFoodId ? foods.find(f => f.id === selectedFoodId) : null;
       const sortedBodyEntries = [...bodyEntries].sort((a, b) => b.date.localeCompare(a.date));
       const bodyEntryOptions = [...bodyEntries].sort((a, b) => a.date.localeCompare(b.date));
@@ -2268,7 +2332,7 @@
                               <span className="block text-[10px] text-zinc-500 mt-1">{f.calories} ккал · Б {f.protein} · Ж {f.fats} · У {f.carbs}</span>
                             </button>
                           )) : (
-                            <div className="px-4 py-3 text-sm text-zinc-500">Ничего не найдено</div>
+                            <div className="px-4 py-3 text-sm text-zinc-500">{foodSearchHint}</div>
                           )}
                           {!foodSearch.trim() && sortedFoods.length > suggestionFoods.length && (
                             <div className="px-4 py-2 text-[10px] text-zinc-500 text-center bg-[#141416]">Начните вводить название для поиска по всей базе</div>
