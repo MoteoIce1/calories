@@ -604,14 +604,6 @@
         if (substringIndex >= 0) return 350 - substringIndex;
       }
 
-      if (normalizedQuery.length >= 3) {
-        let queryIndex = 0;
-        for (let i = 0; i < normalizedName.length && queryIndex < normalizedQuery.length; i++) {
-          if (normalizedName[i] === normalizedQuery[queryIndex]) queryIndex++;
-        }
-        if (queryIndex === normalizedQuery.length) return 180;
-      }
-
       return -1;
     };
 
@@ -2354,7 +2346,7 @@
                       />
                       {foodSearch && (
                         <button type="button" onClick={() => { setFoodSearch(''); foodSearchRef.current?.focus(); }} className="absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 bg-transparent text-zinc-400 flex items-center justify-center active:text-zinc-200" title="Очистить поиск">
-                          <IconClose className="w-8 h-8" />
+                          <IconClose className="w-12 h-12" />
                         </button>
                       )}
                     </div>
