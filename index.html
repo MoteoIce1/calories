@@ -205,7 +205,13 @@
 
     .food-suggestions {
       animation: dropdownIn 260ms var(--ease-out) both;
-      transform-origin: top center;
+      transform-origin: bottom center;
+      box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.45);
+    }
+
+    .meal-form-search-active {
+      position: relative;
+      z-index: 30;
     }
 
     .reorder-item {
@@ -815,6 +821,7 @@
       const [selectedFoodId, setSelectedFoodId] = useState('');
       const [gramsInput, setGramsInput] = useState('');
       const [foodSearch, setFoodSearch] = useState('');
+      const [foodSearchFocused, setFoodSearchFocused] = useState(false);
       const [newFood, setNewFood] = useState({ name: '', cals: '', pro: '', fat: '', carb: '' });
 
       const [editingLogId, setEditingLogId] = useState(null);
@@ -831,6 +838,9 @@
 
       const scrollContainerRef = useRef(null);
       const bodyEditorScrollRef = useRef(null);
+      const mealFormRef = useRef(null);
+      const foodSearchRef = useRef(null);
+      const gramsInputRef = useRef(null);
       const initialGoalsRef = useRef(false);
 
       // Авторизация: следим за состоянием входа
@@ -1063,6 +1073,53 @@
         setIsRefreshingDay(false);
       };
 
+      const resetMealForm = () => {
+        setSelectedFoodId('');
+        setGramsInput('');
+        setFoodSearch('');
+        setFoodSearchFocused(false);
+        foodSearchRef.current?.blur();
+        gramsInputRef.current?.blur();
+      };
+
+      const scrollMealFormIntoView = (options = {}) => {
+        const container = scrollContainerRef.current;
+        const anchor = foodSearchRef.current || mealFormRef.current;
+        if (!container || !anchor) return;
+        const leaveRoomForSuggestions = options.leaveRoomForSuggestions ?? foodSearchFocused;
+        const align = () => {
+          const containerRect = container.getBoundingClientRect();
+          const anchorRect = anchor.getBoundingClientRect();
+          const roomAbove = leaveRoomForSuggestions ? Math.min(280, window.innerHeight * 0.38) : 12;
+          const delta = anchorRect.top - (containerRect.top + roomAbove);
+          if (Math.abs(delta) > 4) container.scrollBy({ top: delta, behavior: 'smooth' });
+        };
+        align();
+        setTimeout(align, 280);
+        setTimeout(align, 560);
+      };
+
+      const selectFood = (foodId) => {
+        setSelectedFoodId(foodId);
+        setFoodSearch('');
+        setFoodSearchFocused(false);
+        foodSearchRef.current?.blur();
+        setTimeout(() => {
+          scrollMealFormIntoView();
+          gramsInputRef.current?.focus();
+        }, 120);
+      };
+
+      const clearFoodSelection = () => {
+        setSelectedFoodId('');
+        setFoodSearch('');
+        setTimeout(() => {
+          setFoodSearchFocused(true);
+          foodSearchRef.current?.focus();
+          scrollMealFormIntoView({ leaveRoomForSuggestions: true });
+        }, 50);
+      };
+
       const handleAddLog = (e) => {
         e.preventDefault();
         const food = foods.find(f => f.id === selectedFoodId);
@@ -1081,7 +1138,7 @@
         const updatedLogs = { ...dailyLogs, [currentDate]: [...(dailyLogs[currentDate] || []), newLog] };
         setDailyLogs(updatedLogs); 
         writeDay(currentDate, { logs: updatedLogs[currentDate] });
-        setSelectedFoodId(''); setGramsInput('');
+        resetMealForm();
       };
 
       const submitEdit = (logId) => {
@@ -1482,8 +1539,12 @@
         ...favoriteFoods,
         ...foods.filter(f => !f.isFavorite).sort((a, b) => a.name.localeCompare(b.name, 'ru')),
       ];
-      const visibleFoods = sortedFoods.filter(f => f.name.toLowerCase().includes(foodSearch.toLowerCase()));
-      const showFoodSuggestions = foodSearch.trim().length > 0;
+      const visibleFoods = sortedFoods.filter(f => f.name.toLowerCase().includes(foodSearch.toLowerCase().trim()));
+      const showFoodSuggestions = foodSearchFocused || foodSearch.trim().length > 0;
+      const suggestionFoods = foodSearch.trim()
+        ? visibleFoods
+        : sortedFoods.slice(0, 40);
+      const selectedFood = selectedFoodId ? foods.find(f => f.id === selectedFoodId) : null;
       const sortedBodyEntries = [...bodyEntries].sort((a, b) => b.date.localeCompare(a.date));
       const bodyEntryOptions = [...bodyEntries].sort((a, b) => a.date.localeCompare(b.date));
       const latestBodyEntry = bodyEntryOptions[bodyEntryOptions.length - 1];
@@ -2180,50 +2241,73 @@
                     </div>
                   </div>
 
-                  <form onSubmit={handleAddLog} className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-2">
+                  <form ref={mealFormRef} onSubmit={handleAddLog} className={`card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-2 ${foodSearchFocused ? 'meal-form-search-active' : ''}`}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</span>
                       <button type="button" onClick={copyPreviousDay} className="btn-active text-[10px] font-bold text-emerald-400 bg-emerald-900/20 px-3 py-1.5 rounded-lg transition-all">Копировать вчера</button>
                     </div>
+                    {selectedFood && !foodSearchFocused && (
+                      <div className="flex items-center justify-between gap-3 bg-emerald-900/25 border border-emerald-700/35 rounded-2xl px-4 py-3">
+                        <div className="min-w-0">
+                          <span className="text-[10px] text-emerald-400 uppercase font-bold tracking-widest">Выбрано</span>
+                          <p className="font-bold text-sm text-emerald-200 truncate">{selectedFood.isFavorite ? '⭐️ ' : ''}{selectedFood.name}</p>
+                          <p className="text-[10px] text-zinc-500 mt-0.5">{selectedFood.calories} ккал / 100 г</p>
+                        </div>
+                        <button type="button" onClick={clearFoodSelection} className="btn-active shrink-0 w-10 h-10 rounded-xl bg-zinc-800 text-zinc-300 text-xl leading-none flex items-center justify-center border border-zinc-700/40" title="Сбросить выбор">×</button>
+                      </div>
+                    )}
                     <div className="relative">
-                      <input type="text" placeholder="🔍 Поиск продукта..." className="w-full bg-[#27272a] rounded-2xl p-3 pr-14 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500" value={foodSearch} onChange={(e) => setFoodSearch(e.target.value)} />
-                      {foodSearch && (
-                        <button type="button" onClick={() => { setFoodSearch(''); setSelectedFoodId(''); }} className="btn-active absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-zinc-800 text-zinc-300 text-2xl leading-none flex items-center justify-center border border-zinc-700/40">
+                      {showFoodSuggestions && (
+                        <div className="food-suggestions absolute bottom-full left-0 right-0 mb-2 max-h-[min(240px,38dvh)] overflow-y-auto rounded-2xl border border-zinc-700/40 bg-[#18181b] divide-y divide-zinc-800/70 overscroll-contain">
+                          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={clearFoodSelection} className={`btn-active w-full text-left px-4 py-3 text-sm font-bold sticky top-0 z-10 ${selectedFoodId ? 'text-zinc-500 bg-[#18181b]' : 'text-emerald-300 bg-emerald-900/30'}`}>
+                            Не выбрано
+                          </button>
+                          {suggestionFoods.length > 0 ? suggestionFoods.map(f => (
+                            <button type="button" onMouseDown={(e) => e.preventDefault()} key={f.id} onClick={() => selectFood(f.id)} className={`btn-active w-full text-left px-4 py-3 transition-colors ${selectedFoodId === f.id ? 'bg-emerald-900/40 text-emerald-300' : 'text-zinc-200'}`}>
+                              <span className="font-bold text-sm">{f.isFavorite ? '⭐️ ' : ''}{f.name}</span>
+                              <span className="block text-[10px] text-zinc-500 mt-1">{f.calories} ккал · Б {f.protein} · Ж {f.fats} · У {f.carbs}</span>
+                            </button>
+                          )) : (
+                            <div className="px-4 py-3 text-sm text-zinc-500">Ничего не найдено</div>
+                          )}
+                          {!foodSearch.trim() && sortedFoods.length > suggestionFoods.length && (
+                            <div className="px-4 py-2 text-[10px] text-zinc-500 text-center bg-[#141416]">Начните вводить название для поиска по всей базе</div>
+                          )}
+                        </div>
+                      )}
+                      <input
+                        ref={foodSearchRef}
+                        type="search"
+                        enterKeyHint="search"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        placeholder={selectedFood ? '🔍 Сменить продукт...' : '🔍 Поиск продукта...'}
+                        className="w-full bg-[#27272a] rounded-2xl p-3 pr-14 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500"
+                        value={foodSearch}
+                        onChange={(e) => setFoodSearch(e.target.value)}
+                        onFocus={() => {
+                          setFoodSearchFocused(true);
+                          scrollMealFormIntoView({ leaveRoomForSuggestions: true });
+                        }}
+                        onBlur={() => setTimeout(() => setFoodSearchFocused(false), 180)}
+                      />
+                      {(foodSearch || selectedFoodId) && (
+                        <button type="button" onClick={resetMealForm} className="btn-active absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-zinc-800 text-zinc-300 text-2xl leading-none flex items-center justify-center border border-zinc-700/40" title="Очистить">
                           ×
                         </button>
                       )}
                     </div>
-                    {favoriteFoods.length > 0 && (
-                      <div className="flex gap-2 overflow-x-auto pt-1 pb-2 -mx-1 px-1">
+                    {!foodSearchFocused && favoriteFoods.length > 0 && (
+                      <div className="flex gap-2 overflow-x-auto pt-1 pb-1 -mx-1 px-1">
                         {favoriteFoods.map(f => (
-                          <button type="button" key={f.id} onClick={() => setSelectedFoodId(selectedFoodId === f.id ? '' : f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
+                          <button type="button" key={f.id} onClick={() => selectedFoodId === f.id ? clearFoodSelection() : selectFood(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
                         ))}
                       </div>
                     )}
-                    {showFoodSuggestions && (
-                      <div className="food-suggestions max-h-56 overflow-y-auto rounded-2xl border border-zinc-700/40 bg-[#18181b] divide-y divide-zinc-800/70">
-                        {selectedFoodId && (
-                          <button type="button" onClick={() => setSelectedFoodId('')} className="btn-active w-full text-left px-4 py-3 text-sm font-bold text-zinc-500">
-                            Не выбрано
-                          </button>
-                        )}
-                        {visibleFoods.length > 0 ? visibleFoods.map(f => (
-                          <button type="button" key={f.id} onClick={() => { setSelectedFoodId(f.id); setFoodSearch(''); }} className={`btn-active w-full text-left px-4 py-3 transition-colors ${selectedFoodId === f.id ? 'bg-emerald-900/40 text-emerald-300' : 'text-zinc-200'}`}>
-                            <span className="font-bold text-sm">{f.isFavorite ? '⭐️ ' : ''}{f.name}</span>
-                            <span className="block text-[10px] text-zinc-500 mt-1">{f.calories} ккал · Б {f.protein} · Ж {f.fats} · У {f.carbs}</span>
-                          </button>
-                        )) : (
-                          <div className="px-4 py-3 text-sm text-zinc-500">Ничего не найдено</div>
-                        )}
-                      </div>
-                    )}
-                    <select className="bg-[#27272a] rounded-2xl p-4 outline-none appearance-none text-zinc-200 text-sm font-medium truncate w-full border border-zinc-700/30 focus:border-emerald-500" value={selectedFoodId} onChange={(e) => setSelectedFoodId(e.target.value)} required>
-                      <option value="">Не выбрано{foodSearch && ` (найдено: ${visibleFoods.length})`}</option>
-                      {visibleFoods.map(f => <option key={f.id} value={f.id}>{f.isFavorite ? '⭐️ ' : ''}{f.name}</option>)}
-                    </select>
                     <div className="flex gap-2">
-                      <input type="number" step="0.1" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => e.target.select()} required />
-                      <button type="submit" className="btn-active w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20"><IconPlus className="w-6 h-6 text-white" /></button>
+                      <input ref={gramsInputRef} type="number" step="0.1" inputMode="decimal" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => { e.target.select(); scrollMealFormIntoView(); }} required />
+                      <button type="submit" disabled={!selectedFoodId || !gramsInput} className="btn-active w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-35 disabled:shadow-none"><IconPlus className="w-6 h-6 text-white" /></button>
                     </div>
                   </form>
 
