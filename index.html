@@ -1140,21 +1140,21 @@
         gramsInputRef.current?.blur();
       };
 
-      const scrollMealFormIntoView = (options = {}) => {
+      const keepInputAboveKeyboard = (inputEl) => {
         const container = scrollContainerRef.current;
-        const anchor = foodSearchRef.current || mealFormRef.current;
-        if (!container || !anchor) return;
-        const leaveRoomForSuggestions = options.leaveRoomForSuggestions ?? foodSearchFocused;
+        if (!container || !inputEl) return;
         const align = () => {
-          const containerRect = container.getBoundingClientRect();
-          const anchorRect = anchor.getBoundingClientRect();
-          const roomAbove = leaveRoomForSuggestions ? Math.min(280, window.innerHeight * 0.38) : 12;
-          const delta = anchorRect.top - (containerRect.top + roomAbove);
-          if (Math.abs(delta) > 4) container.scrollBy({ top: delta, behavior: 'smooth' });
+          const vv = window.visualViewport;
+          if (!vv) return;
+          const inputRect = inputEl.getBoundingClientRect();
+          const visibleBottom = vv.offsetTop + vv.height;
+          const padding = 20;
+          const overflow = inputRect.bottom - (visibleBottom - padding);
+          if (overflow > 0) container.scrollBy({ top: overflow, behavior: 'smooth' });
         };
         align();
-        setTimeout(align, 280);
-        setTimeout(align, 560);
+        setTimeout(align, 320);
+        setTimeout(align, 620);
       };
 
       const selectFood = (foodId) => {
@@ -1163,8 +1163,8 @@
         setFoodSearchFocused(false);
         foodSearchRef.current?.blur();
         setTimeout(() => {
-          scrollMealFormIntoView();
           gramsInputRef.current?.focus();
+          keepInputAboveKeyboard(gramsInputRef.current);
         }, 120);
       };
 
@@ -1174,7 +1174,7 @@
         setTimeout(() => {
           setFoodSearchFocused(true);
           foodSearchRef.current?.focus();
-          scrollMealFormIntoView({ leaveRoomForSuggestions: true });
+          keepInputAboveKeyboard(foodSearchRef.current);
         }, 50);
       };
 
@@ -1598,7 +1598,7 @@
         ...foods.filter(f => !f.isFavorite).sort((a, b) => a.name.localeCompare(b.name, 'ru')),
       ];
       const visibleFoods = searchFoodsByName(sortedFoods, foodSearch);
-      const showFoodSuggestions = foodSearchFocused || foodSearch.trim().length > 0;
+      const showFoodSuggestions = !selectedFoodId && (foodSearchFocused || foodSearch.trim().length > 0);
       const suggestionFoods = foodSearch.trim()
         ? visibleFoods
         : sortedFoods.slice(0, 40);
@@ -2310,7 +2310,7 @@
                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</span>
                       <button type="button" onClick={copyPreviousDay} className="btn-active text-[10px] font-bold text-emerald-400 bg-emerald-900/20 px-3 py-1.5 rounded-lg transition-all">Копировать вчера</button>
                     </div>
-                    {selectedFood && !foodSearchFocused && (
+                    {selectedFood && (
                       <div className="flex items-center justify-between gap-3 bg-emerald-900/25 border border-emerald-700/35 rounded-2xl px-4 py-3">
                         <div className="min-w-0">
                           <span className="text-[10px] text-emerald-400 uppercase font-bold tracking-widest">Выбрано</span>
@@ -2320,10 +2320,11 @@
                         <button type="button" onClick={clearFoodSelection} className="btn-active shrink-0 w-10 h-10 rounded-xl bg-zinc-800 text-zinc-300 text-xl leading-none flex items-center justify-center border border-zinc-700/40" title="Сбросить выбор">×</button>
                       </div>
                     )}
+                    {!selectedFoodId && (
                     <div className="relative">
                       {showFoodSuggestions && (
-                        <div className="food-suggestions absolute bottom-full left-0 right-0 mb-2 max-h-[min(240px,38dvh)] overflow-y-auto rounded-2xl border border-zinc-700/40 bg-[#18181b] divide-y divide-zinc-800/70 overscroll-contain">
-                          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={clearFoodSelection} className={`btn-active w-full text-left px-4 py-3 text-sm font-bold sticky top-0 z-10 ${selectedFoodId ? 'text-zinc-500 bg-[#18181b]' : 'text-emerald-300 bg-emerald-900/30'}`}>
+                        <div className="food-suggestions absolute bottom-full left-0 right-0 mb-2 max-h-[min(240px,38dvh)] overflow-y-auto rounded-2xl border border-zinc-700/40 bg-[#18181b] divide-y divide-zinc-800/70 overscroll-contain -webkit-overflow-scrolling-touch">
+                          <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={clearFoodSelection} className="btn-active w-full text-left px-4 py-3 text-sm font-bold text-emerald-300 bg-emerald-900/30">
                             Не выбрано
                           </button>
                           {suggestionFoods.length > 0 ? suggestionFoods.map(f => (
@@ -2346,23 +2347,24 @@
                         autoComplete="off"
                         autoCorrect="off"
                         spellCheck={false}
-                        placeholder={selectedFood ? '🔍 Сменить продукт...' : '🔍 Поиск продукта...'}
+                        placeholder="🔍 Поиск продукта..."
                         className="w-full bg-[#27272a] rounded-2xl p-3 pr-14 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500"
                         value={foodSearch}
                         onChange={(e) => setFoodSearch(e.target.value)}
                         onFocus={() => {
                           setFoodSearchFocused(true);
-                          scrollMealFormIntoView({ leaveRoomForSuggestions: true });
+                          keepInputAboveKeyboard(foodSearchRef.current);
                         }}
                         onBlur={() => setTimeout(() => setFoodSearchFocused(false), 180)}
                       />
-                      {(foodSearch || selectedFoodId) && (
-                        <button type="button" onClick={resetMealForm} className="btn-active absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-zinc-800 text-zinc-300 text-2xl leading-none flex items-center justify-center border border-zinc-700/40" title="Очистить">
+                      {foodSearch && (
+                        <button type="button" onClick={() => { setFoodSearch(''); foodSearchRef.current?.focus(); }} className="btn-active absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-zinc-800 text-zinc-300 text-2xl leading-none flex items-center justify-center border border-zinc-700/40" title="Очистить поиск">
                           ×
                         </button>
                       )}
                     </div>
-                    {!foodSearchFocused && favoriteFoods.length > 0 && (
+                    )}
+                    {!selectedFoodId && favoriteFoods.length > 0 && !foodSearchFocused && (
                       <div className="flex gap-2 overflow-x-auto pt-1 pb-1 -mx-1 px-1">
                         {favoriteFoods.map(f => (
                           <button type="button" key={f.id} onClick={() => selectedFoodId === f.id ? clearFoodSelection() : selectFood(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
@@ -2370,7 +2372,7 @@
                       </div>
                     )}
                     <div className="flex gap-2">
-                      <input ref={gramsInputRef} type="number" step="0.1" inputMode="decimal" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => { e.target.select(); scrollMealFormIntoView(); }} required />
+                      <input ref={gramsInputRef} type="number" step="0.1" inputMode="decimal" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => { e.target.select(); keepInputAboveKeyboard(e.target); }} required />
                       <button type="submit" disabled={!selectedFoodId || !gramsInput} className="btn-active w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-35 disabled:shadow-none"><IconPlus className="w-6 h-6 text-white" /></button>
                     </div>
                   </form>
