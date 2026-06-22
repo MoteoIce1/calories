@@ -1145,8 +1145,8 @@
       // iOS рисует над клавиатурой системную панель (стрелки + «Готово») ~44px, убрать её из веба нельзя.
       // На iOS visualViewport.height её не вычитает, поэтому учитываем сами; на Android/десктопе панели нет.
       const IS_IOS = typeof navigator !== 'undefined' && (/iP(hone|od|ad)/.test(navigator.platform) || (/Mac/.test(navigator.platform) && navigator.maxTouchPoints > 1));
-      const KB_ACCESSORY = IS_IOS ? 44 : 0;
-      const KB_GAP = 6; // небольшой воздух между полем и панелью/клавиатурой
+      const KB_ACCESSORY = IS_IOS ? 26 : 0;
+      const KB_GAP = 4; // небольшой воздух между полем и панелью/клавиатурой
 
       const keepMealFormAboveKeyboard = () => {
         const container = scrollContainerRef.current;
@@ -1169,11 +1169,18 @@
           const list = foodSuggestRef.current;
           if (!list || Math.abs(vv.height - lastListVvH) < 2) return;
           lastListVvH = vv.height;
+          // Желаемая высота — ровно "Не выбрано" + 2 продукта (по реальной высоте первых 3 строк),
+          // остальное скроллится внутри списка.
+          let want = 0;
+          const kids = list.children;
+          for (let i = 0; i < Math.min(3, kids.length); i++) want += kids[i].offsetHeight;
+          want += 2; // запас на разделители
+          // Но не больше, чем влезает над клавиатурой (на маленьких экранах ужимаем сильнее).
           const otherH = form.getBoundingClientRect().height - list.getBoundingClientRect().height;
           const available = vv.height - KB_ACCESSORY - KB_GAP * 2 - otherH;
-          const maxH = Math.max(132, Math.min(240, available));
-          list.style.maxHeight = maxH + 'px';
-          list.style.minHeight = Math.min(132, maxH) + 'px';
+          const h = Math.max(96, Math.min(want || 168, available));
+          list.style.maxHeight = h + 'px';
+          list.style.minHeight = h + 'px';
         };
 
         // Цель фиксирована относительно экрана: низ формы — над панелью iOS/клавиатурой.
@@ -1223,11 +1230,25 @@
         if (active === foodSearchRef.current || active === gramsInputRef.current) return;
         setFoodSearchFocused(false);
         if (kbTrackRef.current) { kbTrackRef.current(); kbTrackRef.current = null; }
-        if (scrollContainerRef.current) scrollContainerRef.current.style.paddingBottom = '';
-        if (foodSuggestRef.current) {
-          foodSuggestRef.current.style.maxHeight = '';
-          foodSuggestRef.current.style.minHeight = '';
-        }
+        const container = scrollContainerRef.current;
+        if (!container) return;
+        // Плавно сворачиваем нижний запас в такт закрытию клавиатуры, а не убираем рывком.
+        const startPad = parseFloat(container.style.paddingBottom) || 0;
+        if (startPad <= 0) { container.style.paddingBottom = ''; return; }
+        const t0 = performance.now();
+        const dur = 280;
+        const ease = (t) => 1 - Math.pow(1 - t, 3); // easeOutCubic
+        const step = (now) => {
+          const p = Math.min(1, (now - t0) / dur);
+          container.style.paddingBottom = (startPad * (1 - ease(p))) + 'px';
+          const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+          if (container.scrollTop > maxScroll) container.scrollTop = maxScroll; // без скачка скролла
+          if (p < 1) requestAnimationFrame(step);
+          else container.style.paddingBottom = '';
+        };
+        requestAnimationFrame(step);
+        // Высоту списка не сбрасываем здесь: при наличии запроса он остаётся смонтированным
+        // (значение восстановится само при следующем открытии нового элемента).
       }, 180);
 
       const selectFood = (foodId) => {
