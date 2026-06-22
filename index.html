@@ -1140,21 +1140,24 @@
         gramsInputRef.current?.blur();
       };
 
-      const keepInputAboveKeyboard = (inputEl) => {
+      const keepMealFormAboveKeyboard = () => {
         const container = scrollContainerRef.current;
-        if (!container || !inputEl) return;
+        const form = mealFormRef.current;
+        if (!container || !form) return;
         const align = () => {
           const vv = window.visualViewport;
           if (!vv) return;
-          const inputRect = inputEl.getBoundingClientRect();
+          const formRect = form.getBoundingClientRect();
           const visibleBottom = vv.offsetTop + vv.height;
-          const padding = 20;
-          const overflow = inputRect.bottom - (visibleBottom - padding);
-          if (overflow > 0) container.scrollBy({ top: overflow, behavior: 'smooth' });
+          const padding = 12;
+          const delta = formRect.bottom - (visibleBottom - padding);
+          const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+          const targetScroll = Math.max(0, Math.min(maxScroll, container.scrollTop + delta));
+          if (Math.abs(delta) > 4) container.scrollTo({ top: targetScroll, behavior: 'auto' });
         };
-        align();
-        setTimeout(align, 320);
-        setTimeout(align, 620);
+        setTimeout(align, 80);
+        setTimeout(align, 280);
+        setTimeout(align, 520);
       };
 
       const selectFood = (foodId) => {
@@ -1164,7 +1167,7 @@
         foodSearchRef.current?.blur();
         setTimeout(() => {
           gramsInputRef.current?.focus();
-          keepInputAboveKeyboard(gramsInputRef.current);
+          keepMealFormAboveKeyboard();
         }, 120);
       };
 
@@ -1174,7 +1177,7 @@
         setTimeout(() => {
           setFoodSearchFocused(true);
           foodSearchRef.current?.focus();
-          keepInputAboveKeyboard(foodSearchRef.current);
+          keepMealFormAboveKeyboard();
         }, 50);
       };
 
@@ -2321,9 +2324,9 @@
                       </div>
                     )}
                     {!selectedFoodId && (
-                    <div className="relative">
+                    <>
                       {showFoodSuggestions && (
-                        <div className="food-suggestions absolute bottom-full left-0 right-0 mb-2 max-h-[min(240px,38dvh)] overflow-y-auto rounded-2xl border border-zinc-700/40 bg-[#18181b] divide-y divide-zinc-800/70 overscroll-contain -webkit-overflow-scrolling-touch">
+                        <div className="food-suggestions min-h-[min(168px,38dvh)] max-h-[min(240px,38dvh)] overflow-y-auto rounded-2xl border border-zinc-700/40 bg-[#18181b] divide-y divide-zinc-800/70 overscroll-contain -webkit-overflow-scrolling-touch">
                           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={clearFoodSelection} className="btn-active w-full text-left px-4 py-3 text-sm font-bold text-emerald-300 bg-emerald-900/30">
                             Не выбрано
                           </button>
@@ -2340,6 +2343,7 @@
                           )}
                         </div>
                       )}
+                    <div className="relative">
                       <input
                         ref={foodSearchRef}
                         type="search"
@@ -2348,12 +2352,12 @@
                         autoCorrect="off"
                         spellCheck={false}
                         placeholder="🔍 Поиск продукта..."
-                        className="w-full bg-[#27272a] rounded-2xl p-3 pr-14 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500"
+                        className="w-full bg-[#27272a] rounded-2xl p-3 pr-14 outline-none text-zinc-200 text-base border border-zinc-700/30 focus:border-emerald-500"
                         value={foodSearch}
                         onChange={(e) => setFoodSearch(e.target.value)}
                         onFocus={() => {
                           setFoodSearchFocused(true);
-                          keepInputAboveKeyboard(foodSearchRef.current);
+                          keepMealFormAboveKeyboard();
                         }}
                         onBlur={() => setTimeout(() => setFoodSearchFocused(false), 180)}
                       />
@@ -2363,6 +2367,7 @@
                         </button>
                       )}
                     </div>
+                    </>
                     )}
                     {!selectedFoodId && favoriteFoods.length > 0 && !foodSearchFocused && (
                       <div className="flex gap-2 overflow-x-auto pt-1 pb-1 -mx-1 px-1">
@@ -2372,7 +2377,7 @@
                       </div>
                     )}
                     <div className="flex gap-2">
-                      <input ref={gramsInputRef} type="number" step="0.1" inputMode="decimal" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => { e.target.select(); keepInputAboveKeyboard(e.target); }} required />
+                      <input ref={gramsInputRef} type="number" step="0.1" inputMode="decimal" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-base border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => { e.target.select(); keepMealFormAboveKeyboard(); }} required />
                       <button type="submit" disabled={!selectedFoodId || !gramsInput} className="btn-active w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-35 disabled:shadow-none"><IconPlus className="w-6 h-6 text-white" /></button>
                     </div>
                   </form>
