@@ -15,6 +15,8 @@
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+  <!-- Motion One — лёгкие анимации (UMD-глобал window.Motion), без конфликта с React -->
+  <script src="https://cdn.jsdelivr.net/npm/motion@10.18.0/dist/motion.js"></script>
 
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -551,6 +553,9 @@
     // Замеры тела — отдельный документ на запись (фото base64 в одном документе профиля упирались в лимит Firestore 1 МБ).
     const bodyCol = (uid) => db.collection('users').doc(uid).collection('body');
     const bodyDocRef = (uid, id) => db.collection('users').doc(uid).collection('body').doc(id);
+    // Общая база продуктов: один документ shared/foods (читают все, пишет только владелец).
+    const OWNER_EMAIL = 'bulgakov.qa@gmail.com';
+    const sharedFoodsRef = db.collection('shared').doc('foods');
     const legacyRef = db.collection('users').doc('main_profile'); // старая единая структура (для переноса)
 
     // Регистрируем service worker для офлайн-работы (кешируется оболочка и библиотеки с CDN)
@@ -848,6 +853,7 @@
 
       // Авторизация
       const [uid, setUid] = useState(null);
+      const [userEmail, setUserEmail] = useState('');
       const [authReady, setAuthReady] = useState(false);
       const [authEmail, setAuthEmail] = useState('');
       const [authPass, setAuthPass] = useState('');
@@ -855,7 +861,19 @@
       const [authError, setAuthError] = useState('');
       const [authBusy, setAuthBusy] = useState(false);
       
-      const [foods, setFoods] = useState([]);
+      const [sharedFoods, setSharedFoods] = useState([]);   // общая база (shared/foods)
+      const [personalFoods, setPersonalFoods] = useState([]); // личные добавки пользователя (profile.foods)
+      const [favoriteIds, setFavoriteIds] = useState([]);    // избранное — у каждого своё (profile.favoriteIds)
+      const isOwner = userEmail === OWNER_EMAIL;
+      // Итоговый список: общая база + личные поверх (личные перекрывают по id); избранное вычисляется из favoriteIds.
+      const foods = (() => {
+        const base = sharedFoods.length ? sharedFoods : HARDCODED_FOODS;
+        const personalIds = new Set(personalFoods.map(f => f.id));
+        const favSet = new Set(favoriteIds);
+        const baseList = base.filter(f => !personalIds.has(f.id)).map(f => ({ ...f, _shared: true, isFavorite: favSet.has(f.id) }));
+        const personalList = personalFoods.map(f => ({ ...f, _shared: false, isFavorite: favSet.has(f.id) }));
+        return [...baseList, ...personalList];
+      })();
       const [bodyEntries, setBodyEntries] = useState(INITIAL_BODY_ENTRIES);
       const [bodyDraft, setBodyDraft] = useState({ date: getLocalDateString(new Date()), measures: { ...EMPTY_BODY_MEASURES }, photos: [] });
       const [compareBodyIds, setCompareBodyIds] = useState(['', '']);
@@ -907,6 +925,7 @@
       useEffect(() => {
         const unsub = auth.onAuthStateChanged((user) => {
           setUid(user ? user.uid : null);
+          setUserEmail(user ? (user.email || '') : '');
           setAuthReady(true);
           if (!user) { setIsLoading(false); initialGoalsRef.current = false; }
         });
@@ -1012,10 +1031,13 @@
               }
             }
             setDailyGoals(data.dailyGoals || {});
-            setFoods(data.foods && data.foods.length ? data.foods : HARDCODED_FOODS);
+            // Личные продукты (поверх общей базы) и избранное — у каждого своё.
+            setPersonalFoods(Array.isArray(data.foods) ? data.foods : []);
+            if (Array.isArray(data.favoriteIds)) setFavoriteIds(data.favoriteIds);
+            else setFavoriteIds((data.foods || []).filter(f => f.isFavorite).map(f => f.id)); // миграция старого isFavorite
             // bodyEntries теперь живут в подколлекции body (см. отдельный слушатель и миграцию ниже).
           } else {
-            setFoods(HARDCODED_FOODS);
+            setPersonalFoods([]);
           }
           setIsLoading(false);
         }, (error) => { console.log("Firebase error", error); setIsLoading(false); });
@@ -1050,6 +1072,36 @@
         }, (e) => console.log("body listener error", e));
         return () => unsubscribe();
       }, [uid]);
+
+      // Общая база продуктов: читают все авторизованные.
+      useEffect(() => {
+        if (!uid) return;
+        const unsub = sharedFoodsRef.onSnapshot((snap) => {
+          setSharedFoods(snap.exists && Array.isArray(snap.data().list) ? snap.data().list : []);
+        }, (e) => console.log("shared foods error", e));
+        return () => unsub();
+      }, [uid]);
+
+      // Владелец: один раз публикует свои продукты в общую базу (если её ещё нет) и переносит избранное в favoriteIds.
+      useEffect(() => {
+        if (!uid || !isOwner) return;
+        let cancelled = false;
+        (async () => {
+          try {
+            const sd = await sharedFoodsRef.get();
+            if (cancelled || (sd.exists && (sd.data().list || []).length)) return;
+            const prof = (await profileRef(uid).get()).data() || {};
+            const own = prof.foods || [];
+            if (cancelled || !own.length) return;
+            const list = own.map(({ isFavorite, _shared, ...f }) => f);
+            await sharedFoodsRef.set({ list });
+            if (cancelled) return;
+            const favIds = Array.isArray(prof.favoriteIds) ? prof.favoriteIds : own.filter(f => f.isFavorite).map(f => f.id);
+            await profileRef(uid).set({ favoriteIds: favIds, foods: [] }, { merge: true });
+          } catch (e) { console.log('publish shared foods error', e); }
+        })();
+        return () => { cancelled = true; };
+      }, [uid, isOwner]);
 
       // Одноразовая миграция: старый массив profile.bodyEntries (или сиды) -> подколлекция body.
       // Идемпотентно (фиксированные id), флаг bodyMigrated защищает от повторного запуска на других устройствах.
@@ -1309,6 +1361,11 @@
         writeDay(currentDate, { logs: updatedLogs[currentDate] });
       };
 
+      // Запись общей базы (только владелец) и личных продуктов пользователя — с видимой ошибкой при сбое.
+      const saveSharedFoods = (list) => { setSharedFoods(list); sharedFoodsRef.set({ list }, { merge: true }).catch(err => alert('Не удалось сохранить общую базу: ' + err.message)); };
+      const savePersonalFoods = (list) => { setPersonalFoods(list); if (profileDoc) profileDoc.set({ foods: list }, { merge: true }).catch(() => {}); };
+      const saveFavoriteIds = (ids) => { setFavoriteIds(ids); if (profileDoc) profileDoc.set({ favoriteIds: ids }, { merge: true }).catch(() => {}); };
+
       const handleAddFood = (e) => {
         e.preventDefault();
         const foodItem = {
@@ -1316,24 +1373,31 @@
           calories: parseFloat(newFood.cals || 0),
           protein: parseFloat(newFood.pro || 0),
           fats: parseFloat(newFood.fat || 0),
-          carbs: parseFloat(newFood.carb || 0), isFavorite: false
+          carbs: parseFloat(newFood.carb || 0)
         };
-        const updatedFoods = [foodItem, ...foods];
-        setFoods(updatedFoods); 
-        if (profileDoc) profileDoc.set({ foods: updatedFoods }, { merge: true });
+        // Владелец добавляет в общую базу, остальные — в свои личные продукты (поверх базы).
+        if (isOwner) saveSharedFoods([foodItem, ...sharedFoods]);
+        else savePersonalFoods([foodItem, ...personalFoods]);
         setNewFood({ name: '', cals: '', pro: '', fat: '', carb: '' });
       };
 
       const updateFoodBase = (id) => {
-        const updatedFoods = foods.map(f => f.id === id ? { 
-            ...f, name: editValue.name,
-            calories: parseFloat(editValue.calories || 0),
-            protein: parseFloat(editValue.protein || 0),
-            fats: parseFloat(editValue.fats || 0),
-            carbs: parseFloat(editValue.carbs || 0)
-        } : f);
-        setFoods(updatedFoods);
-        
+        const target = foods.find(f => f.id === id);
+        if (!target) { setEditingFoodId(null); return; }
+        const patch = {
+          name: editValue.name,
+          calories: parseFloat(editValue.calories || 0),
+          protein: parseFloat(editValue.protein || 0),
+          fats: parseFloat(editValue.fats || 0),
+          carbs: parseFloat(editValue.carbs || 0),
+        };
+        // Продукт из общей базы правит только владелец; личные — их владелец.
+        if (target._shared) {
+          if (isOwner) saveSharedFoods(sharedFoods.map(f => f.id === id ? { ...f, ...patch } : f));
+        } else {
+          savePersonalFoods(personalFoods.map(f => f.id === id ? { ...f, ...patch } : f));
+        }
+
         const updatedLogs = { ...dailyLogs };
         const affected = [];
         Object.keys(updatedLogs).forEach(date => {
@@ -1355,8 +1419,7 @@
           if (changed) affected.push(date);
         });
 
-        setDailyLogs(updatedLogs); 
-        if (profileDoc) profileDoc.set({ foods: updatedFoods }, { merge: true }); 
+        setDailyLogs(updatedLogs);
         if (uid && affected.length) {
           for (let i = 0; i < affected.length; i += 400) {
             const batch = db.batch();
@@ -1365,11 +1428,6 @@
           }
         }
         setEditingFoodId(null);
-      };
-
-      const saveFoods = (updatedFoods) => {
-        setFoods(updatedFoods);
-        if (profileDoc) profileDoc.set({ foods: updatedFoods }, { merge: true });
       };
 
       // Сохранение/удаление одной записи замеров в подколлекции body (ошибки записи показываем — больше не молчим).
@@ -1507,43 +1565,40 @@
         localStorage.setItem('body-reminder-dismissed', today);
       };
 
-      const deleteFood = (e, id) => { e.stopPropagation(); saveFoods(foods.filter(x => x.id !== id)); };
-
-      const toggleFavorite = (e, id, currentStatus) => {
+      const deleteFood = (e, id) => {
         e.stopPropagation();
-        const nextStatus = !currentStatus;
         const target = foods.find(f => f.id === id);
         if (!target) return;
-        const rest = foods.filter(f => f.id !== id);
-        const updatedTarget = { ...target, isFavorite: nextStatus };
-        const updatedFoods = nextStatus
-          ? [...rest.filter(f => f.isFavorite), updatedTarget, ...rest.filter(f => !f.isFavorite)]
-          : [...rest.filter(f => f.isFavorite), updatedTarget, ...rest.filter(f => !f.isFavorite)];
-        saveFoods(updatedFoods);
+        if (target._shared) { if (isOwner) saveSharedFoods(sharedFoods.filter(x => x.id !== id)); }
+        else savePersonalFoods(personalFoods.filter(x => x.id !== id));
+        if (favoriteIds.includes(id)) saveFavoriteIds(favoriteIds.filter(x => x !== id));
+      };
+
+      // Избранное — у каждого своё: храним упорядоченный список id (порядок = порядок показа).
+      const toggleFavorite = (e, id) => {
+        e.stopPropagation();
+        saveFavoriteIds(favoriteIds.includes(id) ? favoriteIds.filter(x => x !== id) : [...favoriteIds, id]);
       };
 
       const moveFavorite = (e, id, direction) => {
         e.stopPropagation();
-        const favorites = foods.filter(f => f.isFavorite);
-        const index = favorites.findIndex(f => f.id === id);
+        const index = favoriteIds.indexOf(id);
         const nextIndex = index + direction;
-        if (index === -1 || nextIndex < 0 || nextIndex >= favorites.length) return;
-        const reorderedFavorites = [...favorites];
-        [reorderedFavorites[index], reorderedFavorites[nextIndex]] = [reorderedFavorites[nextIndex], reorderedFavorites[index]];
-        const regularFoods = foods.filter(f => !f.isFavorite);
-        saveFoods([...reorderedFavorites, ...regularFoods]);
+        if (index === -1 || nextIndex < 0 || nextIndex >= favoriteIds.length) return;
+        const ids = [...favoriteIds];
+        [ids[index], ids[nextIndex]] = [ids[nextIndex], ids[index]];
+        saveFavoriteIds(ids);
       };
 
       const reorderFavorite = (dragId, targetId) => {
         if (!dragId || !targetId || dragId === targetId) return;
-        const favorites = foods.filter(f => f.isFavorite);
-        const from = favorites.findIndex(f => f.id === dragId);
-        const to = favorites.findIndex(f => f.id === targetId);
+        const from = favoriteIds.indexOf(dragId);
+        const to = favoriteIds.indexOf(targetId);
         if (from === -1 || to === -1) return;
-        const reorderedFavorites = [...favorites];
-        const [moved] = reorderedFavorites.splice(from, 1);
-        reorderedFavorites.splice(to, 0, moved);
-        saveFoods([...reorderedFavorites, ...foods.filter(f => !f.isFavorite)]);
+        const ids = [...favoriteIds];
+        const [moved] = ids.splice(from, 1);
+        ids.splice(to, 0, moved);
+        saveFavoriteIds(ids);
       };
 
       const finishFavoriteTouchDrag = (touch) => {
@@ -1657,7 +1712,8 @@
       
       const progressCals = Math.min(100, (totalCals / (targetCalories || 1)) * 100);
       
-      const favoriteFoods = foods.filter(f => f.isFavorite);
+      // Избранное — в порядке favoriteIds (порядок задаёт сам пользователь).
+      const favoriteFoods = favoriteIds.map(id => foods.find(f => f.id === id)).filter(Boolean);
       const sortedFoods = [
         ...favoriteFoods,
         ...foods.filter(f => !f.isFavorite).sort((a, b) => a.name.localeCompare(b.name, 'ru')),
@@ -2792,7 +2848,7 @@
                         ) : (
                           <div className="flex justify-between items-center cursor-pointer">
                             <div className="flex items-center">
-                              <button onClick={(e) => toggleFavorite(e, f.id, f.isFavorite)} className="btn-active p-2 pl-0 transition-colors">
+                              <button onClick={(e) => toggleFavorite(e, f.id)} className="btn-active p-2 pl-0 transition-colors">
                                 <IconStar className={`w-6 h-6 ${f.isFavorite ? 'text-amber-400' : 'text-zinc-700'}`} fill={f.isFavorite ? "currentColor" : "none"} />
                               </button>
                               {isReorderingFavorites && f.isFavorite && (
@@ -2812,8 +2868,8 @@
                                 </button>
                               )}
                             </div>
-                            <div className="flex-1" onClick={() => { if (!isReorderingFavorites) { setEditingFoodId(f.id); setEditValue({ ...f, fats: f.fats || 0, carbs: f.carbs || 0 }); } }}>
-                              <span className="text-sm font-medium border-b border-zinc-800/50 pb-0.5">{f.name}</span>
+                            <div className="flex-1" onClick={() => { if (!isReorderingFavorites && (!f._shared || isOwner)) { setEditingFoodId(f.id); setEditValue({ ...f, fats: f.fats || 0, carbs: f.carbs || 0 }); } }}>
+                              <span className="text-sm font-medium border-b border-zinc-800/50 pb-0.5">{f.name}{f._shared && <span className="ml-2 text-[9px] text-zinc-600 uppercase tracking-wider">база</span>}</span>
                               <div className="flex gap-3 text-[10px] font-bold uppercase mt-1.5 opacity-80">
                                 <span className="text-emerald-500">{f.calories}</span>
                                 <span className="text-indigo-500">Б: {f.protein}</span>
@@ -2821,7 +2877,7 @@
                                 <span className="text-blue-500">У: {f.carbs}</span>
                               </div>
                             </div>
-                            <button onClick={(e) => deleteFood(e, f.id)} className="btn-active text-zinc-800 active:text-red-500 p-2 transition-colors"><IconTrash className="w-5 h-5" /></button>
+                            {(!f._shared || isOwner) && <button onClick={(e) => deleteFood(e, f.id)} className="btn-active text-zinc-800 active:text-red-500 p-2 transition-colors"><IconTrash className="w-5 h-5" /></button>}
                           </div>
                         )}
                       </div>
