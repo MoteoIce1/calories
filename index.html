@@ -1176,10 +1176,15 @@
             list.style.maxHeight = maxH + 'px';
             list.style.minHeight = Math.min(132, maxH) + 'px';
           }
+          // Целевая позиция низа формы в viewport (где должен быть низ формы на экране)
+          const targetViewportY = vv.height - KB_ACCESSORY - KB_GAP;
+          // Текущая позиция низа формы в viewport (от getBoundingClientRect)
           const formBottom = form.getBoundingClientRect().bottom;
-          const visibleBottom = vv.offsetTop + vv.height - KB_ACCESSORY - KB_GAP;
+          // На сколько нужно скроллить, чтобы низ формы был на целевой позиции
+          const delta = formBottom - targetViewportY;
+          // Целевой scrollTop (независимо от текущей позиции скролла)
           const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
-          return Math.max(0, Math.min(maxScroll, container.scrollTop + (formBottom - visibleBottom)));
+          return Math.max(0, Math.min(maxScroll, container.scrollTop + delta));
         };
 
         // Плавный твин скролла к цели (единая анимация, не зависит от частоты событий клавиатуры).
@@ -1208,10 +1213,18 @@
         };
         const onResize = () => schedule();
         vv.addEventListener('resize', onResize);
-        // Если клавиатура уже открыта (переход поиск ↔ вес) — позиционируем сразу.
-        // Иначе ждём resize от открытия клавиатуры, чтобы не делать лишний первый твин.
+        // Если клавиатура уже открыта (переход поиск ↔ вес) — позиционируем мгновенно, без анимации.
+        // Иначе ждём resize от открытия клавиатуры, чтобы не делать преждевременный твин.
         const kbOpenNow = (window.innerHeight - (vv.offsetTop + vv.height)) > 100;
-        if (kbOpenNow) schedule();
+        if (kbOpenNow) {
+          // Клавиатура уже открыта — позиционируем без анимации, избегаем дёргания
+          const target = computeTarget();
+          if (Math.abs(container.scrollTop - target) > 1) {
+            container.scrollTop = target;
+          }
+        } else {
+          schedule();
+        }
         const fallbackTimer = setTimeout(schedule, 600); // страховка, если resize не пришёл
 
         // Останавливает анимацию/слушатели, но не трогает отступ — чтобы при переходе поиск → вес не было рывка.
@@ -1245,20 +1258,19 @@
         setFoodSearch('');
         setFoodSearchFocused(false);
         foodSearchRef.current?.blur();
-        setTimeout(() => {
-          gramsInputRef.current?.focus();
-          keepMealFormAboveKeyboard();
-        }, 120);
+        // Переходим на поле граммов без задержки, чтобы клавиатура не прыгала
+        gramsInputRef.current?.focus();
+        // Позиционируем форму после того, как поле граммов получит фокус (микротаск)
+        Promise.resolve().then(() => keepMealFormAboveKeyboard());
       };
 
       const clearFoodSelection = () => {
         setSelectedFoodId('');
         setFoodSearch('');
-        setTimeout(() => {
-          setFoodSearchFocused(true);
-          foodSearchRef.current?.focus();
-          keepMealFormAboveKeyboard();
-        }, 50);
+        // Переходим на поле поиска без лишних задержек
+        setFoodSearchFocused(true);
+        foodSearchRef.current?.focus();
+        Promise.resolve().then(() => keepMealFormAboveKeyboard());
       };
 
       const handleAddLog = (e) => {
