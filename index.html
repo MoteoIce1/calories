@@ -179,10 +179,10 @@
       will-change: transform;
     }
 
-    /* Затухание правого края горизонтальных списков — содержимое будто уходит «в стену». */
+    /* Затухание обоих краёв горизонтальных списков — содержимое будто уходит «в стену» с двух сторон. */
     .hscroll-fade {
-      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
-      mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
+      -webkit-mask-image: linear-gradient(to right, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%);
+      mask-image: linear-gradient(to right, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%);
     }
 
     .btn-active:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.04); }
@@ -2321,7 +2321,7 @@
                       />
                       {foodSearch && (
                         <button type="button" onClick={() => { setFoodSearch(''); foodSearchRef.current?.focus(); }} className="absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 bg-transparent text-zinc-400 flex items-center justify-center active:text-zinc-200" title="Очистить поиск">
-                          <span className="leading-none" style={{ fontSize: '55px', marginTop: '-0.09em' }}>×</span>
+                          <span className="leading-none" style={{ fontSize: '73px', marginTop: '-0.19em' }}>×</span>
                         </button>
                       )}
                     </div>
