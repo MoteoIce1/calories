@@ -899,6 +899,7 @@
       const mealFormRef = useRef(null);
       const foodSearchRef = useRef(null);
       const gramsInputRef = useRef(null);
+      const mealListScrollRef = useRef(null);
       const initialGoalsRef = useRef(false);
 
       // Авторизация: следим за состоянием входа
@@ -1049,6 +1050,12 @@
         if (el) el.scrollTop = scrollTop;
       }, [showBodyEditor]);
 
+      // При любом изменении поиска прокручиваем список продуктов в начало,
+      // чтобы первый результат всегда был сразу справа от «Не выбрано».
+      useEffect(() => {
+        if (mealListScrollRef.current) mealListScrollRef.current.scrollLeft = 0;
+      }, [foodSearch]);
+
       const startExport = () => {
         setShowExportModal(false);
         setShowReportView(true);
@@ -1146,10 +1153,11 @@
         setTimeout(() => gramsInputRef.current?.focus(), 0);
       };
 
-      // Сброс выбора на «Не выбрано» (тап по чипу «Не выбрано» или в любом месте экрана).
+      // Сброс выбора на «Не выбрано»: снимаем продукт, поиск и вес.
       const clearFoodSelection = () => {
         setSelectedFoodId('');
         setFoodSearch('');
+        setGramsInput('');
       };
 
       const handleAddLog = (e) => {
@@ -1571,9 +1579,9 @@
         ...favoriteFoods,
         ...foods.filter(f => !f.isFavorite).sort((a, b) => a.name.localeCompare(b.name, 'ru')),
       ];
-      const visibleFoods = searchFoodsByName(sortedFoods, foodSearch);
-      // Горизонтальный список продуктов под поиском: всегда виден, фильтруется по мере ввода в поиск.
-      const mealListFoods = foodSearch.trim() ? visibleFoods : sortedFoods;
+      // Нижний горизонтальный список — только НЕ избранные продукты, фильтруется по мере ввода в поиск.
+      const nonFavoriteFoods = foods.filter(f => !f.isFavorite).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+      const mealListFoods = foodSearch.trim() ? searchFoodsByName(nonFavoriteFoods, foodSearch, 200) : nonFavoriteFoods;
       const selectedFood = selectedFoodId ? foods.find(f => f.id === selectedFoodId) : null;
       const sortedBodyEntries = [...bodyEntries].sort((a, b) => b.date.localeCompare(a.date));
       const bodyEntryOptions = [...bodyEntries].sort((a, b) => a.date.localeCompare(b.date));
@@ -2307,21 +2315,23 @@
                         onChange={(e) => setFoodSearch(e.target.value)}
                       />
                       {foodSearch && (
-                        <button type="button" onClick={() => { setFoodSearch(''); foodSearchRef.current?.focus(); }} className="btn-active absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-zinc-800 text-zinc-300 text-2xl leading-none flex items-center justify-center border border-zinc-700/40" title="Очистить поиск">
+                        <button type="button" onClick={() => { setFoodSearch(''); foodSearchRef.current?.focus(); }} className="btn-active absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-transparent text-zinc-400 text-4xl leading-none flex items-center justify-center" title="Очистить поиск">
                           ×
                         </button>
                       )}
                     </div>
 
-                    {/* Горизонтальный список продуктов: всегда виден, «Не выбрано» закреплено слева, фильтруется по поиску */}
-                    <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" onClick={(e) => e.stopPropagation()}>
-                      <button type="button" onClick={clearFoodSelection} className={`btn-active sticky left-0 z-10 shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${!selectedFoodId ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-[#18181b] text-emerald-300 border-emerald-700/40'}`}>Не выбрано</button>
-                      {mealListFoods.map(f => (
-                        <button type="button" key={f.id} onClick={() => selectFood(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.isFavorite ? '⭐️ ' : ''}{f.name}</button>
-                      ))}
-                      {mealListFoods.length === 0 && (
-                        <span className="self-center text-xs text-zinc-500 px-2 py-2 whitespace-nowrap">Ничего не найдено</span>
-                      )}
+                    {/* «Не выбрано» — вне прокрутки (за ней ничего не видно); справа прокручиваемый список не‑избранных продуктов */}
+                    <div className="flex items-start gap-2 -mx-1 px-1" onClick={(e) => e.stopPropagation()}>
+                      <button type="button" onClick={clearFoodSelection} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${!selectedFoodId ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-emerald-300 border-emerald-700/40'}`}>Не выбрано</button>
+                      <div ref={mealListScrollRef} className="flex gap-2 overflow-x-auto pb-1 min-w-0">
+                        {mealListFoods.map(f => (
+                          <button type="button" key={f.id} onClick={() => selectFood(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
+                        ))}
+                        {mealListFoods.length === 0 && (
+                          <span className="self-center text-xs text-zinc-500 px-1 py-2 whitespace-nowrap">{foodSearch.trim() ? 'Ничего не найдено' : 'Нет продуктов'}</span>
+                        )}
+                      </div>
                     </div>
                   </form>
 
