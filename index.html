@@ -1148,7 +1148,10 @@
         const align = () => {
           const vv = window.visualViewport;
           if (!vv) return;
-          const padding = 12;
+          // iOS рисует над клавиатурой системную панель (стрелки + «Готово») ~44px,
+          // которую нельзя убрать из веба. Оставляем под неё запас, чтобы она не перекрывала «Вес (г)» и «+».
+          const isIOS = /iP(hone|od|ad)/.test(navigator.platform) || (/Mac/.test(navigator.platform) && navigator.maxTouchPoints > 1);
+          const padding = isIOS ? 56 : 12;
           // Сначала ужимаем список подсказок так, чтобы вся форма (список + поиск + вес/плюс)
           // помещалась в видимую область над клавиатурой и список оставался виден и скроллился.
           const list = foodSuggestRef.current;
