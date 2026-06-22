@@ -567,6 +567,13 @@
 
     const { useState, useEffect, useRef } = React;
 
+    // Безопасная обёртка над Motion One: если библиотека не загрузилась — тихо ничего не делаем.
+    const EASE_OUT = [0.22, 1, 0.36, 1];
+    const mAnimate = (el, keyframes, options) => {
+      if (!el || !(window.Motion && window.Motion.animate)) return null;
+      try { return window.Motion.animate(el, keyframes, options); } catch (e) { return null; }
+    };
+
     const evaluateMath = (expr) => {
       if (!expr) return 0;
       try {
@@ -1135,6 +1142,12 @@
             scrollContainerRef.current.scrollTop = 0;
         }
       }, [activeTab, showReportView]);
+
+      // Плавный переход контента при смене вкладки (Motion One).
+      useEffect(() => {
+        if (showReportView) return;
+        mAnimate(scrollContainerRef.current, { opacity: [0, 1], y: [10, 0] }, { duration: 0.34, easing: EASE_OUT });
+      }, [activeTab]);
 
       useEffect(() => {
         if (bodyEditorScrollRef.current === null) return;
