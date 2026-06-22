@@ -1158,85 +1158,62 @@
         if (kbTrackRef.current) kbTrackRef.current();
 
         let cancelled = false;
-        let rafTween = 0;
-        let settleTimer = 0;
+        let raf = 0;
+        let lastListVvH = -1;
+        let stable = 0;
+        const t0 = performance.now();
 
-        // Целевая позиция формы фиксирована относительно экрана (низ формы — над панелью/клавиатурой),
-        // поэтому из любой начальной позиции скролла форма приезжает в одно и то же место.
+        // Высоту списка подсказок подстраиваем только когда меняется visualViewport (открытие клавиатуры),
+        // чтобы не было рефлоу каждый кадр. Список остаётся виден ("Не выбрано" + продукты) и скроллится внутри.
+        const syncListHeight = () => {
+          const list = foodSuggestRef.current;
+          if (!list || Math.abs(vv.height - lastListVvH) < 2) return;
+          lastListVvH = vv.height;
+          const otherH = form.getBoundingClientRect().height - list.getBoundingClientRect().height;
+          const available = vv.height - KB_ACCESSORY - KB_GAP * 2 - otherH;
+          const maxH = Math.max(132, Math.min(240, available));
+          list.style.maxHeight = maxH + 'px';
+          list.style.minHeight = Math.min(132, maxH) + 'px';
+        };
+
+        // Цель фиксирована относительно экрана: низ формы — над панелью iOS/клавиатурой.
+        // Снизу добавляем запас, чтобы скролла всегда хватало дойти до этой точки из любого положения.
         const computeTarget = () => {
-          // Гарантируем, что снизу всегда хватает места для скролла: добавляем запас под клавиатуру.
           const kbOverlap = Math.max(0, window.innerHeight - (vv.offsetTop + vv.height));
           container.style.paddingBottom = (kbOverlap + KB_ACCESSORY + 32) + 'px';
-          // Ужимаем список подсказок, чтобы форма целиком влезала над клавиатурой, а список скроллился внутри.
-          const list = foodSuggestRef.current;
-          if (list) {
-            const otherH = form.getBoundingClientRect().height - list.getBoundingClientRect().height;
-            const available = vv.height - KB_ACCESSORY - KB_GAP * 2 - otherH;
-            const maxH = Math.max(132, Math.min(240, available));
-            list.style.maxHeight = maxH + 'px';
-            list.style.minHeight = Math.min(132, maxH) + 'px';
-          }
-          // Целевая позиция низа формы в viewport (где должен быть низ формы на экране)
-          const targetViewportY = vv.height - KB_ACCESSORY - KB_GAP;
-          // Текущая позиция низа формы в viewport (от getBoundingClientRect)
+          syncListHeight();
           const formBottom = form.getBoundingClientRect().bottom;
-          // На сколько нужно скроллить, чтобы низ формы был на целевой позиции
-          const delta = formBottom - targetViewportY;
-          // Целевой scrollTop (независимо от текущей позиции скролла)
+          const visibleBottom = vv.offsetTop + vv.height - KB_ACCESSORY - KB_GAP;
           const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
-          return Math.max(0, Math.min(maxScroll, container.scrollTop + delta));
+          return Math.max(0, Math.min(maxScroll, container.scrollTop + (formBottom - visibleBottom)));
         };
 
-        // Плавный твин скролла к цели (единая анимация, не зависит от частоты событий клавиатуры).
-        const tweenTo = (target) => {
-          cancelAnimationFrame(rafTween);
-          const start = container.scrollTop;
-          const dist = target - start;
-          if (Math.abs(dist) < 1) return;
-          const dur = 340;
-          const t0 = performance.now();
-          const ease = (t) => 1 - Math.pow(1 - t, 3); // easeOutCubic
-          const step = (now) => {
-            if (cancelled) return;
-            const p = Math.min(1, (now - t0) / dur);
-            container.scrollTop = start + dist * ease(p);
-            if (p < 1) rafTween = requestAnimationFrame(step);
-          };
-          rafTween = requestAnimationFrame(step);
-        };
-
-        // Ждём, пока клавиатура полностью откроется (visualViewport перестанет меняться),
-        // и только потом считаем цель и анимируем — так положение всегда одинаковое.
-        const schedule = () => {
-          clearTimeout(settleTimer);
-          settleTimer = setTimeout(() => { if (!cancelled) tweenTo(computeTarget()); }, 60);
-        };
-        const onResize = () => schedule();
-        vv.addEventListener('resize', onResize);
-        // Если клавиатура уже открыта (переход поиск ↔ вес) — позиционируем мгновенно, без анимации.
-        // Иначе ждём resize от открытия клавиатуры, чтобы не делать преждевременный твин.
-        const kbOpenNow = (window.innerHeight - (vv.offsetTop + vv.height)) > 100;
-        if (kbOpenNow) {
-          // Клавиатура уже открыта — позиционируем без анимации, избегаем дёргания
+        // Следящая анимация: каждый кадр сами пишем scrollTop (перекрывая нативный скролл браузера)
+        // и плавно тянем к цели. Цель поднимается вместе с клавиатурой → движение одно и плавное,
+        // а финальная точка всегда одна и та же независимо от стартовой позиции скролла.
+        const follow = (now) => {
+          if (cancelled) return;
           const target = computeTarget();
-          if (Math.abs(container.scrollTop - target) > 1) {
-            container.scrollTop = target;
-          }
-        } else {
-          schedule();
-        }
-        const fallbackTimer = setTimeout(schedule, 600); // страховка, если resize не пришёл
+          const cur = container.scrollTop;
+          const diff = target - cur;
+          if (Math.abs(diff) < 0.5) { container.scrollTop = target; stable++; }
+          else { container.scrollTop = cur + diff * 0.2; stable = 0; }
+          const elapsed = now - t0;
+          if (stable >= 4 && elapsed > 360) return;   // дошли и стабильно — стоп
+          if (elapsed > 1300) return;                 // жёсткий предел
+          raf = requestAnimationFrame(follow);
+        };
+        raf = requestAnimationFrame(follow);
 
-        // Останавливает анимацию/слушатели, но не трогает отступ — чтобы при переходе поиск → вес не было рывка.
+        // Держим цикл живым на время открытия клавиатуры (когда приходят события resize).
+        const onResize = () => { stable = 0; if (!cancelled) { cancelAnimationFrame(raf); raf = requestAnimationFrame(follow); } };
+        vv.addEventListener('resize', onResize);
+
         const cancel = () => {
           cancelled = true;
-          cancelAnimationFrame(rafTween);
-          clearTimeout(settleTimer);
-          clearTimeout(killTimer);
-          clearTimeout(fallbackTimer);
+          cancelAnimationFrame(raf);
           vv.removeEventListener('resize', onResize);
         };
-        const killTimer = setTimeout(() => { vv.removeEventListener('resize', onResize); }, 1600);
         kbTrackRef.current = cancel;
       };
 
