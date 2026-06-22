@@ -1141,39 +1141,57 @@
         gramsInputRef.current?.blur();
       };
 
+      const kbTrackRef = useRef(null);
+      // iOS рисует над клавиатурой системную панель (стрелки + «Готово») ~44px, убрать её из веба нельзя.
+      // На iOS visualViewport.height её не вычитает, поэтому учитываем сами; на Android/десктопе панели нет.
+      const IS_IOS = typeof navigator !== 'undefined' && (/iP(hone|od|ad)/.test(navigator.platform) || (/Mac/.test(navigator.platform) && navigator.maxTouchPoints > 1));
+      const KB_ACCESSORY = IS_IOS ? 44 : 0;
+      const KB_GAP = 6; // небольшой воздух между полем и панелью/клавиатурой
+
       const keepMealFormAboveKeyboard = () => {
         const container = scrollContainerRef.current;
         const form = mealFormRef.current;
-        if (!container || !form) return;
+        const vv = window.visualViewport;
+        if (!container || !form || !vv) return;
+
         const align = () => {
-          const vv = window.visualViewport;
-          if (!vv) return;
-          // iOS рисует над клавиатурой системную панель (стрелки + «Готово») ~44px,
-          // которую нельзя убрать из веба. Оставляем под неё запас, чтобы она не перекрывала «Вес (г)» и «+».
-          const isIOS = /iP(hone|od|ad)/.test(navigator.platform) || (/Mac/.test(navigator.platform) && navigator.maxTouchPoints > 1);
-          const padding = isIOS ? 56 : 12;
-          // Сначала ужимаем список подсказок так, чтобы вся форма (список + поиск + вес/плюс)
-          // помещалась в видимую область над клавиатурой и список оставался виден и скроллился.
+          // Ужимаем список подсказок, чтобы вся форма (список + поиск + вес/плюс) влезала над клавиатурой,
+          // а список оставался виден и скроллился внутри себя.
           const list = foodSuggestRef.current;
           if (list) {
             const formH = form.getBoundingClientRect().height;
             const listH = list.getBoundingClientRect().height;
             const otherH = formH - listH; // заголовок + поиск + строка веса + отступы
-            const available = vv.height - padding * 2 - otherH;
+            const available = vv.height - KB_ACCESSORY - KB_GAP * 2 - otherH;
             const maxH = Math.max(132, Math.min(240, available));
             list.style.maxHeight = maxH + 'px';
             list.style.minHeight = Math.min(132, maxH) + 'px';
           }
-          const formRect = form.getBoundingClientRect();
-          const visibleBottom = vv.offsetTop + vv.height;
-          const delta = formRect.bottom - (visibleBottom - padding);
+          const formBottom = form.getBoundingClientRect().bottom;
+          const visibleBottom = vv.offsetTop + vv.height - KB_ACCESSORY - KB_GAP;
+          const delta = formBottom - visibleBottom;
+          if (Math.abs(delta) < 1) return;
           const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
-          const targetScroll = Math.max(0, Math.min(maxScroll, container.scrollTop + delta));
-          if (Math.abs(delta) > 4) container.scrollTo({ top: targetScroll, behavior: 'auto' });
+          container.scrollTop = Math.max(0, Math.min(maxScroll, container.scrollTop + delta));
         };
-        setTimeout(align, 80);
-        setTimeout(align, 280);
-        setTimeout(align, 520);
+
+        // Следим за анимацией клавиатуры по событиям visualViewport — это даёт плавное движение
+        // вместо «прыжков» по таймерам. Слушатель снимается, когда клавиатура устаканилась или поле потеряло фокус.
+        if (kbTrackRef.current) kbTrackRef.current();
+        let raf = 0;
+        const onChange = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(align); };
+        vv.addEventListener('resize', onChange);
+        vv.addEventListener('scroll', onChange);
+        onChange();
+        const stop = () => {
+          cancelAnimationFrame(raf);
+          vv.removeEventListener('resize', onChange);
+          vv.removeEventListener('scroll', onChange);
+          clearTimeout(timer);
+          kbTrackRef.current = null;
+        };
+        const timer = setTimeout(stop, 1200);
+        kbTrackRef.current = stop;
       };
 
       const selectFood = (foodId) => {
@@ -2377,6 +2395,7 @@
                         }}
                         onBlur={() => setTimeout(() => {
                           setFoodSearchFocused(false);
+                          if (kbTrackRef.current) kbTrackRef.current();
                           if (foodSuggestRef.current) {
                             foodSuggestRef.current.style.maxHeight = '';
                             foodSuggestRef.current.style.minHeight = '';
