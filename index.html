@@ -179,11 +179,9 @@
       will-change: transform;
     }
 
-    /* Затухание обоих краёв горизонтальных списков — содержимое будто уходит «в стену» с двух сторон. */
-    .hscroll-fade {
-      -webkit-mask-image: linear-gradient(to right, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%);
-      mask-image: linear-gradient(to right, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%);
-    }
+    /* Затухание краёв горизонтальных списков включается из JS только с той стороны,
+       где есть прокручиваемое содержимое (крайние элементы в покое остаются чёткими). */
+    .hscroll-fade { transition: -webkit-mask-image 140ms linear, mask-image 140ms linear; }
 
     .btn-active:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.04); }
     .btn-active:active:not(:disabled) { transform: scale(0.965); opacity: 0.82; }
@@ -906,6 +904,7 @@
       const foodSearchRef = useRef(null);
       const gramsInputRef = useRef(null);
       const mealListScrollRef = useRef(null);
+      const favScrollRef = useRef(null);
       const initialGoalsRef = useRef(false);
 
       // Авторизация: следим за состоянием входа
@@ -1061,6 +1060,39 @@
       useEffect(() => {
         if (mealListScrollRef.current) mealListScrollRef.current.scrollLeft = 0;
       }, [foodSearch]);
+
+      // Затухание краёв горизонтальных списков: включаем маску только с той стороны,
+      // где есть прокручиваемое содержимое. Крайние элементы в покое остаются чёткими.
+      useEffect(() => {
+        const FADE = 22, EPS = 2;
+        const right = `linear-gradient(to right, #000 calc(100% - ${FADE}px), transparent 100%)`;
+        const left = `linear-gradient(to right, transparent 0, #000 ${FADE}px, #000 100%)`;
+        const both = `linear-gradient(to right, transparent 0, #000 ${FADE}px, #000 calc(100% - ${FADE}px), transparent 100%)`;
+        const update = (el) => {
+          if (!el) return;
+          const canL = el.scrollLeft > EPS;
+          const canR = el.scrollLeft + el.clientWidth < el.scrollWidth - EPS;
+          const mask = canL && canR ? both : canR ? right : canL ? left : 'none';
+          el.style.webkitMaskImage = mask;
+          el.style.maskImage = mask;
+        };
+        const els = [favScrollRef.current, mealListScrollRef.current].filter(Boolean);
+        const cleanups = els.map((el) => {
+          const fn = () => update(el);
+          fn();
+          el.addEventListener('scroll', fn, { passive: true });
+          return () => el.removeEventListener('scroll', fn);
+        });
+        const onResize = () => els.forEach(update);
+        window.addEventListener('resize', onResize);
+        // Контент мог отрендериться чуть позже — пересчитаем на следующем кадре.
+        const raf = requestAnimationFrame(() => els.forEach(update));
+        return () => {
+          cleanups.forEach((c) => c());
+          window.removeEventListener('resize', onResize);
+          cancelAnimationFrame(raf);
+        };
+      }, [activeTab, foodSearch, foods, selectedFoodId]);
 
       const startExport = () => {
         setShowExportModal(false);
@@ -2292,7 +2324,7 @@
 
                     {/* Избранное — отдельная строка сверху */}
                     {favoriteFoods.length > 0 && (
-                      <div className="hscroll-fade flex gap-2 overflow-x-auto py-2 -my-2 px-1 -mx-1" onClick={(e) => e.stopPropagation()}>
+                      <div ref={favScrollRef} className="hscroll-fade flex gap-2 overflow-x-auto py-2 -my-2 px-1 -mx-1" onClick={(e) => e.stopPropagation()}>
                         {favoriteFoods.map(f => (
                           <button type="button" key={f.id} onClick={() => selectedFoodId === f.id ? clearFoodSelection() : selectFood(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
                         ))}
@@ -2321,7 +2353,7 @@
                       />
                       {foodSearch && (
                         <button type="button" onClick={() => { setFoodSearch(''); foodSearchRef.current?.focus(); }} className="absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 bg-transparent text-zinc-400 flex items-center justify-center active:text-zinc-200" title="Очистить поиск">
-                          <span className="leading-none" style={{ fontSize: '55px', marginTop: '-0.19em' }}>×</span>
+                          <span className="leading-none" style={{ fontSize: '48px', marginTop: '-0.19em' }}>×</span>
                         </button>
                       )}
                     </div>
