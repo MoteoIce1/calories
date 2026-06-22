@@ -179,6 +179,12 @@
       will-change: transform;
     }
 
+    /* Затухание правого края горизонтальных списков — содержимое будто уходит «в стену». */
+    .hscroll-fade {
+      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
+      mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent 100%);
+    }
+
     .btn-active:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.04); }
     .btn-active:active:not(:disabled) { transform: scale(0.965); opacity: 0.82; }
     .list-item-active { transition: transform 260ms var(--ease-out), background-color 260ms var(--ease-out), border-color 260ms var(--ease-out), box-shadow 260ms var(--ease-out); }
@@ -2287,7 +2293,7 @@
 
                     {/* Избранное — отдельная строка сверху */}
                     {favoriteFoods.length > 0 && (
-                      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" onClick={(e) => e.stopPropagation()}>
+                      <div className="hscroll-fade flex gap-2 overflow-x-auto pb-1 -mx-1 px-1" onClick={(e) => e.stopPropagation()}>
                         {favoriteFoods.map(f => (
                           <button type="button" key={f.id} onClick={() => selectedFoodId === f.id ? clearFoodSelection() : selectFood(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
                         ))}
@@ -2315,7 +2321,7 @@
                         onChange={(e) => setFoodSearch(e.target.value)}
                       />
                       {foodSearch && (
-                        <button type="button" onClick={() => { setFoodSearch(''); foodSearchRef.current?.focus(); }} className="btn-active absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-transparent text-zinc-400 text-4xl leading-none flex items-center justify-center" title="Очистить поиск">
+                        <button type="button" onClick={() => { setFoodSearch(''); foodSearchRef.current?.focus(); }} className="absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 bg-transparent text-zinc-400 text-5xl leading-none flex items-center justify-center active:text-zinc-200" title="Очистить поиск">
                           ×
                         </button>
                       )}
@@ -2324,7 +2330,7 @@
                     {/* «Не выбрано» — вне прокрутки (за ней ничего не видно); справа прокручиваемый список не‑избранных продуктов */}
                     <div className="flex items-start gap-2 -mx-1 px-1" onClick={(e) => e.stopPropagation()}>
                       <button type="button" onClick={clearFoodSelection} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${!selectedFoodId ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-emerald-300 border-emerald-700/40'}`}>Не выбрано</button>
-                      <div ref={mealListScrollRef} className="flex gap-2 overflow-x-auto pb-1 min-w-0">
+                      <div ref={mealListScrollRef} className="hscroll-fade flex gap-2 overflow-x-auto pb-1 min-w-0">
                         {mealListFoods.map(f => (
                           <button type="button" key={f.id} onClick={() => selectFood(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
                         ))}
