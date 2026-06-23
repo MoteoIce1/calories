@@ -1550,12 +1550,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
       if (showReportView) {
         return (
-          <div className="report-view" style={{ background: '#070706', color: '#f8f1e4', height: '100lvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '8px', paddingTop: 'max(10px, calc(env(safe-area-inset-top) + 4px))', position: 'relative', zIndex: 2 }}>
-            <div className="print-hide" style={{ position: 'sticky', top: '6px', zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '22px', padding: '10px', background: 'rgba(14, 13, 11, 0.94)', border: '1px solid rgba(220, 178, 100, 0.2)', borderRadius: '10px', boxShadow: '0 14px 32px rgba(0, 0, 0, 0.34)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+          <div className="report-view" style={{ background: '#0b0f0d', color: '#dcfce7', height: '100lvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '8px', paddingTop: 'max(10px, calc(env(safe-area-inset-top) + 4px))', position: 'relative', zIndex: 2 }}>
+            <div className="print-hide" style={{ position: 'sticky', top: '6px', zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '22px', padding: '10px', background: 'rgba(15, 21, 18, 0.94)', border: '1px solid rgba(52, 211, 153, 0.2)', borderRadius: '10px', boxShadow: '0 14px 32px rgba(0, 0, 0, 0.34)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
                <button 
                  onClick={() => { setIsPrinting(false); setShowReportView(false); }} 
                  className="btn-active" 
-                 style={{ padding: '12px 18px', background: '#16140f', borderRadius: '8px', fontWeight: 'bold', color: '#f5ead4', border: '1px solid rgba(220, 178, 100, 0.18)', fontSize: '14px', transition: 'all 0.2s', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                 style={{ padding: '12px 18px', background: '#18211c', borderRadius: '8px', fontWeight: 'bold', color: '#d1fae5', border: '1px solid rgba(52, 211, 153, 0.18)', fontSize: '14px', transition: 'all 0.2s', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                >
                  <IconArrowLeft className="w-4 h-4" /> Назад
                </button>
@@ -1563,7 +1563,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                  onClick={handlePrintClick} 
                  disabled={isPrinting}
                  className="btn-active" 
-                 style={{ padding: '12px 18px', background: isPrinting ? '#9d7737' : 'linear-gradient(110deg, #8f6a32, #e0bb6e, #9b7337)', borderRadius: '8px', fontWeight: 'bold', color: '#17130b', border: 'none', fontSize: '14px', boxShadow: '0 12px 24px rgba(200, 157, 80, 0.18)', transition: 'all 0.2s', opacity: isPrinting ? 0.8 : 1, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                 style={{ padding: '12px 18px', background: isPrinting ? '#187a58' : 'linear-gradient(110deg, #0f8b61, #34d399, #a7f3d0, #12805d)', borderRadius: '8px', fontWeight: 'bold', color: '#082016', border: 'none', fontSize: '14px', boxShadow: '0 12px 24px rgba(52, 211, 153, 0.18)', transition: 'all 0.2s', opacity: isPrinting ? 0.8 : 1, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                >
                  {isPrinting ? 'Обработка...' : <><IconPrinter className="w-4 h-4" /> Сохранить PDF</>}
                </button>
