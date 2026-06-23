@@ -992,10 +992,10 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       );
       const metricChartLabels = metricChartDates.map(date => date.slice(5));
       const metricChartSeries = [
-        { key: 'weight', title: 'Вес', unit: 'кг', color: '#d8b46d' },
-        { key: 'fatPercent', title: 'Жир', unit: '%', color: '#e06d6d' },
-        { key: 'leanMass', title: 'БЖМ', unit: 'кг', color: '#83b3ae' },
-        { key: 'fatMass', title: 'Масса жира', unit: 'кг', color: '#c6a56d' },
+        { key: 'weight', title: 'Вес', unit: 'кг', color: '#a3e635' },
+        { key: 'fatPercent', title: 'Жир', unit: '%', color: '#f87171' },
+        { key: 'leanMass', title: 'БЖМ', unit: 'кг', color: '#38bdf8' },
+        { key: 'fatMass', title: 'Масса жира', unit: 'кг', color: '#f59e0b' },
       ].map(series => ({ ...series, data: metricChartDates.map(date => dailyMetrics[date]?.[series.key]) }));
 
       const allDatesSet = new Set([
@@ -1550,12 +1550,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
       if (showReportView) {
         return (
-          <div className="report-view" style={{ background: '#141414', color: '#fff0ed', height: '100lvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '8px', paddingTop: 'max(10px, calc(env(safe-area-inset-top) + 4px))', position: 'relative', zIndex: 2 }}>
-            <div className="print-hide" style={{ position: 'sticky', top: '6px', zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '22px', padding: '10px', background: 'rgba(28, 28, 28, 0.94)', border: '1px solid rgba(251, 111, 97, 0.2)', borderRadius: '10px', boxShadow: '0 14px 32px rgba(0, 0, 0, 0.34)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+          <div className="report-view" style={{ background: '#0a0a0b', color: '#fafafa', height: '100lvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '8px', paddingTop: 'max(10px, calc(env(safe-area-inset-top) + 4px))', position: 'relative', zIndex: 2 }}>
+            <div className="print-hide" style={{ position: 'sticky', top: '6px', zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '22px', padding: '10px', background: 'rgba(10, 10, 11, 0.85)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '14px', boxShadow: 'none', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
                <button 
                  onClick={() => { setIsPrinting(false); setShowReportView(false); }} 
                  className="btn-active" 
-                 style={{ padding: '12px 18px', background: '#2a2a2a', borderRadius: '8px', fontWeight: 'bold', color: '#ffe4df', border: '1px solid rgba(251, 111, 97, 0.18)', fontSize: '14px', transition: 'all 0.2s', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                 style={{ padding: '12px 18px', background: '#202023', borderRadius: '12px', fontWeight: 'bold', color: '#fafafa', border: '1px solid rgba(255, 255, 255, 0.1)', fontSize: '14px', transition: 'all 0.2s', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                >
                  <IconArrowLeft className="w-4 h-4" /> Назад
                </button>
@@ -1563,7 +1563,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                  onClick={handlePrintClick} 
                  disabled={isPrinting}
                  className="btn-active" 
-                 style={{ padding: '12px 18px', background: isPrinting ? '#c34c43' : 'linear-gradient(110deg, #d84f46, #fb6f61, #ffc1b9, #d95047)', borderRadius: '8px', fontWeight: 'bold', color: '#260d0b', border: 'none', fontSize: '14px', boxShadow: '0 12px 24px rgba(251, 111, 97, 0.18)', transition: 'all 0.2s', opacity: isPrinting ? 0.8 : 1, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                 style={{ padding: '12px 18px', background: isPrinting ? '#84cc16' : '#a3e635', borderRadius: '12px', fontWeight: 'bold', color: '#0a0a0b', border: 'none', fontSize: '14px', boxShadow: 'none', transition: 'all 0.2s', opacity: isPrinting ? 0.8 : 1, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                >
                  {isPrinting ? 'Обработка...' : <><IconPrinter className="w-4 h-4" /> Сохранить PDF</>}
                </button>

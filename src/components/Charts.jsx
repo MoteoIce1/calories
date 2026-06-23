@@ -61,8 +61,8 @@ import { movingAverage } from '../utils/stats.js';
           <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
             {yTicks.map((t, k) => (
               <g key={k}>
-                <line x1={padL} y1={yFor(t)} x2={W - padR} y2={yFor(t)} stroke="rgba(222, 190, 132, 0.18)" strokeWidth="1" />
-                <text x={padL - 5} y={yFor(t) + 3} textAnchor="end" fontSize="8" fill="#a69b8a">{t.toFixed(1)}</text>
+                <line x1={padL} y1={yFor(t)} x2={W - padR} y2={yFor(t)} stroke="rgba(0, 0, 0, 0.08)" strokeWidth="1" />
+                <text x={padL - 5} y={yFor(t) + 3} textAnchor="end" fontSize="8" fill="#94a3b8">{t.toFixed(1)}</text>
               </g>
             ))}
             <polyline points={rawLine} fill="none" stroke={color} strokeWidth={showAverage ? 1 : 2} strokeOpacity={showAverage ? 0.3 : 1} strokeLinejoin="round" strokeLinecap="round" />
@@ -70,15 +70,15 @@ import { movingAverage } from '../utils/stats.js';
               <circle key={k} cx={xFor(p.i)} cy={yFor(p.v)} r="2.2" fill={color} fillOpacity={showAverage ? 0.35 : 1} />
             ))}
             {avgLine && <polyline points={avgLine} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
-            <text x={padL} y={H - 7} textAnchor="start" fontSize="8" fill="#a69b8a">{dates[validPoints[0].i]}</text>
-            <text x={W - padR} y={H - 7} textAnchor="end" fontSize="8" fill="#a69b8a">{dates[validPoints[validPoints.length - 1].i]}</text>
+            <text x={padL} y={H - 7} textAnchor="start" fontSize="8" fill="#94a3b8">{dates[validPoints[0].i]}</text>
+            <text x={W - padR} y={H - 7} textAnchor="end" fontSize="8" fill="#94a3b8">{dates[validPoints[validPoints.length - 1].i]}</text>
           </svg>
           {showAverage && <p className="text-[8px] text-slate-500 mt-1 text-center">{averageMode === 'period' ? 'Линия — среднее за выбранный период, точки — дни' : 'Линия — среднее за 7 дней, точки — замеры'}</p>}
         </div>
       );
     };
 
-    const MiniWeightChart = ({ title = 'Динамика веса', data, dates, color = '#d8b46d', unit = 'кг' }) => {
+    const MiniWeightChart = ({ title = 'Динамика веса', data, dates, color = '#a3e635', unit = 'кг' }) => {
       const points = (data || [])
         .map((v, i) => ({ v: Number(v), i, raw: v }))
         .filter(p => p.raw !== null && p.raw !== undefined && p.raw !== '' && !isNaN(p.v));
@@ -107,14 +107,14 @@ import { movingAverage } from '../utils/stats.js';
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block">
             {yTicks.map((tick) => (
               <g key={tick}>
-                <line x1={padL} y1={yFor(tick)} x2={W - padR} y2={yFor(tick)} stroke="rgba(222, 190, 132, 0.13)" strokeWidth="1" />
-                <text x={padL - 5} y={yFor(tick) + 3} textAnchor="end" fontSize="8" fill="#8f8373">{tick}</text>
+                <line x1={padL} y1={yFor(tick)} x2={W - padR} y2={yFor(tick)} stroke="rgba(255, 255, 255, 0.08)" strokeWidth="1" />
+                <text x={padL - 5} y={yFor(tick) + 3} textAnchor="end" fontSize="8" fill="#8b8b91">{tick}</text>
               </g>
             ))}
             <polyline points={line} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             {points.map((p, idx) => <circle key={idx} cx={xFor(p.i)} cy={yFor(p.v)} r="2.2" fill={color} />)}
-            <text x={padL} y={H - 2} fontSize="9" fill="#8f8373">{dates[points[0].i]}</text>
-            <text x={W - padR} y={H - 2} textAnchor="end" fontSize="9" fill="#8f8373">{dates[points[points.length - 1].i]}</text>
+            <text x={padL} y={H - 2} fontSize="9" fill="#8b8b91">{dates[points[0].i]}</text>
+            <text x={W - padR} y={H - 2} textAnchor="end" fontSize="9" fill="#8b8b91">{dates[points[points.length - 1].i]}</text>
           </svg>
         </div>
       );
