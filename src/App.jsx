@@ -7,7 +7,7 @@ import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
-import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter } from './components/Icons.jsx';
+import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera } from './components/Icons.jsx';
 
     // Плавный «накрут» числа при изменении значения (count-up).
     function AnimatedNumber({ value, className }) {
@@ -96,6 +96,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const [showGoalModal, setShowGoalModal] = useState(false);
       const [exportStart, setExportStart] = useState(getDefaultStartDate());
       const [exportEnd, setExportEnd] = useState(getDefaultExportEndDate());
+      const [installPrompt, setInstallPrompt] = useState(null);
 
       const scrollContainerRef = useRef(null);
       const bodyEditorScrollRef = useRef(null);
@@ -115,6 +116,20 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
           if (!user) { setIsLoading(false); initialGoalsRef.current = false; }
         });
         return () => unsub();
+      }, []);
+
+      useEffect(() => {
+        const handleBeforeInstallPrompt = (event) => {
+          event.preventDefault();
+          setInstallPrompt(event);
+        };
+        const handleAppInstalled = () => setInstallPrompt(null);
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        window.addEventListener('appinstalled', handleAppInstalled);
+        return () => {
+          window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+          window.removeEventListener('appinstalled', handleAppInstalled);
+        };
       }, []);
 
       const doAuth = async () => {
@@ -832,6 +847,13 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       };
 
       const forceRefreshApp = () => window.location.href = window.location.pathname + '?v=' + Date.now();
+
+      const installApp = async () => {
+        if (!installPrompt) return;
+        await installPrompt.prompt();
+        await installPrompt.userChoice;
+        setInstallPrompt(null);
+      };
 
       const toggleWorkout = () => {
         const updated = { ...dailyWorkouts, [currentDate]: !dailyWorkouts[currentDate] };
@@ -2123,6 +2145,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                   <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Аккаунт</h2>
                     <p className="text-xs text-zinc-500 break-all">{auth.currentUser ? auth.currentUser.email : ''}</p>
+                    {installPrompt && <button type="button" onClick={installApp} className="btn-active w-full bg-indigo-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2"><IconDownload className="w-5 h-5" />Установить приложение</button>}
                     <button onClick={() => { if (confirm('Выйти из аккаунта?')) auth.signOut(); }} className="btn-active w-full bg-zinc-800 text-red-400 rounded-xl p-4 font-bold transition-all">Выйти</button>
                   </div>
                 </div>
@@ -2136,7 +2159,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                 <IconCalendar className="w-6 h-6" /><span className="text-[10px] font-bold mt-1 uppercase tracking-widest">Дневник</span>
               </button>
               <button onClick={() => setActiveTab('progress')} className={`btn-active w-24 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'progress' ? 'text-violet-300 bg-zinc-900/50' : 'text-zinc-600'}`}>
-                <span className="text-xl leading-6">📷</span><span className="text-[10px] font-bold mt-1 uppercase tracking-widest">Прогресс</span>
+                <IconCamera className="w-6 h-6" /><span className="text-[10px] font-bold mt-1 uppercase tracking-widest">Прогресс</span>
               </button>
               <button onClick={() => setActiveTab('directory')} className={`btn-active w-24 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'directory' ? 'text-indigo-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
                 <IconBook className="w-6 h-6" /><span className="text-[10px] font-bold mt-1 uppercase tracking-widest">База</span>
