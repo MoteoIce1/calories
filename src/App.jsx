@@ -78,7 +78,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const [showReportView, setShowReportView] = useState(false);
       const [isPrinting, setIsPrinting] = useState(false);
       
-      const defaultGoals = { calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: 6000, maintenance: 2300, targetFat: 12, waterGoal: 2500 };
+      const defaultGoals = { calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: 6000, maintenance: 2300, targetFat: 12, waterGoal: 2500, deficit: 500 };
       const [goals, setGoals] = useState(defaultGoals);
       const [draftGoals, setDraftGoals] = useState(defaultGoals);
       const [dailyGoals, setDailyGoals] = useState({});
@@ -117,6 +117,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const [singleBodyPhoto, setSingleBodyPhoto] = useState(null);
       const [singleBodyPhotoZoom, setSingleBodyPhotoZoom] = useState(false);
       const [dismissedBodyReminderDate, setDismissedBodyReminderDate] = useState(() => localStorage.getItem('body-reminder-dismissed') || '');
+      const [kbjuRecalcDismissed, setKbjuRecalcDismissed] = useState(() => localStorage.getItem('kbju-recalc-dismissed') || '');
       const [dailyLogs, setDailyLogs] = useState({});
       const [dailySteps, setDailySteps] = useState({});
       const [dailyMetrics, setDailyMetrics] = useState({});
@@ -289,9 +290,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
           if (docSnap.exists) {
             const data = docSnap.data();
             if (data.goals) {
-              setGoals({ ...defaultGoals, ...data.goals });
+              const loaded = { ...defaultGoals, ...data.goals };
+              // Дефицит мог не сохраняться в старых данных — выводим из нормы и цели.
+              if (data.goals.deficit === undefined) loaded.deficit = Math.round((Number(loaded.maintenance) || 0) - (Number(loaded.calories) || 0));
+              setGoals(loaded);
               if (!initialGoalsRef.current) {
-                setDraftGoals({ ...defaultGoals, ...data.goals });
+                setDraftGoals(loaded);
                 initialGoalsRef.current = true;
               }
             }
@@ -493,14 +497,26 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       };
 
       const handleDraftGoalChange = (field, val) => setDraftGoals({ ...draftGoals, [field]: val });
-      // Дефицит и цель калорий связаны через норму: цель = норма − дефицит.
-      // Меняем дефицит → пересчитываем цель калорий (и наоборот цель сама задаёт дефицит).
-      const handleDeficitChange = (val) => {
-        const maintenance = Number(draftGoals.maintenance) || 0;
-        const deficit = val === '' ? 0 : parseInt(val);
-        setDraftGoals({ ...draftGoals, calories: Math.max(0, maintenance - deficit) });
+      // Дефицит ↔ цель калорий ↔ норма связаны: цель = норма − дефицит.
+      // Каждое поле — обычный редактируемый ввод (можно очищать), при числе пересчитывается связанное.
+      const goalNum = (v) => (v === '' || v === null || v === undefined || isNaN(parseFloat(v))) ? null : parseFloat(v);
+      // edited-поле принимает число (или сырую строку для промежуточного «-»); связанное пересчитываем только при числе.
+      const editedVal = (val, parsed) => val === '' ? '' : (parsed === null ? val : parsed);
+      const handleCaloriesChange = (val) => {
+        const m = goalNum(draftGoals.maintenance) || 0;
+        const c = goalNum(val);
+        setDraftGoals({ ...draftGoals, calories: editedVal(val, c), ...(c === null ? {} : { deficit: Math.round(m - c) }) });
       };
-      const draftDeficit = (Number(draftGoals.maintenance) || 0) - (Number(draftGoals.calories) || 0);
+      const handleDeficitChange = (val) => {
+        const m = goalNum(draftGoals.maintenance) || 0;
+        const d = goalNum(val);
+        setDraftGoals({ ...draftGoals, deficit: editedVal(val, d), ...(d === null ? {} : { calories: Math.max(0, Math.round(m - d)) }) });
+      };
+      const handleMaintenanceChange = (val) => {
+        const m = goalNum(val);
+        const d = goalNum(draftGoals.deficit) || 0;
+        setDraftGoals({ ...draftGoals, maintenance: editedVal(val, m), ...(m === null ? {} : { calories: Math.max(0, Math.round(m - d)) }) });
+      };
 
       const confirmGoalSave = (mode) => {
         if (!confirm('Вы уверены, что хотите применить новые настройки?')) return;
@@ -970,9 +986,11 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
       // Автоматический расчёт КБЖУ по формуле и открытие модалки применения целей.
       const applyAutoKbju = () => {
-        const res = computeKbju(profileData);
+        const res = computeKbju(effectiveProfile);
         if (!res) { alert('Заполните пол, возраст, рост и вес — по ним считается КБЖУ.'); return; }
-        setDraftGoals({ ...draftGoals, calories: res.calories, protein: res.protein, fats: res.fats, carbs: res.carbs, maintenance: res.maintenance });
+        setDraftGoals({ ...draftGoals, calories: res.calories, protein: res.protein, fats: res.fats, carbs: res.carbs, maintenance: res.maintenance, deficit: Number(effectiveProfile.deficit) || 0 });
+        // Запоминаем вес из замеров и дату расчёта — чтобы раз в месяц напоминать о пересчёте.
+        saveProfileData({ ...profileData, weight: effectiveProfile.weight, lastKbjuAt: getLocalDateString(new Date()) });
         setActiveTab('directory');
         setShowGoalModal(true);
       };
@@ -1072,7 +1090,20 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const waterGoal = Number(activeGoals.waterGoal) || 2500;
       const waterProgress = Math.min(100, (todayWater / (waterGoal || 1)) * 100);
       const blocks = settings.blocks || DEFAULT_SETTINGS.blocks;
-      const kbjuPreview = computeKbju(profileData);
+      // Вес для расчёта КБЖУ берём из последних замеров в «Прогрессе», если они есть.
+      const measuredWeight = (() => {
+        const ds = Object.keys(dailyMetrics).filter(d => dailyMetrics[d]?.weight).sort();
+        return ds.length ? Number(dailyMetrics[ds[ds.length - 1]].weight) : null;
+      })();
+      const effectiveProfile = { ...profileData, weight: measuredWeight != null ? measuredWeight : profileData.weight };
+      const kbjuPreview = computeKbju(effectiveProfile);
+      // Раз в месяц предлагаем пересчитать КБЖУ, если из-за изменившегося веса цель сдвинулась ≥50 ккал.
+      const kbjuToday = getLocalDateString(new Date());
+      const daysSinceDate = (d) => d ? Math.floor((new Date(kbjuToday) - new Date(d)) / 86400000) : Infinity;
+      const kbjuCalorieGap = (profileData.mode === 'auto' && kbjuPreview) ? Math.abs((kbjuPreview.calories || 0) - (Number(goals.calories) || 0)) : 0;
+      const showKbjuRecalc = profileData.mode === 'auto' && !!kbjuPreview && measuredWeight != null
+        && kbjuCalorieGap >= 50 && daysSinceDate(profileData.lastKbjuAt) >= 30 && daysSinceDate(kbjuRecalcDismissed) >= 30;
+      const dismissKbjuRecalc = () => { localStorage.setItem('kbju-recalc-dismissed', kbjuToday); setKbjuRecalcDismissed(kbjuToday); };
 
       // Избранное — в порядке favoriteIds (порядок задаёт сам пользователь).
       const favoriteFoods = favoriteIds.map(id => foods.find(f => f.id === id)).filter(Boolean);
@@ -1723,6 +1754,17 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
               <motion.div key={activeTab} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}>
               {activeTab === 'diary' && (
                 <div className="space-y-4">
+                  {showKbjuRecalc && (
+                    <div className="card-enter bg-amber-500/10 border border-amber-400/30 rounded-3xl p-4 flex gap-3 items-start">
+                      <div className="w-10 h-10 shrink-0 rounded-2xl bg-amber-400/15 flex items-center justify-center"><IconCalc className="w-5 h-5 text-amber-400" /></div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-amber-100">Пора пересчитать КБЖУ</p>
+                        <p className="text-xs text-amber-200/70 mt-1">Замеры изменились — по формуле выходит {kbjuPreview.calories} ккал вместо {goals.calories}. Обновить цели?</p>
+                        <button type="button" onClick={applyAutoKbju} className="btn-active mt-2 bg-amber-400 text-amber-950 rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-widest">Пересчитать</button>
+                      </div>
+                      <button type="button" onClick={dismissKbjuRecalc} className="btn-active shrink-0 text-[10px] font-bold text-amber-100/70 bg-amber-950/40 rounded-xl px-3 py-2">Позже</button>
+                    </div>
+                  )}
                   <div className="date-toolbar card-enter flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
                     <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(getLocalDateString(d));}} className="btn-active p-3 text-zinc-400"><IconChevronLeft className="w-5 h-5" /></button>
                     <div className="relative font-bold text-sm text-zinc-200 flex items-center justify-center cursor-pointer px-4">
@@ -2208,8 +2250,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     <div className="grid grid-cols-3 gap-3">
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ВОЗРАСТ</span><input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={profileData.age} onChange={(e) => handleProfileChange('age', e.target.value)} onFocus={(e) => e.target.select()} /></div>
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">РОСТ, СМ</span><input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={profileData.height} onChange={(e) => handleProfileChange('height', e.target.value)} onFocus={(e) => e.target.select()} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ВЕС, КГ</span><input type="number" inputMode="decimal" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={profileData.weight} onChange={(e) => handleProfileChange('weight', e.target.value)} onFocus={(e) => e.target.select()} /></div>
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ВЕС, КГ</span><input type="number" inputMode="decimal" step="0.1" disabled={measuredWeight != null} title={measuredWeight != null ? 'Берётся из замеров в «Прогрессе»' : undefined} className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors disabled:opacity-70" value={measuredWeight != null ? measuredWeight : profileData.weight} onChange={(e) => handleProfileChange('weight', e.target.value)} onFocus={(e) => e.target.select()} /></div>
                     </div>
+                    {measuredWeight != null && <p className="text-[10px] text-zinc-600 leading-relaxed">Вес берётся из последних замеров в «Прогрессе» ({measuredWeight} кг). Добавляйте замеры там — он обновится автоматически.</p>}
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-2">УРОВЕНЬ АКТИВНОСТИ</span>
                       <div className="flex flex-col gap-2">
@@ -2323,9 +2366,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                   <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><IconTarget className="w-4 h-4" /> Ваши цели</h2>
                     <div className="grid grid-cols-2 gap-3 mb-3">
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ (ЦЕЛЬ)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.calories} onChange={(e) => handleDraftGoalChange('calories', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЖЕЛАЕМЫЙ ДЕФИЦИТ</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftDeficit} onChange={(e) => handleDeficitChange(e.target.value)} onFocus={(e) => e.target.select()} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">НОРМА (БЕЗ ДЕФИЦИТА)</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-white font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.maintenance} onChange={(e) => handleDraftGoalChange('maintenance', e.target.value === '' ? '' : parseInt(e.target.value))} /></div>
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ (ЦЕЛЬ)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.calories} onChange={(e) => handleCaloriesChange(e.target.value)} onFocus={(e) => e.target.select()} /></div>
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЖЕЛАЕМЫЙ ДЕФИЦИТ</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.deficit} onChange={(e) => handleDeficitChange(e.target.value)} onFocus={(e) => e.target.select()} /></div>
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">НОРМА (БЕЗ ДЕФИЦИТА)</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-white font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.maintenance} onChange={(e) => handleMaintenanceChange(e.target.value)} onFocus={(e) => e.target.select()} /></div>
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">БАЗА ШАГОВ</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-300 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.baseSteps} onChange={(e) => handleDraftGoalChange('baseSteps', e.target.value === '' ? '' : parseInt(e.target.value))} /></div>
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">БЕЛОК (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.protein} onChange={(e) => handleDraftGoalChange('protein', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЖИРЫ (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.fats} onChange={(e) => handleDraftGoalChange('fats', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
