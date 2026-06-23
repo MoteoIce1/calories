@@ -207,3 +207,94 @@ exports.parseIngredients = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-ce
 
   return { ingredients };
 });
+
+// Распознавание блюда по фото: название, КБЖУ всей порции и примерный вес.
+// Если на фото не видно компонентов, сильно влияющих на КБЖУ (масло, соус, сахар),
+// возвращает needClarification=true с вопросами. Учитывает ответы пользователя.
+exports.analyzePhoto = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1', memory: '512MiB' }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Войдите в аккаунт.');
+  const imageBase64 = String((request.data && request.data.imageBase64) || '');
+  const mimeType = String((request.data && request.data.mimeType) || 'image/jpeg');
+  const answers = String((request.data && request.data.answers) || '').trim().slice(0, 1500);
+  if (!imageBase64) throw new HttpsError('invalid-argument', 'Нет изображения.');
+  if (imageBase64.length > 7000000) throw new HttpsError('invalid-argument', 'Слишком большое изображение.');
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) throw new HttpsError('invalid-argument', 'Поддерживаются JPEG, PNG, WebP.');
+
+  const schema = {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      name: { type: 'string' },
+      needClarification: { type: 'boolean' },
+      questions: { type: 'array', items: { type: 'string' } },
+      detectedIngredients: { type: 'array', items: { type: 'string' } },
+      grams: { type: 'number' },
+      calories: { type: 'number' },
+      protein: { type: 'number' },
+      fats: { type: 'number' },
+      carbs: { type: 'number' },
+      note: { type: 'string' },
+    },
+    required: ['name', 'needClarification', 'questions', 'detectedIngredients', 'grams', 'calories', 'protein', 'fats', 'carbs', 'note'],
+  };
+
+  const system = 'Ты нутрициолог. По фото блюда определи: name — короткое название блюда на русском; detectedIngredients — что видно на фото; grams — примерный вес порции в граммах; calories/protein/fats/carbs — КБЖУ ВСЕЙ порции (ккал и граммы, не на 100 г). '
+    + 'ВАЖНО про уточнения: некоторые компоненты сильно меняют КБЖУ, но на фото их часто не видно (сливочное/растительное масло, соус, заправка, майонез, сахар, сливки, сироп). Если такой скрытый компонент вероятен для этого блюда и пользователь его не подтвердил/не опроверг — поставь needClarification=true и задай 1–3 коротких конкретных вопроса в questions (например «Добавляли сливочное масло в гречку?», «Каким соусом заправлен салат?»). Если всё ясно или пользователь уже ответил на уточнения — needClarification=false и questions=[]. '
+    + 'В любом случае дай свою лучшую числовую оценку КБЖУ и веса (с учётом ответов пользователя). note — одна короткая строка с допущениями. Отвечай строго в требуемом JSON, без пояснений вне него.';
+
+  const userText = 'Определи блюдо и его КБЖУ по фото.'
+    + (answers ? '\n\nОтветы пользователя на уточнения (учти их и больше не спрашивай про это):\n' + answers : '');
+
+  const body = {
+    model: MODEL,
+    max_tokens: 1024,
+    system,
+    output_config: { format: { type: 'json_schema', schema } },
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } },
+        { type: 'text', text: userText },
+      ],
+    }],
+  };
+
+  let resp;
+  try {
+    resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY.value(),
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    throw new HttpsError('unavailable', 'Не удалось связаться с ИИ.');
+  }
+
+  if (!resp.ok) {
+    const t = await resp.text().catch(() => '');
+    throw new HttpsError('internal', 'Ошибка ИИ (' + resp.status + '): ' + t.slice(0, 300));
+  }
+
+  const data = await resp.json();
+  const out = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
+  let parsed;
+  try { parsed = JSON.parse(out); } catch (e) { throw new HttpsError('internal', 'ИИ вернул некорректный ответ. Попробуйте ещё раз.'); }
+
+  const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10;
+  return {
+    name: String(parsed.name || 'Блюдо').slice(0, 80),
+    needClarification: !!parsed.needClarification,
+    questions: (Array.isArray(parsed.questions) ? parsed.questions : []).map((q) => String(q || '').trim()).filter(Boolean).slice(0, 5),
+    detectedIngredients: (Array.isArray(parsed.detectedIngredients) ? parsed.detectedIngredients : []).map((q) => String(q || '').trim()).filter(Boolean).slice(0, 20),
+    grams: Math.round(Number(parsed.grams) || 0),
+    calories: Math.round(Number(parsed.calories) || 0),
+    protein: round1(parsed.protein),
+    fats: round1(parsed.fats),
+    carbs: round1(parsed.carbs),
+    note: String(parsed.note || '').slice(0, 200),
+  };
+});
