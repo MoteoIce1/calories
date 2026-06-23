@@ -1,6 +1,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -36,12 +37,29 @@ async function enforceAiLimit(uid) {
   }
 }
 
+// ── Дедуп: одинаковый текстовый запрос отдаём из кеша, без вызова ИИ ──
+// Экономит и деньги, и дневной лимит пользователя (кеш-хит лимит не тратит).
+const cacheKeyFor = (fn, input) => fn + '_' + crypto.createHash('sha256').update(input).digest('hex');
+async function getCachedResult(key) {
+  try { const snap = await db.collection('aiCache').doc(key).get(); return snap.exists ? snap.data().result : null; }
+  catch (e) { return null; }
+}
+async function putCachedResult(key, result) {
+  try { await db.collection('aiCache').doc(key).set({ result, createdAt: Date.now() }, { merge: true }); }
+  catch (e) { /* кеш не критичен — игнорируем ошибки записи */ }
+}
+
 exports.calcRecipe = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1' }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Войдите в аккаунт.');
-  await enforceAiLimit(request.auth.uid);
   const text = String((request.data && request.data.text) || '').trim();
   if (!text) throw new HttpsError('invalid-argument', 'Опишите ингредиенты блюда.');
   if (text.length > 4000) throw new HttpsError('invalid-argument', 'Слишком длинный текст (макс. 4000 символов).');
+
+  // Дедуп: одинаковый рецепт — из кеша, без вызова ИИ и без траты лимита.
+  const cacheKey = cacheKeyFor('calcRecipe', text.toLowerCase().replace(/\s+/g, ' '));
+  const cached = await getCachedResult(cacheKey);
+  if (cached) return cached;
+  await enforceAiLimit(request.auth.uid);
 
   const schema = {
     type: 'object',
@@ -70,7 +88,9 @@ exports.calcRecipe = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1
   const body = {
     model: MODEL,
     max_tokens: 1024,
-    system,
+    // cache_control: помечаем системный промпт как кешируемый (выгодно при длинных
+    // промптах; на коротких Haiku < 4096 токенов кеш молча не сработает — это нормально).
+    system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
     output_config: { format: { type: 'json_schema', schema } },
     messages: [{
       role: 'user',
@@ -105,7 +125,7 @@ exports.calcRecipe = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1
 
   const p = parsed.per100g || {};
   const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10;
-  return {
+  const result = {
     name: String(parsed.name || 'Блюдо').slice(0, 80),
     calories: Math.round(Number(p.calories) || 0),
     protein: round1(p.protein),
@@ -114,6 +134,8 @@ exports.calcRecipe = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1
     totalGrams: Math.round(Number(parsed.totalGrams) || 0),
     note: String(parsed.note || '').slice(0, 200),
   };
+  await putCachedResult(cacheKey, result);
+  return result;
 });
 
 // Разбор произвольного текста рецепта на ОТДЕЛЬНЫЕ продукты с КБЖУ на 100 г каждого.
@@ -121,10 +143,16 @@ exports.calcRecipe = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1
 // ингредиентов, новые из которых (после подтверждения) добавляются в базу продуктов.
 exports.parseIngredients = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1' }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Войдите в аккаунт.');
-  await enforceAiLimit(request.auth.uid);
   const text = String((request.data && request.data.text) || '').trim();
   if (!text) throw new HttpsError('invalid-argument', 'Опишите ингредиенты блюда.');
   if (text.length > 4000) throw new HttpsError('invalid-argument', 'Слишком длинный текст (макс. 4000 символов).');
+
+  // Дедуп по тексту рецепта (список базы в ключ не входит — совпадения с базой
+  // клиент пересчитывает сам, поэтому кеш переиспользуется между пользователями).
+  const cacheKey = cacheKeyFor('parseIngredients', text.toLowerCase().replace(/\s+/g, ' '));
+  const cached = await getCachedResult(cacheKey);
+  if (cached) return cached;
+  await enforceAiLimit(request.auth.uid);
 
   // Названия продуктов, уже имеющихся в базе у пользователя. ИИ сопоставляет с ними
   // ингредиенты, чтобы не плодить дубли («масло сливочное» ↔ «Сливочное масло»).
@@ -181,7 +209,7 @@ exports.parseIngredients = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-ce
   const body = {
     model: MODEL,
     max_tokens: 2500,
-    system,
+    system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
     output_config: { format: { type: 'json_schema', schema } },
     messages: [{ role: 'user', content }],
   };
@@ -233,7 +261,9 @@ exports.parseIngredients = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-ce
     .filter((it) => it.name)
     .slice(0, 30);
 
-  return { ingredients };
+  const result = { ingredients };
+  await putCachedResult(cacheKey, result);
+  return result;
 });
 
 // Распознавание блюда по фото: название, КБЖУ всей порции и примерный вес.
@@ -277,7 +307,7 @@ exports.analyzePhoto = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-centra
   const body = {
     model: MODEL,
     max_tokens: 1024,
-    system,
+    system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
     output_config: { format: { type: 'json_schema', schema } },
     messages: [{
       role: 'user',

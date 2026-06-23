@@ -2,6 +2,18 @@ import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 import 'firebase/compat/auth';
 import 'firebase/compat/functions';
+import 'firebase/compat/app-check';
+
+    // App Check защищает Cloud Functions от вызовов НЕ из вашего приложения (боты, абуз —
+    // чтобы чужой скрипт не жёг ваш бюджет и лимиты ИИ). Чтобы включить:
+    //   1) Firebase Console → App Check → зарегистрируйте веб-приложение, провайдер
+    //      reCAPTCHA v3, получите site key (и зарегистрируйте сам reCAPTCHA-ключ на
+    //      google.com/recaptcha, тип v3).
+    //   2) Вставьте site key ниже в APPCHECK_SITE_KEY.
+    //   3) В Console → App Check включите Enforcement для Cloud Functions, и в
+    //      functions/index.js добавьте `enforceAppCheck: true` в опции onCall(...).
+    // Пока ключ пустой — App Check не активируется, ничего не ломается.
+    const APPCHECK_SITE_KEY = '';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBg9rVgF6WUjuu9abFvV_1KCHdSW3fZ5uQ",
@@ -15,6 +27,14 @@ import 'firebase/compat/functions';
 
     if (!firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
+      // Активируем App Check только если задан site key (иначе пропускаем — без поломок).
+      if (APPCHECK_SITE_KEY) {
+        try {
+          // Для локальной отладки можно временно включить debug-токен:
+          // if (location.hostname === 'localhost') self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+          firebase.appCheck().activate(new firebase.appCheck.ReCaptchaV3Provider(APPCHECK_SITE_KEY), true);
+        } catch (e) { console.warn('App Check init error:', e); }
+      }
       firebase.firestore().enablePersistence().catch((err) => {
         console.warn("Firebase persistence error:", err.code);
       });
