@@ -1162,13 +1162,20 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
             defSum += (bM + Math.round((steps - bS) * 0.04)) - cals; defCnt++;
           }
         }
+        // Серия: день засчитывается, если ФАКТИЧЕСКИЙ дефицит (с учётом шагов) достиг
+        // целевого. То есть сожжено (поддержка + бонус за шаги) − съедено ≥ целевой дефицит.
         let streak = 0;
         for (let i = 0; i < 400; i++) {
           const d = new Date(t); d.setDate(d.getDate() - i);
           const date = getLocalDateString(d); const logs = dailyLogs[date] || [];
           if (!logs.length) break;
-          const g = getEffectiveGoals(date); const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
-          if (cals <= (Number(g.calories) || 0)) streak++; else break;
+          const g = getEffectiveGoals(date);
+          const bS2 = g.baseSteps || 6000, bM2 = g.maintenance || 2300;
+          const steps2 = dailySteps[date] !== undefined ? dailySteps[date] : bS2;
+          const burned2 = bM2 + Math.round((steps2 - bS2) * 0.04);
+          const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
+          const targetDeficit = Number(g.deficit) || 0;
+          if ((burned2 - cals) >= targetDeficit) streak++; else break;
         }
         const fatDates = Object.keys(dailyMetrics).filter(d => dailyMetrics[d]?.fatPercent).sort();
         // Тренды (последние 14 точек) по метрикам — чтобы соперник видел прогресс по той
@@ -1224,12 +1231,32 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         return () => unsubs.forEach(u => u());
       }, [uid, connections, challenges]);
 
-      // Публикуем мою витрину (имя, код, показатели) при изменении данных.
+      // Публикуем ТОЛЬКО имя и код друга (для поиска по коду и подписи друзей).
+      // Показатели здоровья (вес, жир, шаги, талия) сюда НЕ кладём — иначе их видит
+      // любой авторизованный. Данные спора живут в самом документе спора (см. ниже).
       useEffect(() => {
         if (!uid) return;
-        const stats = computePublicStats();
-        publicProfileRef(uid).set({ uid, friendCode: myFriendCode, displayName: myDisplayName, ...stats, updatedAt: Date.now() }, { merge: true }).catch(() => {});
-      }, [uid, myDisplayName, dailyLogs, dailySteps, dailyMetrics, goals, dailyGoals, measuredWeight, bodyEntries]);
+        publicProfileRef(uid).set({ uid, friendCode: myFriendCode, displayName: myDisplayName, updatedAt: Date.now() }, { merge: true }).catch(() => {});
+      }, [uid, myDisplayName]);
+
+      // В каждый спор, где я участник, пишу СВОЙ текущий показатель и тренд ТОЛЬКО по
+      // метрике этого спора. Документ спора читают лишь его участники (правила Firestore),
+      // поэтому соперник видит только ту метрику, по которой поспорили, и никто посторонний.
+      const challengeHistKey = (metric) => ({ weight: 'weightHistory', fatPercent: 'fatHistory', avg7Steps: 'stepsHistory', waist: 'waistHistory' }[metric]);
+      useEffect(() => {
+        if (!uid || !challenges.length) return;
+        challenges.forEach(c => {
+          if (!(c.members || []).includes(uid)) return;
+          const tp = challengeType(c.type);
+          const histKey = challengeHistKey(tp.metric);
+          const value = typeof myStatsNow[tp.metric] === 'number' ? myStatsNow[tp.metric] : null;
+          const history = histKey ? (myStatsNow[histKey] || []) : [];
+          // Пишем ТОЛЬКО при реальном изменении — иначе запись→snapshot→запись зациклятся.
+          const cur = c.live && c.live[uid];
+          if (cur && cur.value === value && JSON.stringify(cur.history || []) === JSON.stringify(history)) return;
+          challengeRef(c.id).set({ live: { [uid]: { value, history, updatedAt: Date.now() } } }, { merge: true }).catch(() => {});
+        });
+      }, [uid, challenges, dailyLogs, dailySteps, dailyMetrics, measuredWeight, bodyEntries]);
 
       // ── Действия с друзьями и спорами ──
       const sendFriendRequest = async () => {
@@ -1262,17 +1289,27 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         // Срок строго в будущем — нельзя сегодня/вчера (жёсткая проверка, не только min инпута).
         if (deadline <= getLocalDateString(new Date())) { alert('Срок спора должен быть в будущем — выберите дату от завтра.'); return; }
         const members = [uid, friendUid].sort();
-        const start = { [uid]: myStatsNow, [friendUid]: friendProfiles[friendUid] || null };
         // У каждого участника своя цель: я худею до своей, друг — до своей.
         const targets = { [uid]: Number(myTarget), [friendUid]: Number(friendTarget) };
+        // Сразу кладу свой текущий показатель и тренд по метрике спора (видят только участники).
+        const tp0 = challengeType(type);
+        const hk0 = challengeHistKey(tp0.metric);
+        // Старт-снимок — ТОЛЬКО метрика спора (не весь профиль, чтобы не светить остальное).
+        const start = { [uid]: { [tp0.metric]: typeof myStatsNow[tp0.metric] === 'number' ? myStatsNow[tp0.metric] : null } };
+        const live = { [uid]: { value: typeof myStatsNow[tp0.metric] === 'number' ? myStatsNow[tp0.metric] : null, history: hk0 ? (myStatsNow[hk0] || []) : [], updatedAt: Date.now() } };
         const ref = challengesCol.doc();
         try {
-          await ref.set({ members, createdBy: uid, type, targets, deadline, status: 'pending', acceptedBy: [uid], start, createdAt: Date.now() });
+          await ref.set({ members, createdBy: uid, type, targets, deadline, status: 'pending', acceptedBy: [uid], start, live, createdAt: Date.now() });
           setShowChallengeModal(false);
           alert('Вызов отправлен ' + friendName(friendUid) + '!');
         } catch (e) { alert('Не удалось создать спор: ' + e.message); }
       };
-      const acceptChallenge = (c) => challengeRef(c.id).set({ status: 'active', acceptedBy: firebase.firestore.FieldValue.arrayUnion(uid), start: { [uid]: myStatsNow } }, { merge: true }).catch(e => alert('Ошибка: ' + e.message));
+      const acceptChallenge = (c) => {
+        const tp = challengeType(c.type); const hk = challengeHistKey(tp.metric);
+        const live = { [uid]: { value: typeof myStatsNow[tp.metric] === 'number' ? myStatsNow[tp.metric] : null, history: hk ? (myStatsNow[hk] || []) : [], updatedAt: Date.now() } };
+        const startVal = typeof myStatsNow[tp.metric] === 'number' ? myStatsNow[tp.metric] : null;
+        challengeRef(c.id).set({ status: 'active', acceptedBy: firebase.firestore.FieldValue.arrayUnion(uid), start: { [uid]: { [tp.metric]: startVal } }, live }, { merge: true }).catch(e => alert('Ошибка: ' + e.message));
+      };
       const removeChallenge = (c) => { if (confirm('Удалить спор?')) challengeRef(c.id).delete().catch(e => alert('Ошибка: ' + e.message)); };
 
       // Цель участника в споре: новые споры хранят targets[uid]; старые — единый target.
@@ -1280,8 +1317,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       // Табло спора: у каждого своя цель; лидер — кто ближе к СВОЕЙ цели (или уже достиг).
       const challengeStanding = (c) => {
         const tp = challengeType(c.type);
+        const histKey = challengeHistKey(tp.metric);
         const rows = (c.members || []).map(m => {
-          const value = statFor(m, tp.metric);
+          // Своё значение берём из свежего myStatsNow; значение соперника — из c.live (приватно).
+          const live = (c.live && c.live[m]) ? c.live[m] : null;
+          const value = m === uid ? myStatsNow[tp.metric] : (live ? live.value : undefined);
+          const history = m === uid ? (histKey ? (myStatsNow[histKey] || []) : []) : (live && Array.isArray(live.history) ? live.history : []);
           const target = challengeTargetFor(c, m);
           const hasV = typeof value === 'number' && !isNaN(value);
           const hasT = typeof target === 'number' && !isNaN(target);
@@ -1291,10 +1332,6 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
           // Прогресс относительно старта спора (снимок показателей при создании/принятии).
           const startVal = c.start && c.start[m] ? c.start[m][tp.metric] : null;
           const delta = (hasV && typeof startVal === 'number') ? Math.round((value - startVal) * 10) / 10 : null;
-          // Тренд именно по метрике спора (вес/жир/шаги/талия) — из публичной витрины.
-          const histKey = { weight: 'weightHistory', fatPercent: 'fatHistory', avg7Steps: 'stepsHistory', waist: 'waistHistory' }[tp.metric];
-          const profile = m === uid ? myStatsNow : friendProfiles[m];
-          const history = (histKey && Array.isArray(profile?.[histKey])) ? profile[histKey] : [];
           return { uid: m, name: m === uid ? 'Вы' : friendName(m), value, target, reached, remaining, start: typeof startVal === 'number' ? startVal : null, delta, history };
         });
         const valid = rows.filter(r => r.remaining != null);
@@ -2816,7 +2853,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                         <div key={c.id} className="flex items-center justify-between gap-2 bg-[#27272a] rounded-xl p-3 border border-zinc-700/30">
                           <div className="min-w-0">
                             <span className="text-sm font-bold text-zinc-200 block truncate">{friendName(fid)}</span>
-                            <span className="text-[10px] text-zinc-500">{friendProfiles[fid]?.weight ? `${friendProfiles[fid].weight} кг · ` : ''}серия {friendProfiles[fid]?.goalStreak || 0} дн</span>
+                            <span className="text-[10px] text-zinc-500">Показатели видны только в общем споре</span>
                           </div>
                           <div className="flex gap-2 shrink-0">
                             <button type="button" onClick={() => openChallengeWith(fid)} className="btn-active bg-emerald-600/15 text-emerald-300 border border-emerald-600/30 rounded-lg px-3 py-2 text-xs font-bold">Спорить</button>
