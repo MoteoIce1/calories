@@ -1678,10 +1678,16 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
               </div>
               <div className="flex items-center gap-2">
                 {activeTab === 'directory' && (
-                  <button onClick={forceRefreshApp} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50"><IconRefresh className="w-5 h-5" /></button>
+                  <>
+                    <button onClick={() => setActiveTab('profile')} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50" aria-label="Профиль"><IconUser className="w-5 h-5" /></button>
+                    <button onClick={forceRefreshApp} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50" aria-label="Обновить"><IconRefresh className="w-5 h-5" /></button>
+                  </>
+                )}
+                {activeTab === 'profile' && (
+                  <button onClick={() => setActiveTab('directory')} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50" aria-label="Назад в базу"><IconArrowLeft className="w-5 h-5" /></button>
                 )}
                 {activeTab === 'diary' && (
-                  <button onClick={() => setShowExportModal(true)} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50"><IconDownload className="w-5 h-5" /></button>
+                  <button onClick={() => setShowExportModal(true)} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50" aria-label="Выгрузка"><IconDownload className="w-5 h-5" /></button>
                 )}
               </div>
             </header>
@@ -2411,10 +2417,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
               <button onClick={() => setActiveTab('progress')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'progress' ? 'text-violet-300 bg-zinc-900/50' : 'text-zinc-600'}`}>
                 <IconCamera className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase tracking-widest">Прогресс</span>
               </button>
-              <button onClick={() => setActiveTab('profile')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'profile' ? 'text-emerald-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
-                <IconUser className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase tracking-widest">Профиль</span>
-              </button>
-              <button onClick={() => setActiveTab('directory')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'directory' ? 'text-indigo-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
+              <button onClick={() => setActiveTab('directory')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'directory' || activeTab === 'profile' ? 'text-indigo-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
                 <IconBook className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase tracking-widest">База</span>
               </button>
             </nav>
