@@ -143,7 +143,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const [friendProfiles, setFriendProfiles] = useState({});
       const [friendCodeInput, setFriendCodeInput] = useState('');
       const [showChallengeModal, setShowChallengeModal] = useState(false);
-      const [challengeDraft, setChallengeDraft] = useState({ friendUid: '', type: 'weight', target: '', deadline: '' });
+      const [challengeDraft, setChallengeDraft] = useState({ friendUid: '', type: 'weight', myTarget: '', friendTarget: '', deadline: '' });
       // ИИ-расчёт рецепта.
       const [showRecipeModal, setShowRecipeModal] = useState(false);
       const [recipeText, setRecipeText] = useState('');
@@ -1234,17 +1234,19 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const removeConnection = (c) => { if (confirm('Удалить?')) connectionRef(c.id).delete().catch(e => alert('Ошибка: ' + e.message)); };
 
       const openChallengeWith = (friendUid) => {
-        setChallengeDraft({ friendUid: friendUid || (acceptedFriends[0] ? otherUid(acceptedFriends[0]) : ''), type: 'weight', target: '', deadline: getDefaultExportEndDate() });
+        setChallengeDraft({ friendUid: friendUid || (acceptedFriends[0] ? otherUid(acceptedFriends[0]) : ''), type: 'weight', myTarget: '', friendTarget: '', deadline: getDefaultExportEndDate() });
         setShowChallengeModal(true);
       };
       const createChallenge = async () => {
-        const { friendUid, type, target, deadline } = challengeDraft;
-        if (!uid || !friendUid || target === '' || !deadline) { alert('Заполните соперника, цель и срок.'); return; }
+        const { friendUid, type, myTarget, friendTarget, deadline } = challengeDraft;
+        if (!uid || !friendUid || myTarget === '' || friendTarget === '' || !deadline) { alert('Заполните соперника, обе цели и срок.'); return; }
         const members = [uid, friendUid].sort();
         const start = { [uid]: myStatsNow, [friendUid]: friendProfiles[friendUid] || null };
+        // У каждого участника своя цель: я худею до своей, друг — до своей.
+        const targets = { [uid]: Number(myTarget), [friendUid]: Number(friendTarget) };
         const ref = challengesCol.doc();
         try {
-          await ref.set({ members, createdBy: uid, type, target: Number(target), deadline, status: 'pending', acceptedBy: [uid], start, createdAt: Date.now() });
+          await ref.set({ members, createdBy: uid, type, targets, deadline, status: 'pending', acceptedBy: [uid], start, createdAt: Date.now() });
           setShowChallengeModal(false);
           alert('Вызов отправлен ' + friendName(friendUid) + '!');
         } catch (e) { alert('Не удалось создать спор: ' + e.message); }
@@ -1252,34 +1254,47 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const acceptChallenge = (c) => challengeRef(c.id).set({ status: 'active', acceptedBy: firebase.firestore.FieldValue.arrayUnion(uid), start: { [uid]: myStatsNow } }, { merge: true }).catch(e => alert('Ошибка: ' + e.message));
       const removeChallenge = (c) => { if (confirm('Удалить спор?')) challengeRef(c.id).delete().catch(e => alert('Ошибка: ' + e.message)); };
 
-      // Табло спора: значения сторон, лидер, достигнута ли цель, осталось времени.
+      // Цель участника в споре: новые споры хранят targets[uid]; старые — единый target.
+      const challengeTargetFor = (c, m) => (c.targets && typeof c.targets[m] === 'number') ? c.targets[m] : (typeof c.target === 'number' ? c.target : null);
+      // Табло спора: у каждого своя цель; лидер — кто ближе к СВОЕЙ цели (или уже достиг).
       const challengeStanding = (c) => {
         const tp = challengeType(c.type);
-        const rows = (c.members || []).map(m => ({ uid: m, name: m === uid ? 'Вы' : friendName(m), value: statFor(m, tp.metric) }));
-        const valid = rows.filter(r => typeof r.value === 'number' && !isNaN(r.value));
+        const rows = (c.members || []).map(m => {
+          const value = statFor(m, tp.metric);
+          const target = challengeTargetFor(c, m);
+          const hasV = typeof value === 'number' && !isNaN(value);
+          const hasT = typeof target === 'number' && !isNaN(target);
+          const reached = hasV && hasT && (tp.dir === 'down' ? value <= target : value >= target);
+          // Остаток до своей цели (0 — достигнута). Им меряем близость к цели.
+          const remaining = (hasV && hasT) ? Math.max(0, tp.dir === 'down' ? value - target : target - value) : null;
+          return { uid: m, name: m === uid ? 'Вы' : friendName(m), value, target, reached, remaining };
+        });
+        const valid = rows.filter(r => r.remaining != null);
         let leaderUid = null;
-        if (valid.length) {
-          const best = valid.reduce((a, b) => (tp.dir === 'down' ? (b.value < a.value ? b : a) : (b.value > a.value ? b : a)));
-          leaderUid = best.uid;
-        }
-        const reached = (v) => typeof v === 'number' && (tp.dir === 'down' ? v <= c.target : v >= c.target);
+        if (valid.length) leaderUid = valid.reduce((a, b) => (b.remaining < a.remaining ? b : a)).uid;
         const daysLeft = Math.ceil((new Date(c.deadline) - new Date(getLocalDateString(new Date()))) / 86400000);
-        return { tp, rows, leaderUid, reached, daysLeft };
+        return { tp, rows, leaderUid, daysLeft };
       };
 
-      // Предупреждение об агрессивном похудении при создании спора.
+      // Предупреждение об агрессивном похудении при создании спора (проверяем обе стороны).
       const challengeSafetyWarning = (() => {
-        const { type, target, deadline } = challengeDraft;
-        if ((type !== 'weight' && type !== 'fat') || target === '' || !deadline) return '';
-        const current = myStatsNow[challengeType(type).metric];
-        if (typeof current !== 'number') return '';
+        const { type, myTarget, friendTarget, friendUid, deadline } = challengeDraft;
+        if ((type !== 'weight' && type !== 'fat') || !deadline) return '';
         const weeks = Math.max(0.5, (new Date(deadline) - new Date(getLocalDateString(new Date()))) / (86400000 * 7));
-        const drop = current - Number(target);
-        if (drop <= 0) return '';
-        const rate = drop / weeks;
-        if (type === 'weight' && rate > 1) return `Это ~${rate.toFixed(1)} кг/нед. Спор спором, но такое агрессивное похудение вредит организму — диетологи советуют дефицит около 500 ккал/день (≈0,5 кг/нед). Поставьте срок подальше или цель помягче.`;
-        if (type === 'fat' && rate > 1) return `Это ~${rate.toFixed(1)}% жира в неделю — слишком быстро и вредно для здоровья. Безопасный темп — около 0,5% в неделю. Лучше увеличьте срок.`;
-        return '';
+        const metric = challengeType(type).metric;
+        const rateFor = (current, target) => {
+          if (typeof current !== 'number' || target === '' || target == null) return 0;
+          const drop = current - Number(target);
+          return drop <= 0 ? 0 : drop / weeks;
+        };
+        const myRate = rateFor(myStatsNow[metric], myTarget);
+        const friendRate = rateFor(friendProfiles[friendUid]?.[metric], friendTarget);
+        const limit = 1; // кг/нед или %/нед
+        const worst = Math.max(myRate, friendRate);
+        if (worst <= limit) return '';
+        const who = myRate > friendRate ? 'у вас' : 'у соперника';
+        if (type === 'weight') return `Темп ${who} ~${worst.toFixed(1)} кг/нед — такое агрессивное похудение вредит организму (безопасно ≈0,5 кг/нед, дефицит ~500 ккал/день). Поставьте срок подальше или цель помягче.`;
+        return `Темп ${who} ~${worst.toFixed(1)}% жира в неделю — слишком быстро и вредно (безопасно ≈0,5%/нед). Лучше увеличьте срок.`;
       })();
 
       // ── ИИ-расчёт рецепта ──
@@ -1325,7 +1340,8 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
           const res = await callable({ text, knownNames: foods.map(f => f.name).slice(0, 1000) });
           const list = (res.data?.ingredients || []).map(it => {
             const exists = foodAlreadyExists(it.name);
-            return { ...it, exists, add: !exists };
+            // baseName/base — «среднее» по умолчанию, к которому можно вернуться после выбора варианта.
+            return { ...it, exists, add: !exists, baseName: it.name, base: { calories: it.calories, protein: it.protein, fats: it.fats, carbs: it.carbs }, chosen: null };
           });
           if (!list.length) setMealAiError('Не удалось распознать продукты. Уточните текст.');
           setMealAiItems(list);
@@ -1335,6 +1351,13 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         setMealAiBusy(false);
       };
       const updateMealAiItem = (index, patch) => setMealAiItems(arr => arr.map((x, j) => j === index ? { ...x, ...patch } : x));
+      // Выбор варианта продукта (жирность и т.п.). opt = null → «неважно», вернуть среднее.
+      const selectMealAiVariant = (index, opt) => setMealAiItems(arr => arr.map((x, j) => {
+        if (j !== index) return x;
+        if (!opt) { const name = x.baseName; return { ...x, chosen: null, name, ...x.base, exists: foodAlreadyExists(name) }; }
+        const name = (x.baseName + ' ' + opt.label).trim().slice(0, 80);
+        return { ...x, chosen: opt.label, name, calories: opt.calories, protein: opt.protein, fats: opt.fats, carbs: opt.carbs, exists: foodAlreadyExists(name) };
+      }));
       const confirmMealAi = () => {
         const toAdd = (mealAiItems || []).filter(it => it.add && !it.exists && String(it.name || '').trim());
         if (toAdd.length) {
@@ -2124,7 +2147,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                   <form ref={mealFormRef} onSubmit={handleAddLog} className="meal-composer card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-3">
                     <div className="flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</span>
-                      <button type="button" onClick={() => { setShowMealAiModal(true); setMealAiError(''); setMealAiItems(null); }} className="btn-active shrink-0 flex items-center gap-1 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all"><IconSparkles className="w-3.5 h-3.5" /> Рецепт ИИ</button>
+                      <button type="button" onClick={() => { setShowMealAiModal(true); setMealAiText(''); setMealAiError(''); setMealAiItems(null); }} className="btn-active shrink-0 flex items-center gap-1 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all"><IconSparkles className="w-3.5 h-3.5" /> Рецепт ИИ</button>
                     </div>
 
                     {/* Избранное — отдельная строка сверху */}
@@ -2689,15 +2712,18 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                             <div className="flex items-start justify-between gap-2 mb-3">
                               <div className="min-w-0">
                                 <p className="text-sm font-black text-zinc-100">{st.tp.label}</p>
-                                <p className="text-[10px] text-zinc-500 mt-0.5">Цель: {st.tp.dir === 'down' ? '≤' : '≥'} {c.target} {st.tp.unit} · {finished ? 'завершён' : `осталось ${Math.max(0, st.daysLeft)} дн`}</p>
+                                <p className="text-[10px] text-zinc-500 mt-0.5">У каждого своя цель · {finished ? 'завершён' : `осталось ${Math.max(0, st.daysLeft)} дн`}</p>
                               </div>
                               <button type="button" onClick={() => removeChallenge(c)} className="btn-active text-zinc-700 active:text-red-400 p-1 shrink-0"><IconTrash className="w-4 h-4" /></button>
                             </div>
                             <div className="space-y-2">
                               {st.rows.map(r => (
-                                <div key={r.uid} className={`flex items-center justify-between rounded-xl px-3 py-2 border ${st.leaderUid === r.uid ? 'bg-emerald-600/15 border-emerald-600/40' : 'bg-[#27272a] border-zinc-700/30'}`}>
-                                  <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5 truncate">{st.leaderUid === r.uid && <IconFlame className="w-4 h-4 text-amber-400 shrink-0" />}{r.name}</span>
-                                  <span className={`text-sm font-black ${st.reached(r.value) ? 'text-emerald-400' : 'text-zinc-200'}`}>{typeof r.value === 'number' ? Math.round(r.value * 10) / 10 : '—'} {st.tp.unit}{st.reached(r.value) ? ' ✓' : ''}</span>
+                                <div key={r.uid} className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 border ${st.leaderUid === r.uid ? 'bg-emerald-600/15 border-emerald-600/40' : 'bg-[#27272a] border-zinc-700/30'}`}>
+                                  <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5 min-w-0 truncate">{st.leaderUid === r.uid && <IconFlame className="w-4 h-4 text-amber-400 shrink-0" />}{r.name}</span>
+                                  <span className="shrink-0 text-right">
+                                    <span className={`text-sm font-black ${r.reached ? 'text-emerald-400' : 'text-zinc-200'}`}>{typeof r.value === 'number' ? Math.round(r.value * 10) / 10 : '—'}{r.reached ? ' ✓' : ''}</span>
+                                    {typeof r.target === 'number' && <span className="text-[10px] text-zinc-500 font-bold"> {st.tp.dir === 'down' ? '→ ≤' : '→ ≥'}{r.target} {st.tp.unit}</span>}
+                                  </span>
                                 </div>
                               ))}
                             </div>
@@ -2937,15 +2963,32 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                       </div>
                       <p className="text-[10px] text-zinc-600 mt-1.5">{challengeType(challengeDraft.type).help}</p>
                     </div>
-                    <div>
-                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ЦЕЛЬ ({challengeType(challengeDraft.type).dir === 'down' ? 'не выше' : 'не ниже'}), {challengeType(challengeDraft.type).unit}</span>
-                      <input type="number" inputMode="decimal" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500" value={challengeDraft.target} onChange={(e) => setChallengeDraft({ ...challengeDraft, target: e.target.value })} onFocus={(e) => e.target.select()} />
-                    </div>
+                    {(() => {
+                      const tp = challengeType(challengeDraft.type);
+                      const myCur = myStatsNow[tp.metric];
+                      const frCur = friendProfiles[challengeDraft.friendUid]?.[tp.metric];
+                      const fmt = (v) => typeof v === 'number' ? Math.round(v * 10) / 10 : null;
+                      return (
+                        <div>
+                          <span className="text-[9px] text-zinc-500 font-bold block mb-1">ЦЕЛИ — у каждого своя ({tp.dir === 'down' ? 'не выше' : 'не ниже'}), {tp.unit}</span>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <span className="text-[10px] text-zinc-400 font-bold block mb-1 truncate">Вы{fmt(myCur) != null ? ` · сейчас ${fmt(myCur)}` : ''}</span>
+                              <input type="number" inputMode="decimal" placeholder="—" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500" value={challengeDraft.myTarget} onChange={(e) => setChallengeDraft({ ...challengeDraft, myTarget: e.target.value })} onFocus={(e) => e.target.select()} />
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-zinc-400 font-bold block mb-1 truncate">{challengeDraft.friendUid ? friendName(challengeDraft.friendUid) : 'Соперник'}{fmt(frCur) != null ? ` · ${fmt(frCur)}` : ''}</span>
+                              <input type="number" inputMode="decimal" placeholder="—" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500" value={challengeDraft.friendTarget} onChange={(e) => setChallengeDraft({ ...challengeDraft, friendTarget: e.target.value })} onFocus={(e) => e.target.select()} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">СРОК</span>
                       <div className="relative w-full bg-[#27272a] rounded-xl p-3 flex items-center justify-center border border-zinc-700/30">
                         <span className="text-zinc-200 font-bold">{challengeDraft.deadline ? displayDate(challengeDraft.deadline) : 'выберите дату'}</span>
-                        <input type="date" className="absolute opacity-0 top-0 left-0 w-full h-full cursor-pointer" value={challengeDraft.deadline} min={getLocalDateString(new Date())} onChange={(e) => { if (e.target.value) setChallengeDraft({ ...challengeDraft, deadline: e.target.value }); }} />
+                        <input type="date" className="absolute opacity-0 top-0 left-0 w-full h-full cursor-pointer" value={challengeDraft.deadline} min={getLocalDateString(new Date(Date.now() + 86400000))} onChange={(e) => { if (e.target.value) setChallengeDraft({ ...challengeDraft, deadline: e.target.value }); }} />
                       </div>
                     </div>
                     {challengeSafetyWarning && (
@@ -2954,7 +2997,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                         <p className="text-[11px] text-red-200/90 leading-relaxed">{challengeSafetyWarning}</p>
                       </div>
                     )}
-                    <button type="button" onClick={createChallenge} disabled={!challengeDraft.friendUid || challengeDraft.target === '' || !challengeDraft.deadline} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all disabled:opacity-35">Бросить вызов</button>
+                    <button type="button" onClick={createChallenge} disabled={!challengeDraft.friendUid || challengeDraft.myTarget === '' || challengeDraft.friendTarget === '' || !challengeDraft.deadline} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all disabled:opacity-35">Бросить вызов</button>
                     <button type="button" onClick={() => setShowChallengeModal(false)} className="btn-active w-full border border-zinc-800 text-zinc-500 rounded-xl p-3 font-bold transition-all">Отмена</button>
                   </div>
                 </motion.div>
@@ -2988,7 +3031,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                       <button type="button" onClick={addRecipeToBase} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-3 font-bold transition-all">Добавить в базу</button>
                     </div>
                   )}
-                  <button type="button" onClick={() => { setShowRecipeModal(false); }} className="btn-active w-full mt-3 border border-zinc-800 text-zinc-500 rounded-xl p-3 font-bold transition-all">Закрыть</button>
+                  <button type="button" onClick={() => { setShowRecipeModal(false); setRecipeText(''); setRecipeResult(null); setRecipeError(''); }} className="btn-active w-full mt-3 border border-zinc-800 text-zinc-500 rounded-xl p-3 font-bold transition-all">Закрыть</button>
                 </motion.div>
               </motion.div>
             )}
@@ -3014,6 +3057,15 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                             <input type="text" className={`flex-1 min-w-0 bg-zinc-900 rounded-lg p-2 text-sm outline-none border border-zinc-700/30 ${it.exists ? 'text-zinc-500' : 'text-zinc-200'}`} value={it.name} onChange={(e) => updateMealAiItem(i, { name: e.target.value, exists: foodAlreadyExists(e.target.value) })} />
                             {it.exists && <span className="shrink-0 text-[9px] text-zinc-500 font-bold uppercase tracking-wider">в базе</span>}
                           </div>
+                          {!it.exists && (it.options || []).length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                              <span className="w-full text-[9px] text-zinc-500 font-bold">Жирность / вид (или «Неважно» — среднее):</span>
+                              <button type="button" onClick={() => selectMealAiVariant(i, null)} className={`btn-active text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors ${!it.chosen ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>Неважно</button>
+                              {it.options.map((o, k) => (
+                                <button type="button" key={k} onClick={() => selectMealAiVariant(i, o)} className={`btn-active text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors ${it.chosen === o.label ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{o.label}</button>
+                              ))}
+                            </div>
+                          )}
                           {!it.exists && (
                             <div className="grid grid-cols-4 gap-1.5 mt-2">
                               <label className="text-[9px] text-zinc-500 font-bold">Ккал<input type="number" inputMode="decimal" className="w-full bg-zinc-900 rounded-lg p-1.5 text-xs text-emerald-400 font-bold outline-none mt-0.5" value={it.calories} onChange={(e) => updateMealAiItem(i, { calories: e.target.value })} /></label>
@@ -3029,7 +3081,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                       ); })()}
                     </div>
                   )}
-                  <button type="button" onClick={() => { setShowMealAiModal(false); }} className="btn-active w-full mt-3 border border-zinc-800 text-zinc-500 rounded-xl p-3 font-bold transition-all">Закрыть</button>
+                  <button type="button" onClick={() => { setShowMealAiModal(false); setMealAiText(''); setMealAiItems(null); setMealAiError(''); }} className="btn-active w-full mt-3 border border-zinc-800 text-zinc-500 rounded-xl p-3 font-bold transition-all">Закрыть</button>
                 </motion.div>
               </motion.div>
             )}
