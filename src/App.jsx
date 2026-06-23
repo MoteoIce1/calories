@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import firebase, { db, auth, functions, profileRef, dayRef, daysCol, bodyCol, bodyDocRef, OWNER_EMAIL, sharedFoodsRef, legacyRef, publicProfileRef, publicProfilesCol, connectionsCol, connectionRef, challengesCol, challengeRef } from './firebase.js';
 import { motion, AnimatePresence, animate } from 'framer-motion';
 import { evaluateMath } from './utils/math.js';
-import { searchFoodsByName, normalizeFoodSearchQuery } from './utils/food.js';
+import { searchFoodsByName, getFoodNameWords } from './utils/food.js';
 import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
@@ -1312,15 +1312,19 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       };
 
       // ── ИИ: разбор рецепта на отдельные продукты для базы (из дневника) ──
+      // Ключ названия — набор слов без учёта порядка/регистра: «масло сливочное» == «Сливочное масло».
+      const foodNameKey = (name) => getFoodNameWords(name || '').sort().join(' ');
+      const foodAlreadyExists = (name) => { const key = foodNameKey(name); return !!key && foods.some(f => foodNameKey(f.name) === key); };
       const runMealAi = async () => {
         const text = mealAiText.trim();
         if (!text) return;
         setMealAiBusy(true); setMealAiError(''); setMealAiItems(null);
         try {
           const callable = functions.httpsCallable('parseIngredients');
-          const res = await callable({ text });
+          // Передаём базу, чтобы ИИ переиспользовал существующие названия и не плодил дубли.
+          const res = await callable({ text, knownNames: foods.map(f => f.name).slice(0, 1000) });
           const list = (res.data?.ingredients || []).map(it => {
-            const exists = foods.some(f => normalizeFoodSearchQuery(f.name) === normalizeFoodSearchQuery(it.name || ''));
+            const exists = foodAlreadyExists(it.name);
             return { ...it, exists, add: !exists };
           });
           if (!list.length) setMealAiError('Не удалось распознать продукты. Уточните текст.');
@@ -3007,7 +3011,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                         <div key={i} className={`rounded-xl p-3 border ${it.exists ? 'bg-zinc-900/40 border-zinc-800/50' : 'bg-[#27272a] border-zinc-700/30'}`}>
                           <div className="flex items-center gap-2">
                             <button type="button" disabled={it.exists} onClick={() => updateMealAiItem(i, { add: !it.add })} aria-label={it.add ? 'Не добавлять' : 'Добавить'} className={`btn-active shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${it.exists ? 'border-zinc-700 bg-zinc-800' : it.add ? 'bg-emerald-600 border-emerald-500' : 'border-zinc-600 bg-transparent'}`}>{!it.exists && it.add && <IconCheck className="w-3.5 h-3.5 text-white" />}</button>
-                            <input type="text" className={`flex-1 min-w-0 bg-zinc-900 rounded-lg p-2 text-sm outline-none border border-zinc-700/30 ${it.exists ? 'text-zinc-500' : 'text-zinc-200'}`} value={it.name} onChange={(e) => updateMealAiItem(i, { name: e.target.value, exists: foods.some(f => normalizeFoodSearchQuery(f.name) === normalizeFoodSearchQuery(e.target.value)) })} />
+                            <input type="text" className={`flex-1 min-w-0 bg-zinc-900 rounded-lg p-2 text-sm outline-none border border-zinc-700/30 ${it.exists ? 'text-zinc-500' : 'text-zinc-200'}`} value={it.name} onChange={(e) => updateMealAiItem(i, { name: e.target.value, exists: foodAlreadyExists(e.target.value) })} />
                             {it.exists && <span className="shrink-0 text-[9px] text-zinc-500 font-bold uppercase tracking-wider">в базе</span>}
                           </div>
                           {!it.exists && (
