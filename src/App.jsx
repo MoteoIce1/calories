@@ -1419,7 +1419,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         reader.onload = () => {
           const imgEl = new Image();
           imgEl.onload = () => {
-            const max = 768;
+            const max = 1024;
             const scale = Math.min(1, max / Math.max(imgEl.width, imgEl.height));
             const w = Math.max(1, Math.round(imgEl.width * scale));
             const h = Math.max(1, Math.round(imgEl.height * scale));
