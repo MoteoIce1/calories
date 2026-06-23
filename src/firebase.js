@@ -1,6 +1,7 @@
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 import 'firebase/compat/auth';
+import 'firebase/compat/functions';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBg9rVgF6WUjuu9abFvV_1KCHdSW3fZ5uQ",
@@ -20,6 +21,7 @@ import 'firebase/compat/auth';
     }
     const db = firebase.firestore();
     const auth = firebase.auth();
+    const functions = firebase.functions(); // регион по умолчанию us-central1 (совпадает с Cloud Function)
     auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
 
     // Ссылки на данные в БД считаются по uid авторизованного пользователя.
@@ -35,8 +37,16 @@ import 'firebase/compat/auth';
     const sharedFoodsRef = db.collection('shared').doc('foods');
     const legacyRef = db.collection('users').doc('main_profile'); // старая единая структура (для переноса)
 
+    // Соревновательная часть: публичная витрина показателей, связи (друзья) и споры.
+    const publicProfilesCol = db.collection('publicProfiles');
+    const publicProfileRef = (uid) => db.collection('publicProfiles').doc(uid);
+    const connectionsCol = db.collection('connections');
+    const connectionRef = (id) => db.collection('connections').doc(id);
+    const challengesCol = db.collection('challenges');
+    const challengeRef = (id) => db.collection('challenges').doc(id);
+
     // Доступ из консоли браузера для разовых операций с данными (правила Firestore по-прежнему защищают).
     if (typeof window !== 'undefined') { window.__db = db; window.__auth = auth; }
 
 export default firebase;
-export { db, auth, profileRef, dayRef, daysCol, bodyCol, bodyDocRef, OWNER_EMAIL, sharedFoodsRef, legacyRef };
+export { db, auth, functions, profileRef, dayRef, daysCol, bodyCol, bodyDocRef, OWNER_EMAIL, sharedFoodsRef, legacyRef, publicProfilesCol, publicProfileRef, connectionsCol, connectionRef, challengesCol, challengeRef };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import firebase, { db, auth, profileRef, dayRef, daysCol, bodyCol, bodyDocRef, OWNER_EMAIL, sharedFoodsRef, legacyRef } from './firebase.js';
+import firebase, { db, auth, functions, profileRef, dayRef, daysCol, bodyCol, bodyDocRef, OWNER_EMAIL, sharedFoodsRef, legacyRef, publicProfileRef, publicProfilesCol, connectionsCol, connectionRef, challengesCol, challengeRef } from './firebase.js';
 import { motion, AnimatePresence, animate } from 'framer-motion';
 import { evaluateMath } from './utils/math.js';
 import { searchFoodsByName } from './utils/food.js';
@@ -7,7 +7,17 @@ import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
-import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders } from './components/Icons.jsx';
+import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconCopy, IconFlame, IconSparkles } from './components/Icons.jsx';
+
+    // Типы споров (вызовов). dir: 'down' — цель достичь значения не выше target; 'up' — не ниже target.
+    const CHALLENGE_TYPES = [
+      { key: 'weight', label: 'Сбросить вес', short: 'Вес', unit: 'кг', metric: 'weight', dir: 'down', help: 'Кто первым дойдёт до целевого веса' },
+      { key: 'fat', label: 'Снизить % жира', short: 'Жир', unit: '%', metric: 'fatPercent', dir: 'down', help: 'Кто первым дойдёт до целевого % жира' },
+      { key: 'steps', label: 'Среднее шагов в день', short: 'Шаги', unit: 'шаг', metric: 'avg7Steps', dir: 'up', help: 'У кого выше среднее за 7 дней' },
+      { key: 'deficit', label: 'Средний дефицит', short: 'Дефицит', unit: 'ккал', metric: 'avg7Deficit', dir: 'up', help: 'У кого выше средний дефицит за 7 дней' },
+      { key: 'streak', label: 'Дни подряд в цели', short: 'Серия', unit: 'дн', metric: 'goalStreak', dir: 'up', help: 'Кто дольше держит дефицит без срыва' },
+    ];
+    const challengeType = (key) => CHALLENGE_TYPES.find(t => t.key === key) || CHALLENGE_TYPES[0];
 
     // Уровни активности для формулы Миффлина — Сан-Жеора (множитель к BMR).
     const ACTIVITY_LEVELS = [
@@ -126,6 +136,20 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const [profileData, setProfileData] = useState(DEFAULT_PROFILE);
       const [settings, setSettings] = useState(DEFAULT_SETTINGS);
       const [customWater, setCustomWater] = useState('');
+
+      // Соревновательная часть.
+      const [connections, setConnections] = useState([]);
+      const [challenges, setChallenges] = useState([]);
+      const [friendProfiles, setFriendProfiles] = useState({});
+      const [friendCodeInput, setFriendCodeInput] = useState('');
+      const [showChallengeModal, setShowChallengeModal] = useState(false);
+      const [challengeDraft, setChallengeDraft] = useState({ friendUid: '', type: 'weight', target: '', deadline: '' });
+      // ИИ-расчёт рецепта.
+      const [showRecipeModal, setShowRecipeModal] = useState(false);
+      const [recipeText, setRecipeText] = useState('');
+      const [recipeBusy, setRecipeBusy] = useState(false);
+      const [recipeResult, setRecipeResult] = useState(null);
+      const [recipeError, setRecipeError] = useState('');
       const [isRefreshingDay, setIsRefreshingDay] = useState(false);
       
       const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
@@ -1105,6 +1129,182 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         && kbjuCalorieGap >= 50 && daysSinceDate(profileData.lastKbjuAt) >= 30 && daysSinceDate(kbjuRecalcDismissed) >= 30;
       const dismissKbjuRecalc = () => { localStorage.setItem('kbju-recalc-dismissed', kbjuToday); setKbjuRecalcDismissed(kbjuToday); };
 
+      // ── Соревнования: код друга, мои показатели для витрины ──
+      const myFriendCode = uid ? uid.slice(0, 6).toUpperCase() : '';
+      const myDisplayName = (profileData.displayName || '').trim() || (userEmail ? userEmail.split('@')[0] : 'Аноним');
+      // Сводные показатели для публичной витрины (по ним считаются споры).
+      const computePublicStats = () => {
+        const t = getLocalDateString(new Date());
+        let stepSum = 0, stepCnt = 0, defSum = 0, defCnt = 0;
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(t); d.setDate(d.getDate() - i);
+          const date = getLocalDateString(d);
+          const g = getEffectiveGoals(date); const bS = g.baseSteps || 6000, bM = g.maintenance || 2300;
+          if (dailySteps[date] !== undefined) { stepSum += Number(dailySteps[date]) || 0; stepCnt++; }
+          const logs = dailyLogs[date] || [];
+          if (logs.length) {
+            const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
+            const steps = dailySteps[date] !== undefined ? dailySteps[date] : bS;
+            defSum += (bM + Math.round((steps - bS) * 0.04)) - cals; defCnt++;
+          }
+        }
+        let streak = 0;
+        for (let i = 0; i < 400; i++) {
+          const d = new Date(t); d.setDate(d.getDate() - i);
+          const date = getLocalDateString(d); const logs = dailyLogs[date] || [];
+          if (!logs.length) break;
+          const g = getEffectiveGoals(date); const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
+          if (cals <= (Number(g.calories) || 0)) streak++; else break;
+        }
+        const fatDates = Object.keys(dailyMetrics).filter(d => dailyMetrics[d]?.fatPercent).sort();
+        return {
+          weight: measuredWeight != null ? measuredWeight : (Number(profileData.weight) || null),
+          fatPercent: fatDates.length ? Number(dailyMetrics[fatDates[fatDates.length - 1]].fatPercent) : null,
+          avg7Steps: stepCnt ? Math.round(stepSum / stepCnt) : 0,
+          avg7Deficit: defCnt ? Math.round(defSum / defCnt) : 0,
+          goalStreak: streak,
+        };
+      };
+      const myStatsNow = computePublicStats();
+      const acceptedFriends = connections.filter(c => c.status === 'accepted');
+      const incomingRequests = connections.filter(c => c.status === 'pending' && c.requestedBy !== uid);
+      const outgoingRequests = connections.filter(c => c.status === 'pending' && c.requestedBy === uid);
+      const friendName = (fid) => (friendProfiles[fid]?.displayName) || 'Друг';
+      const otherUid = (c) => (c.members || []).find(m => m !== uid);
+      const statFor = (fid, metric) => fid === uid ? myStatsNow[metric] : (friendProfiles[fid]?.[metric]);
+
+      // Слушаем связи и споры, где я участник.
+      useEffect(() => {
+        if (!uid) { setConnections([]); setChallenges([]); return; }
+        const u1 = connectionsCol.where('members', 'array-contains', uid).onSnapshot(
+          (s) => { const a = []; s.forEach(d => a.push({ id: d.id, ...d.data() })); setConnections(a); },
+          (e) => console.log('connections error', e));
+        const u2 = challengesCol.where('members', 'array-contains', uid).onSnapshot(
+          (s) => { const a = []; s.forEach(d => a.push({ id: d.id, ...d.data() })); setChallenges(a); },
+          (e) => console.log('challenges error', e));
+        return () => { u1(); u2(); };
+      }, [uid]);
+
+      // Подгружаем публичные профили друзей/соперников (для табло споров).
+      useEffect(() => {
+        if (!uid) return;
+        const others = new Set();
+        connections.forEach(c => (c.members || []).forEach(m => { if (m !== uid) others.add(m); }));
+        challenges.forEach(c => (c.members || []).forEach(m => { if (m !== uid) others.add(m); }));
+        const ids = [...others];
+        if (!ids.length) return;
+        let cancelled = false;
+        Promise.all(ids.map(id => publicProfileRef(id).get().then(d => d.exists ? { id, ...d.data() } : null).catch(() => null)))
+          .then(list => { if (cancelled) return; const map = {}; list.filter(Boolean).forEach(p => { map[p.id] = p; }); setFriendProfiles(prev => ({ ...prev, ...map })); });
+        return () => { cancelled = true; };
+      }, [uid, connections, challenges]);
+
+      // Публикуем мою витрину (имя, код, показатели) при изменении данных.
+      useEffect(() => {
+        if (!uid) return;
+        const stats = computePublicStats();
+        publicProfileRef(uid).set({ uid, friendCode: myFriendCode, displayName: myDisplayName, ...stats, updatedAt: Date.now() }, { merge: true }).catch(() => {});
+      }, [uid, myDisplayName, dailyLogs, dailySteps, dailyMetrics, goals, dailyGoals, measuredWeight]);
+
+      // ── Действия с друзьями и спорами ──
+      const sendFriendRequest = async () => {
+        const code = friendCodeInput.trim().toUpperCase();
+        if (!uid || !code) return;
+        if (code === myFriendCode) { alert('Это ваш собственный код.'); return; }
+        try {
+          const snap = await publicProfilesCol.where('friendCode', '==', code).limit(1).get();
+          if (snap.empty) { alert('Пользователь с таким кодом не найден. Проверьте код (он появляется после того, как друг откроет приложение).'); return; }
+          const them = snap.docs[0].data();
+          const theirUid = them.uid || snap.docs[0].id;
+          if (theirUid === uid) { alert('Это ваш собственный код.'); return; }
+          const connId = [uid, theirUid].sort().join('__');
+          await connectionRef(connId).set({ members: [uid, theirUid].sort(), status: 'pending', requestedBy: uid, createdAt: Date.now() }, { merge: true });
+          setFriendProfiles(prev => ({ ...prev, [theirUid]: { id: theirUid, ...them } }));
+          setFriendCodeInput('');
+          alert('Заявка отправлена ' + (them.displayName || 'другу') + '.');
+        } catch (e) { alert('Не удалось отправить заявку: ' + e.message); }
+      };
+      const acceptConnection = (c) => connectionRef(c.id).set({ status: 'accepted' }, { merge: true }).catch(e => alert('Ошибка: ' + e.message));
+      const removeConnection = (c) => { if (confirm('Удалить?')) connectionRef(c.id).delete().catch(e => alert('Ошибка: ' + e.message)); };
+
+      const openChallengeWith = (friendUid) => {
+        setChallengeDraft({ friendUid: friendUid || (acceptedFriends[0] ? otherUid(acceptedFriends[0]) : ''), type: 'weight', target: '', deadline: getDefaultExportEndDate() });
+        setShowChallengeModal(true);
+      };
+      const createChallenge = async () => {
+        const { friendUid, type, target, deadline } = challengeDraft;
+        if (!uid || !friendUid || target === '' || !deadline) { alert('Заполните соперника, цель и срок.'); return; }
+        const members = [uid, friendUid].sort();
+        const start = { [uid]: myStatsNow, [friendUid]: friendProfiles[friendUid] || null };
+        const ref = challengesCol.doc();
+        try {
+          await ref.set({ members, createdBy: uid, type, target: Number(target), deadline, status: 'pending', acceptedBy: [uid], start, createdAt: Date.now() });
+          setShowChallengeModal(false);
+          alert('Вызов отправлен ' + friendName(friendUid) + '!');
+        } catch (e) { alert('Не удалось создать спор: ' + e.message); }
+      };
+      const acceptChallenge = (c) => challengeRef(c.id).set({ status: 'active', acceptedBy: firebase.firestore.FieldValue.arrayUnion(uid), start: { [uid]: myStatsNow } }, { merge: true }).catch(e => alert('Ошибка: ' + e.message));
+      const removeChallenge = (c) => { if (confirm('Удалить спор?')) challengeRef(c.id).delete().catch(e => alert('Ошибка: ' + e.message)); };
+
+      // Табло спора: значения сторон, лидер, достигнута ли цель, осталось времени.
+      const challengeStanding = (c) => {
+        const tp = challengeType(c.type);
+        const rows = (c.members || []).map(m => ({ uid: m, name: m === uid ? 'Вы' : friendName(m), value: statFor(m, tp.metric) }));
+        const valid = rows.filter(r => typeof r.value === 'number' && !isNaN(r.value));
+        let leaderUid = null;
+        if (valid.length) {
+          const best = valid.reduce((a, b) => (tp.dir === 'down' ? (b.value < a.value ? b : a) : (b.value > a.value ? b : a)));
+          leaderUid = best.uid;
+        }
+        const reached = (v) => typeof v === 'number' && (tp.dir === 'down' ? v <= c.target : v >= c.target);
+        const daysLeft = Math.ceil((new Date(c.deadline) - new Date(getLocalDateString(new Date()))) / 86400000);
+        return { tp, rows, leaderUid, reached, daysLeft };
+      };
+
+      // Предупреждение об агрессивном похудении при создании спора.
+      const challengeSafetyWarning = (() => {
+        const { type, target, deadline } = challengeDraft;
+        if ((type !== 'weight' && type !== 'fat') || target === '' || !deadline) return '';
+        const current = myStatsNow[challengeType(type).metric];
+        if (typeof current !== 'number') return '';
+        const weeks = Math.max(0.5, (new Date(deadline) - new Date(getLocalDateString(new Date()))) / (86400000 * 7));
+        const drop = current - Number(target);
+        if (drop <= 0) return '';
+        const rate = drop / weeks;
+        if (type === 'weight' && rate > 1) return `Это ~${rate.toFixed(1)} кг/нед. Спор спором, но такое агрессивное похудение вредит организму — диетологи советуют дефицит около 500 ккал/день (≈0,5 кг/нед). Поставьте срок подальше или цель помягче.`;
+        if (type === 'fat' && rate > 1) return `Это ~${rate.toFixed(1)}% жира в неделю — слишком быстро и вредно для здоровья. Безопасный темп — около 0,5% в неделю. Лучше увеличьте срок.`;
+        return '';
+      })();
+
+      // ── ИИ-расчёт рецепта ──
+      const calcRecipe = async () => {
+        const text = recipeText.trim();
+        if (!text) return;
+        setRecipeBusy(true); setRecipeError(''); setRecipeResult(null);
+        try {
+          const callable = functions.httpsCallable('calcRecipe');
+          const res = await callable({ text });
+          setRecipeResult(res.data);
+        } catch (e) {
+          setRecipeError(e.message || 'Не удалось рассчитать. Проверьте, что функция развёрнута.');
+        }
+        setRecipeBusy(false);
+      };
+      const addRecipeToBase = () => {
+        if (!recipeResult) return;
+        const foodItem = {
+          id: Date.now().toString(),
+          name: recipeResult.name || 'Блюдо',
+          calories: Number(recipeResult.calories) || 0,
+          protein: Number(recipeResult.protein) || 0,
+          fats: Number(recipeResult.fats) || 0,
+          carbs: Number(recipeResult.carbs) || 0,
+        };
+        if (isOwner) saveSharedFoods([foodItem, ...sharedFoods]);
+        else savePersonalFoods([foodItem, ...personalFoods]);
+        setShowRecipeModal(false); setRecipeText(''); setRecipeResult(null); setRecipeError('');
+      };
+
       // Избранное — в порядке favoriteIds (порядок задаёт сам пользователь).
       const favoriteFoods = favoriteIds.map(id => foods.find(f => f.id === id)).filter(Boolean);
       const sortedFoods = [
@@ -1731,16 +1931,17 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         <div className="app-shell flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900 relative overflow-hidden">
             <header className="app-header shrink-0 pt-8 px-4 pb-4 bg-[#09090b] flex justify-between items-center z-10">
               <div>
-                <h1 key={activeTab} className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : activeTab === 'progress' ? 'Прогресс' : activeTab === 'profile' ? 'Профиль' : 'База'}</h1>
+                <h1 key={activeTab} className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : activeTab === 'progress' ? 'Прогресс' : activeTab === 'profile' ? 'Профиль' : activeTab === 'social' ? 'Друзья и споры' : 'База'}</h1>
               </div>
               <div className="flex items-center gap-2">
                 {activeTab === 'directory' && (
                   <>
+                    <button onClick={() => setActiveTab('social')} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50" aria-label="Друзья и споры"><IconUsers className="w-5 h-5" /></button>
                     <button onClick={() => setActiveTab('profile')} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50" aria-label="Профиль"><IconUser className="w-5 h-5" /></button>
                     <button onClick={forceRefreshApp} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50" aria-label="Обновить"><IconRefresh className="w-5 h-5" /></button>
                   </>
                 )}
-                {activeTab === 'profile' && (
+                {(activeTab === 'profile' || activeTab === 'social') && (
                   <button onClick={() => setActiveTab('directory')} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50" aria-label="Назад в базу"><IconArrowLeft className="w-5 h-5" /></button>
                 )}
                 {activeTab === 'diary' && (
@@ -2361,6 +2562,112 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                 </div>
               )}
 
+              {activeTab === 'social' && (
+                <div className="space-y-5">
+                  {/* Мой код */}
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
+                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconUser className="w-4 h-4" /> Моя карточка</h2>
+                    <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ИМЯ (видят друзья)</span><input type="text" maxLength={24} placeholder="Как вас зовут" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={profileData.displayName || ''} onChange={(e) => handleProfileChange('displayName', e.target.value)} /></div>
+                    <div>
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ВАШ КОД ДЛЯ ДРУЗЕЙ</span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-[#27272a] rounded-xl p-3 font-black text-lg tracking-[0.3em] text-emerald-400 text-center border border-zinc-700/30">{myFriendCode || '—'}</div>
+                        <button type="button" onClick={() => { if (navigator.clipboard) { navigator.clipboard.writeText(myFriendCode); alert('Код скопирован'); } }} className="btn-active w-12 h-12 shrink-0 bg-zinc-800 rounded-xl flex items-center justify-center text-zinc-300 border border-zinc-700/30" aria-label="Скопировать код"><IconCopy className="w-5 h-5" /></button>
+                      </div>
+                      <p className="text-[10px] text-zinc-600 mt-1.5">Поделитесь кодом, чтобы вас добавили в друзья.</p>
+                    </div>
+                  </div>
+
+                  {/* Добавить друга */}
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
+                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Добавить друга по коду</h2>
+                    <div className="flex gap-2">
+                      <input type="text" placeholder="Код друга" maxLength={6} className="flex-1 bg-[#27272a] rounded-xl p-3 font-black tracking-[0.2em] uppercase text-zinc-200 outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={friendCodeInput} onChange={(e) => setFriendCodeInput(e.target.value.toUpperCase())} />
+                      <button type="button" onClick={sendFriendRequest} disabled={!friendCodeInput.trim()} className="btn-active px-4 shrink-0 bg-emerald-600 text-white rounded-xl font-bold transition-all disabled:opacity-35">Добавить</button>
+                    </div>
+                  </div>
+
+                  {/* Входящие заявки */}
+                  {incomingRequests.length > 0 && (
+                    <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
+                      <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Заявки в друзья ({incomingRequests.length})</h2>
+                      {incomingRequests.map(c => (
+                        <div key={c.id} className="flex items-center justify-between gap-2 bg-[#27272a] rounded-xl p-3 border border-zinc-700/30">
+                          <span className="text-sm font-bold text-zinc-200 truncate">{friendName(otherUid(c))}</span>
+                          <div className="flex gap-2 shrink-0">
+                            <button type="button" onClick={() => acceptConnection(c)} className="btn-active bg-emerald-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Принять</button>
+                            <button type="button" onClick={() => removeConnection(c)} className="btn-active bg-zinc-800 text-zinc-400 rounded-lg px-3 py-2 text-xs font-bold">Отклонить</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Друзья */}
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconUsers className="w-4 h-4" /> Друзья ({acceptedFriends.length})</h2>
+                      {acceptedFriends.length > 0 && <button type="button" onClick={() => openChallengeWith('')} className="btn-active flex items-center gap-1.5 bg-emerald-600 text-white rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-widest"><IconTrophy className="w-4 h-4" /> Новый спор</button>}
+                    </div>
+                    {acceptedFriends.length === 0 && <p className="text-xs text-zinc-500">Пока нет друзей. Добавьте по коду — и спорьте, кто быстрее придёт к цели.</p>}
+                    {acceptedFriends.map(c => {
+                      const fid = otherUid(c);
+                      return (
+                        <div key={c.id} className="flex items-center justify-between gap-2 bg-[#27272a] rounded-xl p-3 border border-zinc-700/30">
+                          <div className="min-w-0">
+                            <span className="text-sm font-bold text-zinc-200 block truncate">{friendName(fid)}</span>
+                            <span className="text-[10px] text-zinc-500">{friendProfiles[fid]?.weight ? `${friendProfiles[fid].weight} кг · ` : ''}серия {friendProfiles[fid]?.goalStreak || 0} дн</span>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button type="button" onClick={() => openChallengeWith(fid)} className="btn-active bg-emerald-600/15 text-emerald-300 border border-emerald-600/30 rounded-lg px-3 py-2 text-xs font-bold">Спорить</button>
+                            <button type="button" onClick={() => removeConnection(c)} className="btn-active text-zinc-700 active:text-red-400 p-2"><IconTrash className="w-5 h-5" /></button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Споры */}
+                  {challenges.length > 0 && (
+                    <div className="space-y-3">
+                      <h2 className="px-1 text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconTrophy className="w-4 h-4" /> Споры ({challenges.length})</h2>
+                      {[...challenges].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(c => {
+                        const st = challengeStanding(c);
+                        const isInvite = c.status === 'pending' && !(c.acceptedBy || []).includes(uid);
+                        const isWaiting = c.status === 'pending' && (c.acceptedBy || []).includes(uid);
+                        const finished = st.daysLeft < 0 || c.status === 'finished';
+                        return (
+                          <div key={c.id} className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50">
+                            <div className="flex items-start justify-between gap-2 mb-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-black text-zinc-100">{st.tp.label}</p>
+                                <p className="text-[10px] text-zinc-500 mt-0.5">Цель: {st.tp.dir === 'down' ? '≤' : '≥'} {c.target} {st.tp.unit} · {finished ? 'завершён' : `осталось ${Math.max(0, st.daysLeft)} дн`}</p>
+                              </div>
+                              <button type="button" onClick={() => removeChallenge(c)} className="btn-active text-zinc-700 active:text-red-400 p-1 shrink-0"><IconTrash className="w-4 h-4" /></button>
+                            </div>
+                            <div className="space-y-2">
+                              {st.rows.map(r => (
+                                <div key={r.uid} className={`flex items-center justify-between rounded-xl px-3 py-2 border ${st.leaderUid === r.uid ? 'bg-emerald-600/15 border-emerald-600/40' : 'bg-[#27272a] border-zinc-700/30'}`}>
+                                  <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5 truncate">{st.leaderUid === r.uid && <IconFlame className="w-4 h-4 text-amber-400 shrink-0" />}{r.name}</span>
+                                  <span className={`text-sm font-black ${st.reached(r.value) ? 'text-emerald-400' : 'text-zinc-200'}`}>{typeof r.value === 'number' ? Math.round(r.value * 10) / 10 : '—'} {st.tp.unit}{st.reached(r.value) ? ' ✓' : ''}</span>
+                                </div>
+                              ))}
+                            </div>
+                            {isInvite && (
+                              <div className="flex gap-2 mt-3">
+                                <button type="button" onClick={() => acceptChallenge(c)} className="btn-active flex-1 bg-emerald-600 text-white rounded-xl p-3 text-xs font-bold">Принять вызов</button>
+                                <button type="button" onClick={() => removeChallenge(c)} className="btn-active flex-1 bg-zinc-800 text-zinc-400 rounded-xl p-3 text-xs font-bold">Отказаться</button>
+                              </div>
+                            )}
+                            {isWaiting && <p className="text-[10px] text-zinc-500 mt-2 text-center">Ждём, пока соперник примет вызов…</p>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {activeTab === 'directory' && (
                 <div className="space-y-6">
                   <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
@@ -2381,7 +2688,10 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                   </div>
 
                   <form onSubmit={handleAddFood} className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Добавить продукт (на 100г)</h2>
+                    <div className="flex items-center justify-between gap-2">
+                      <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Добавить продукт (на 100г)</h2>
+                      <button type="button" onClick={() => { setShowRecipeModal(true); setRecipeError(''); setRecipeResult(null); }} className="btn-active flex items-center gap-1.5 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-widest transition-all"><IconSparkles className="w-4 h-4" /> Из рецепта (ИИ)</button>
+                    </div>
                     <input type="text" placeholder="Название" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.name} onChange={(e) => setNewFood({...newFood, name: e.target.value})} required />
                     <div className="grid grid-cols-2 gap-3">
                       <input type="number" step="0.1" placeholder="Ккал" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.cals} onChange={(e) => setNewFood({...newFood, cals: e.target.value})} onFocus={(e) => e.target.select()} required />
@@ -2501,7 +2811,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
               <button onClick={() => setActiveTab('progress')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'progress' ? 'text-violet-300 bg-zinc-900/50' : 'text-zinc-600'}`}>
                 <IconCamera className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase tracking-widest">Прогресс</span>
               </button>
-              <button onClick={() => setActiveTab('directory')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'directory' || activeTab === 'profile' ? 'text-indigo-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
+              <button onClick={() => setActiveTab('directory')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'directory' || activeTab === 'profile' || activeTab === 'social' ? 'text-indigo-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
                 <IconBook className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase tracking-widest">База</span>
               </button>
             </nav>
@@ -2551,6 +2861,86 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     <button onClick={() => confirmGoalSave('all')} className="btn-active w-full p-4 rounded-xl bg-zinc-800 font-bold text-zinc-200 transition-all">Применить ко всей истории</button>
                     <button onClick={() => setShowGoalModal(false)} className="btn-active w-full p-4 rounded-xl border border-zinc-800 text-zinc-500 font-bold mt-2 transition-all">Отмена</button>
                   </div>
+                </motion.div>
+              </motion.div>
+            )}
+            </AnimatePresence>
+
+            {/* Модалка: новый спор */}
+            <AnimatePresence>
+            {showChallengeModal && (
+              <motion.div key="challenge" className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+                <motion.div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm max-h-[88vh] overflow-y-auto" initial={{ opacity: 0, scale: 0.9, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }}>
+                  <h3 className="text-lg font-bold mb-4 text-center flex items-center justify-center gap-2"><IconTrophy className="w-5 h-5 text-amber-400" /> Новый спор</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">СОПЕРНИК</span>
+                      <select className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30" value={challengeDraft.friendUid} onChange={(e) => setChallengeDraft({ ...challengeDraft, friendUid: e.target.value })}>
+                        <option value="">— выберите —</option>
+                        {acceptedFriends.map(c => { const fid = otherUid(c); return <option key={fid} value={fid}>{friendName(fid)}</option>; })}
+                      </select>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ТИП СПОРА</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {CHALLENGE_TYPES.map(t => (
+                          <button key={t.key} type="button" onClick={() => setChallengeDraft({ ...challengeDraft, type: t.key })} className={`btn-active rounded-xl p-2.5 text-xs font-bold border transition-all ${challengeDraft.type === t.key ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-[#27272a] text-zinc-300 border-zinc-700/30'}`}>{t.short}</button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-zinc-600 mt-1.5">{challengeType(challengeDraft.type).help}</p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ЦЕЛЬ ({challengeType(challengeDraft.type).dir === 'down' ? 'не выше' : 'не ниже'}), {challengeType(challengeDraft.type).unit}</span>
+                      <input type="number" inputMode="decimal" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500" value={challengeDraft.target} onChange={(e) => setChallengeDraft({ ...challengeDraft, target: e.target.value })} onFocus={(e) => e.target.select()} />
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">СРОК</span>
+                      <div className="relative w-full bg-[#27272a] rounded-xl p-3 flex items-center justify-center border border-zinc-700/30">
+                        <span className="text-zinc-200 font-bold">{challengeDraft.deadline ? displayDate(challengeDraft.deadline) : 'выберите дату'}</span>
+                        <input type="date" className="absolute opacity-0 top-0 left-0 w-full h-full cursor-pointer" value={challengeDraft.deadline} min={getLocalDateString(new Date())} onChange={(e) => { if (e.target.value) setChallengeDraft({ ...challengeDraft, deadline: e.target.value }); }} />
+                      </div>
+                    </div>
+                    {challengeSafetyWarning && (
+                      <div className="bg-red-500/10 border border-red-400/30 rounded-xl p-3 flex gap-2 items-start">
+                        <IconTimer className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-red-200/90 leading-relaxed">{challengeSafetyWarning}</p>
+                      </div>
+                    )}
+                    <button type="button" onClick={createChallenge} disabled={!challengeDraft.friendUid || challengeDraft.target === '' || !challengeDraft.deadline} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all disabled:opacity-35">Бросить вызов</button>
+                    <button type="button" onClick={() => setShowChallengeModal(false)} className="btn-active w-full border border-zinc-800 text-zinc-500 rounded-xl p-3 font-bold transition-all">Отмена</button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+            </AnimatePresence>
+
+            {/* Модалка: КБЖУ из рецепта (ИИ) */}
+            <AnimatePresence>
+            {showRecipeModal && (
+              <motion.div key="recipe" className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+                <motion.div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm max-h-[88vh] overflow-y-auto" initial={{ opacity: 0, scale: 0.9, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }}>
+                  <h3 className="text-lg font-bold mb-1 text-center flex items-center justify-center gap-2"><IconSparkles className="w-5 h-5 text-indigo-400" /> КБЖУ из рецепта</h3>
+                  <p className="text-zinc-500 text-xs mb-4 text-center leading-relaxed">Впишите ингредиенты с количеством — ИИ посчитает КБЖУ на 100 г.</p>
+                  <textarea rows={5} placeholder={'Например:\nкуриная грудка 500 г\nрис 200 г\nмасло оливковое 1 ст.л.\nсоль, специи'} className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 text-sm outline-none border border-zinc-700/30 focus:border-emerald-500 resize-none" value={recipeText} onChange={(e) => setRecipeText(e.target.value)} />
+                  <button type="button" onClick={calcRecipe} disabled={recipeBusy || !recipeText.trim()} className="btn-active w-full mt-3 bg-indigo-600 text-white rounded-xl p-3 font-bold transition-all disabled:opacity-35 flex items-center justify-center gap-2">{recipeBusy ? 'Считаю…' : <><IconSparkles className="w-5 h-5" /> Рассчитать</>}</button>
+                  {recipeError && <p className="text-red-400 text-xs mt-3 leading-relaxed">{recipeError}</p>}
+                  {recipeResult && (
+                    <div className="mt-4 space-y-3">
+                      <div className="bg-[#27272a] rounded-2xl p-3 border border-zinc-700/30 space-y-2">
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Проверьте и поправьте</p>
+                        <input type="text" className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-zinc-200 outline-none border border-zinc-700/30" value={recipeResult.name} onChange={(e) => setRecipeResult({ ...recipeResult, name: e.target.value })} />
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="text-[10px] text-zinc-500 font-bold">Ккал/100г<input type="number" className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-emerald-400 font-bold outline-none mt-1" value={recipeResult.calories} onChange={(e) => setRecipeResult({ ...recipeResult, calories: e.target.value })} /></label>
+                          <label className="text-[10px] text-zinc-500 font-bold">Белок<input type="number" className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-indigo-400 font-bold outline-none mt-1" value={recipeResult.protein} onChange={(e) => setRecipeResult({ ...recipeResult, protein: e.target.value })} /></label>
+                          <label className="text-[10px] text-zinc-500 font-bold">Жиры<input type="number" className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-amber-400 font-bold outline-none mt-1" value={recipeResult.fats} onChange={(e) => setRecipeResult({ ...recipeResult, fats: e.target.value })} /></label>
+                          <label className="text-[10px] text-zinc-500 font-bold">Углеводы<input type="number" className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-blue-400 font-bold outline-none mt-1" value={recipeResult.carbs} onChange={(e) => setRecipeResult({ ...recipeResult, carbs: e.target.value })} /></label>
+                        </div>
+                        {recipeResult.note && <p className="text-[10px] text-zinc-500 leading-relaxed">{recipeResult.note}{recipeResult.totalGrams ? ` · общая масса ≈ ${recipeResult.totalGrams} г` : ''}</p>}
+                      </div>
+                      <button type="button" onClick={addRecipeToBase} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-3 font-bold transition-all">Добавить в базу</button>
+                    </div>
+                  )}
+                  <button type="button" onClick={() => { setShowRecipeModal(false); }} className="btn-active w-full mt-3 border border-zinc-800 text-zinc-500 rounded-xl p-3 font-bold transition-all">Закрыть</button>
                 </motion.div>
               </motion.div>
             )}

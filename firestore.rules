@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isOwnerEmail() { return signedIn() && request.auth.token.email == 'i9293658888@mail.ru'; }
+    function isMember(data) { return signedIn() && request.auth.uid in data.members; }
+
+    // Приватные данные пользователя: цели, продукты, дни, замеры, профиль, настройки.
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+      match /{document=**} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // Общая база продуктов: читают все авторизованные, пишет только владелец.
+    match /shared/{doc} {
+      allow read: if signedIn();
+      allow write: if isOwnerEmail();
+    }
+
+    // Публичная «витрина» для соревнований: код друга, имя и сводные показатели.
+    // Читают все авторизованные (поиск по коду, табло спора), пишет только владелец документа.
+    match /publicProfiles/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Связи (заявки в друзья / дружба). Доступ только участникам.
+    match /connections/{id} {
+      allow read, update, delete: if isMember(resource.data);
+      allow create: if isMember(request.resource.data);
+    }
+
+    // Споры (вызовы). Доступ только участникам.
+    match /challenges/{id} {
+      allow read, update, delete: if isMember(resource.data);
+      allow create: if isMember(request.resource.data);
+    }
+  }
+}
