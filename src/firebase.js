@@ -33,6 +33,12 @@ import 'firebase/compat/app-check';
           // Для локальной отладки можно временно включить debug-токен:
           // if (location.hostname === 'localhost') self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
           firebase.appCheck().activate(new firebase.appCheck.ReCaptchaV3Provider(APPCHECK_SITE_KEY), true);
+          // Диагностика: подтверждаем, что клиент реально получает App Check токен.
+          // В консоли браузера: __appCheckToken() — покажет токен или ошибку конфигурации.
+          if (typeof window !== 'undefined') {
+            window.__appCheckToken = () => firebase.appCheck().getToken().then(t => { console.log('AppCheck OK, token len:', (t.token || '').length); return t; }).catch(e => { console.error('AppCheck FAIL:', e); throw e; });
+            firebase.appCheck().getToken().then(t => console.log('AppCheck активен, токен получен (len ' + (t.token || '').length + ')')).catch(e => console.error('AppCheck НЕ получил токен:', e && e.message));
+          }
         } catch (e) { console.warn('App Check init error:', e); }
       }
       firebase.firestore().enablePersistence().catch((err) => {
