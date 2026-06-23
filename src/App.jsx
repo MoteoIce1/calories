@@ -7,7 +7,45 @@ import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
-import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera } from './components/Icons.jsx';
+import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders } from './components/Icons.jsx';
+
+    // Уровни активности для формулы Миффлина — Сан-Жеора (множитель к BMR).
+    const ACTIVITY_LEVELS = [
+      { key: '1.2', label: 'Минимальная', hint: 'сидячий образ жизни' },
+      { key: '1.375', label: 'Лёгкая', hint: 'тренировки 1–3 раза/нед' },
+      { key: '1.55', label: 'Средняя', hint: 'тренировки 3–5 раз/нед' },
+      { key: '1.725', label: 'Высокая', hint: 'тренировки 6–7 раз/нед' },
+      { key: '1.9', label: 'Очень высокая', hint: 'физический труд / 2 раза в день' },
+    ];
+
+    // Блоки дневника, которые можно скрыть в настройках профиля.
+    const TOGGLEABLE_BLOCKS = [
+      { key: 'calories', label: 'Калории', hint: 'счётчик калорий и прогресс дня' },
+      { key: 'protein', label: 'Белок', hint: 'прогресс-бар белка' },
+      { key: 'fats', label: 'Жиры', hint: 'прогресс-бар жиров' },
+      { key: 'carbs', label: 'Углеводы', hint: 'прогресс-бар углеводов' },
+      { key: 'steps', label: 'Шаги', hint: 'шаги и калории от ходьбы' },
+      { key: 'workout', label: 'Силовая тренировка', hint: 'отметка тренировки' },
+      { key: 'water', label: 'Вода', hint: 'учёт выпитой воды' },
+    ];
+
+    const DEFAULT_PROFILE = { sex: 'male', age: '', height: '', weight: '', activity: '1.375', mode: 'manual', deficit: 500 };
+    const DEFAULT_SETTINGS = { fontScale: 'normal', blocks: TOGGLEABLE_BLOCKS.reduce((acc, b) => ({ ...acc, [b.key]: true }), {}) };
+    const WATER_QUICK = [100, 300, 500];
+
+    // Формула Миффлина — Сан-Жеора: BMR → TDEE (норма) → цель с дефицитом, затем БЖУ от веса.
+    function computeKbju(p) {
+      const w = parseFloat(p.weight), h = parseFloat(p.height), age = parseFloat(p.age);
+      if (!w || !h || !age) return null;
+      const bmr = 10 * w + 6.25 * h - 5 * age + (p.sex === 'female' ? -161 : 5);
+      const maintenance = Math.round(bmr * (parseFloat(p.activity) || 1.375));
+      const deficit = Number(p.deficit) || 0;
+      const calories = Math.max(0, maintenance - deficit);
+      const protein = Math.round(w * 2);
+      const fats = Math.round(w * 1);
+      const carbs = Math.max(0, Math.round((calories - protein * 4 - fats * 9) / 4));
+      return { maintenance, calories, protein, fats, carbs };
+    }
 
     // Плавный «накрут» числа при изменении значения (count-up).
     function AnimatedNumber({ value, className }) {
@@ -31,7 +69,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const [showReportView, setShowReportView] = useState(false);
       const [isPrinting, setIsPrinting] = useState(false);
       
-      const defaultGoals = { calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: 6000, maintenance: 2300, targetFat: 12 };
+      const defaultGoals = { calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: 6000, maintenance: 2300, targetFat: 12, waterGoal: 2500 };
       const [goals, setGoals] = useState(defaultGoals);
       const [draftGoals, setDraftGoals] = useState(defaultGoals);
       const [dailyGoals, setDailyGoals] = useState({});
@@ -74,6 +112,10 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const [dailySteps, setDailySteps] = useState({});
       const [dailyMetrics, setDailyMetrics] = useState({});
       const [dailyWorkouts, setDailyWorkouts] = useState({});
+      const [dailyWater, setDailyWater] = useState({});
+      const [profileData, setProfileData] = useState(DEFAULT_PROFILE);
+      const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+      const [customWater, setCustomWater] = useState('');
       const [isRefreshingDay, setIsRefreshingDay] = useState(false);
       
       const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
@@ -131,6 +173,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
           window.removeEventListener('appinstalled', handleAppInstalled);
         };
       }, []);
+
+      // Масштаб шрифта: Tailwind использует rem, поэтому меняем базовый размер корня.
+      useEffect(() => {
+        document.documentElement.style.fontSize = settings.fontScale === 'large' ? '18px' : '';
+        return () => { document.documentElement.style.fontSize = ''; };
+      }, [settings.fontScale]);
 
       const doAuth = async () => {
         setAuthError(''); setAuthBusy(true);
@@ -231,6 +279,8 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
               }
             }
             setDailyGoals(data.dailyGoals || {});
+            if (data.profileData) setProfileData({ ...DEFAULT_PROFILE, ...data.profileData });
+            if (data.settings) setSettings({ ...DEFAULT_SETTINGS, ...data.settings, blocks: { ...DEFAULT_SETTINGS.blocks, ...(data.settings.blocks || {}) } });
             // Личные продукты (поверх общей базы) и избранное — у каждого своё.
             setPersonalFoods(Array.isArray(data.foods) ? data.foods : []);
             if (Array.isArray(data.favoriteIds)) setFavoriteIds(data.favoriteIds);
@@ -248,15 +298,16 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       useEffect(() => {
         if (!uid) return;
         const unsubscribe = daysCol(uid).onSnapshot((snap) => {
-          const logs = {}, steps = {}, metrics = {}, workouts = {};
+          const logs = {}, steps = {}, metrics = {}, workouts = {}, water = {};
           snap.forEach((doc) => {
             const d = doc.data();
             if (d.logs && d.logs.length) logs[doc.id] = d.logs;
             if (d.steps !== undefined && d.steps !== '' && d.steps !== null) steps[doc.id] = d.steps;
             if (d.metrics && Object.keys(d.metrics).length) metrics[doc.id] = d.metrics;
             if (d.workout) workouts[doc.id] = true;
+            if (d.water !== undefined && d.water !== '' && d.water !== null) water[doc.id] = d.water;
           });
-          setDailyLogs(logs); setDailySteps(steps); setDailyMetrics(metrics); setDailyWorkouts(workouts);
+          setDailyLogs(logs); setDailySteps(steps); setDailyMetrics(metrics); setDailyWorkouts(workouts); setDailyWater(water);
         }, (e) => console.log("days listener error", e));
         return () => unsubscribe();
       }, [uid]);
@@ -861,6 +912,45 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         writeDay(currentDate, { workout: !!updated[currentDate] });
       };
 
+      // Вода: добавляем/убавляем мл к текущему дню (не уходим в минус).
+      const addWater = (amount) => {
+        const next = Math.max(0, (Number(dailyWater[currentDate]) || 0) + amount);
+        setDailyWater({ ...dailyWater, [currentDate]: next });
+        writeDay(currentDate, { water: next });
+      };
+      const resetWater = () => {
+        setDailyWater({ ...dailyWater, [currentDate]: 0 });
+        writeDay(currentDate, { water: 0 });
+      };
+      const addCustomWater = () => {
+        const v = Math.round(parseFloat(customWater));
+        if (!v || v <= 0) return;
+        addWater(v);
+        setCustomWater('');
+      };
+
+      // Профиль и настройки приложения сохраняются в документ профиля.
+      const saveProfileData = (next) => {
+        setProfileData(next);
+        if (profileDoc) profileDoc.set({ profileData: next }, { merge: true }).catch(() => {});
+      };
+      const saveSettings = (next) => {
+        setSettings(next);
+        if (profileDoc) profileDoc.set({ settings: next }, { merge: true }).catch(() => {});
+      };
+      const handleProfileChange = (field, value) => saveProfileData({ ...profileData, [field]: value });
+      const toggleBlock = (key) => saveSettings({ ...settings, blocks: { ...settings.blocks, [key]: !settings.blocks[key] } });
+      const setFontScale = (scale) => saveSettings({ ...settings, fontScale: scale });
+
+      // Автоматический расчёт КБЖУ по формуле и открытие модалки применения целей.
+      const applyAutoKbju = () => {
+        const res = computeKbju(profileData);
+        if (!res) { alert('Заполните пол, возраст, рост и вес — по ним считается КБЖУ.'); return; }
+        setDraftGoals({ ...draftGoals, calories: res.calories, protein: res.protein, fats: res.fats, carbs: res.carbs, maintenance: res.maintenance });
+        setActiveTab('directory');
+        setShowGoalModal(true);
+      };
+
       const copyPreviousDay = () => {
         const d = new Date(currentDate); d.setDate(d.getDate() - 1);
         const prev = getLocalDateString(d);
@@ -885,7 +975,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const downloadCSV = () => {
         const sep = ';';
         const fmt = (n) => (n === undefined || n === null || n === '' || isNaN(n)) ? '' : String(n).replace('.', ',');
-        const headers = ['Дата', 'Ккал', 'Белок', 'Жиры', 'Углеводы', 'Шаги', 'Расход', 'Дефицит', 'Тренировка', 'Вес', 'Жир %', 'БЖМ', 'Масса жира'];
+        const headers = ['Дата', 'Ккал', 'Белок', 'Жиры', 'Углеводы', 'Шаги', 'Расход', 'Дефицит', 'Тренировка', 'Вода (мл)', 'Вес', 'Жир %', 'БЖМ', 'Масса жира'];
         const rows = [headers.join(sep)];
         allExportDates.forEach(date => {
           const g = getEffectiveGoals(date);
@@ -901,7 +991,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
           const deficit = burned - cals;
           const m = dailyMetrics[date] || {};
           const workout = dailyWorkouts[date] ? 'да' : '';
-          const vals = [cals, pro, fat, carb, stepsRaw, burned, deficit, '__W__', m.weight, m.fatPercent, m.leanMass, m.fatMass];
+          const vals = [cals, pro, fat, carb, stepsRaw, burned, deficit, '__W__', dailyWater[date], m.weight, m.fatPercent, m.leanMass, m.fatMass];
           const line = [date, ...vals.map(fmt)].join(sep).replace('__W__', workout);
           rows.push(line);
         });
@@ -951,7 +1041,13 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const calsLabel = isOver ? "перебор" : "осталось";
       
       const progressCals = Math.min(100, (totalCals / (targetCalories || 1)) * 100);
-      
+
+      const todayWater = Number(dailyWater[currentDate]) || 0;
+      const waterGoal = Number(activeGoals.waterGoal) || 2500;
+      const waterProgress = Math.min(100, (todayWater / (waterGoal || 1)) * 100);
+      const blocks = settings.blocks || DEFAULT_SETTINGS.blocks;
+      const kbjuPreview = computeKbju(profileData);
+
       // Избранное — в порядке favoriteIds (порядок задаёт сам пользователь).
       const favoriteFoods = favoriteIds.map(id => foods.find(f => f.id === id)).filter(Boolean);
       const sortedFoods = [
@@ -1001,7 +1097,8 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const allDatesSet = new Set([
          ...Object.keys(dailyLogs).filter(d => d >= exportStart && d <= exportEnd),
          ...Object.keys(dailyMetrics).filter(d => d >= exportStart && d <= exportEnd),
-         ...Object.keys(dailySteps).filter(d => d >= exportStart && d <= exportEnd)
+         ...Object.keys(dailySteps).filter(d => d >= exportStart && d <= exportEnd),
+         ...Object.keys(dailyWater).filter(d => d >= exportStart && d <= exportEnd)
       ]);
       const allExportDates = Array.from(allDatesSet).sort((a, b) => new Date(a) - new Date(b));
 
@@ -1497,7 +1594,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
           {allExportDates.map(date => {
               const dayActiveGoals = getEffectiveGoals(date);
               const dayLogs = dailyLogs[date] || [];
-              if (dayLogs.length === 0 && !dailyMetrics[date] && dailySteps[date] === undefined) return null;
+              if (dayLogs.length === 0 && !dailyMetrics[date] && dailySteps[date] === undefined && dailyWater[date] === undefined) return null;
 
               const dayCals = dayLogs.reduce((s, l) => s + (l.totalCalories || 0), 0);
               const dayPro = dayLogs.reduce((s, l) => s + (l.totalProtein || 0), 0);
@@ -1511,7 +1608,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                 <div key={date} style={{ marginBottom: '15px', borderTop: '1px solid #eee', paddingTop: '8px' }}>
                   <h2 style={{ fontSize: '14px', fontWeight: 'bold', color: '#10b981', margin: '0 0 4px 0' }}>{date}</h2>
                   <p style={{ fontSize: '11px', marginBottom: '5px' }}>
-                    Шаги: {dailySteps[date] || '—'} | <strong>Дефицит: {dayBurned - dayCals} ккал</strong>{dailyWorkouts[date] ? ' | Силовая тренировка' : ''}<br/>
+                    Шаги: {dailySteps[date] || '—'} | <strong>Дефицит: {dayBurned - dayCals} ккал</strong>{dailyWorkouts[date] ? ' | Силовая тренировка' : ''}{dailyWater[date] !== undefined ? ` | Вода: ${dailyWater[date]} мл` : ''}<br/>
                     {dayLogs.length > 0 && <span>Б: {Math.round(dayPro)}г | Ж: {Math.round(dayFat)}г | У: {Math.round(dayCarb)}г</span>}
                     {mText && <span><br/><span style={{ color: '#005f73' }}>Тело: {mText}</span></span>}
                   </p>
@@ -1577,7 +1674,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         <div className="app-shell flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900 relative overflow-hidden">
             <header className="app-header shrink-0 pt-8 px-4 pb-4 bg-[#09090b] flex justify-between items-center z-10">
               <div>
-                <h1 key={activeTab} className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : activeTab === 'progress' ? 'Прогресс' : 'База'}</h1>
+                <h1 key={activeTab} className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : activeTab === 'progress' ? 'Прогресс' : activeTab === 'profile' ? 'Профиль' : 'База'}</h1>
               </div>
               <div className="flex items-center gap-2">
                 {activeTab === 'directory' && (
@@ -1603,7 +1700,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()+1); setCurrentDate(getLocalDateString(d));}} disabled={currentDate === getLocalDateString(new Date())} className="btn-active p-3 text-zinc-400 disabled:opacity-20"><IconChevronRight className="w-5 h-5" /></button>
                   </div>
 
+                  {(blocks.calories || blocks.steps || blocks.workout || blocks.protein || blocks.fats || blocks.carbs) && (
                   <div className="calorie-overview card-enter bg-[#18181b] rounded-3xl p-5 shadow-xl border border-zinc-800/50">
+                    {blocks.calories && (<>
                     <div className="flex justify-between items-end mb-3">
                       <div>
                         <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-widest">Калории</p>
@@ -1620,7 +1719,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     <div className="progress-track h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-5">
                       <motion.div className={`h-full ${isOver ? 'bg-red-500' : 'bg-emerald-500'}`} initial={false} animate={{ width: `${progressCals}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }}></motion.div>
                     </div>
+                    </>)}
 
+                    {blocks.steps && (
                     <div className="movement-panel mt-4 mb-4 flex items-center justify-between bg-zinc-900/40 p-3 rounded-2xl border border-zinc-800/40">
                       <div className="step-summary flex min-w-0 flex-1 items-center gap-3">
                         <IconSteps className="w-5 h-5 text-amber-400" />
@@ -1636,7 +1737,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                         <input type="number" className="step-input w-24 bg-zinc-800 rounded-xl p-2 text-center text-sm font-bold outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={todaySteps} onChange={(e) => handleUpdateSteps(e.target.value)} onFocus={(e) => e.target.select()} />
                       </div>
                     </div>
+                    )}
 
+                    {blocks.workout && (
                     <button onClick={toggleWorkout} className={`workout-toggle btn-active w-full mb-4 flex items-center justify-between p-3 rounded-2xl border transition-all ${dailyWorkouts[currentDate] ? 'bg-emerald-900/30 border-emerald-700/50' : 'bg-zinc-900/40 border-zinc-800/40'}`}>
                       <div className="flex items-center gap-3">
                         <IconDumbbell className="w-5 h-5 text-amber-400" />
@@ -1646,19 +1749,55 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                         {dailyWorkouts[currentDate] && <IconCheck className="w-4 h-4 text-white" />}
                       </div>
                     </button>
+                    )}
 
+                    {(blocks.protein || blocks.fats || blocks.carbs) && (
                     <div className="macro-stack flex flex-col gap-3 mt-4 border-t border-zinc-800/50 pt-4">
-                      <MacroBar label="Белок" current={totalPro} goal={activeGoals.protein} colorClass="text-indigo-400" bgClass="bg-indigo-500" />
-                      <MacroBar label="Жиры" current={totalFats} goal={activeGoals.fats} colorClass="text-amber-400" bgClass="bg-amber-500" />
-                      <MacroBar label="Углеводы" current={totalCarbs} goal={activeGoals.carbs} colorClass="text-blue-400" bgClass="bg-blue-500" />
-                      {proteinPerKg !== null && (
+                      {blocks.protein && <MacroBar label="Белок" current={totalPro} goal={activeGoals.protein} colorClass="text-indigo-400" bgClass="bg-indigo-500" />}
+                      {blocks.fats && <MacroBar label="Жиры" current={totalFats} goal={activeGoals.fats} colorClass="text-amber-400" bgClass="bg-amber-500" />}
+                      {blocks.carbs && <MacroBar label="Углеводы" current={totalCarbs} goal={activeGoals.carbs} colorClass="text-blue-400" bgClass="bg-blue-500" />}
+                      {blocks.protein && proteinPerKg !== null && (
                         <div className="flex items-center justify-between pt-1">
                           <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Белок на кг веса</span>
                           <span className={`text-[11px] font-bold ${proteinPerKg >= 1.6 ? 'text-emerald-400' : 'text-amber-400'}`}>{proteinPerKg} г/кг <span className="text-zinc-600">· цель {proteinGoalPerKg}</span></span>
                         </div>
                       )}
                     </div>
+                    )}
                   </div>
+                  )}
+
+                  {blocks.water && (
+                    <div className="water-card card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
+                      <div className="flex justify-between items-end mb-3">
+                        <div>
+                          <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-widest flex items-center gap-1.5"><IconDrop className="w-3.5 h-3.5 text-blue-400" /> Вода</p>
+                          <div className="flex items-baseline gap-1">
+                            <AnimatedNumber value={todayWater} className="text-4xl font-black" />
+                            <span className="text-zinc-600 text-sm">/ {waterGoal} мл</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-2xl font-black text-blue-400">{Math.max(0, waterGoal - todayWater)}</span>
+                          <p className="text-[10px] uppercase font-bold mt-1 tracking-widest opacity-80 text-blue-400">осталось</p>
+                        </div>
+                      </div>
+                      <div className="progress-track h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-4">
+                        <motion.div className="h-full bg-blue-500" initial={false} animate={{ width: `${waterProgress}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }}></motion.div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {WATER_QUICK.map(v => (
+                          <motion.button whileTap={{ scale: 0.92 }} type="button" key={v} onClick={() => addWater(v)} className="btn-active flex-1 min-w-[64px] bg-zinc-900/40 border border-zinc-800/40 text-zinc-200 rounded-2xl py-3 text-sm font-bold transition-all">+{v}</motion.button>
+                        ))}
+                        <motion.button whileTap={{ scale: 0.92 }} type="button" onClick={() => addWater(-100)} disabled={todayWater <= 0} className="btn-active w-12 bg-zinc-900/40 border border-zinc-800/40 text-zinc-400 rounded-2xl py-3 flex items-center justify-center transition-all disabled:opacity-30" aria-label="Убрать 100 мл"><IconMinus className="w-4 h-4" /></motion.button>
+                      </div>
+                      <div className="flex gap-2 mt-2">
+                        <input type="number" inputMode="numeric" placeholder="Своё значение (мл)" className="flex-1 bg-[#27272a] rounded-2xl p-3 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-blue-500" value={customWater} onChange={(e) => setCustomWater(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addCustomWater(); }} onFocus={(e) => e.target.select()} />
+                        <button type="button" onClick={addCustomWater} disabled={!customWater} className="btn-active w-14 shrink-0 bg-blue-600 rounded-2xl flex items-center justify-center transition-all disabled:opacity-35" aria-label="Добавить воду"><IconPlus className="w-6 h-6 text-white" /></button>
+                        <button type="button" onClick={resetWater} disabled={todayWater <= 0} className="btn-active w-14 shrink-0 bg-zinc-800 text-zinc-400 rounded-2xl flex items-center justify-center transition-all disabled:opacity-30" aria-label="Сбросить воду"><IconRefresh className="w-5 h-5" /></button>
+                      </div>
+                    </div>
+                  )}
 
                   <form ref={mealFormRef} onSubmit={handleAddLog} className="meal-composer card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-3">
                     <div className="flex items-center">
@@ -2024,6 +2163,116 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                 </div>
               )}
 
+              {activeTab === 'profile' && (
+                <div className="space-y-5">
+                  {/* Личные данные */}
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
+                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconUser className="w-4 h-4" /> Личные данные</h2>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[['male', 'Мужчина'], ['female', 'Женщина']].map(([s, label]) => (
+                        <button key={s} type="button" onClick={() => handleProfileChange('sex', s)} className={`btn-active rounded-xl p-3 text-sm font-bold border transition-all ${profileData.sex === s ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-[#27272a] text-zinc-300 border-zinc-700/30'}`}>{label}</button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ВОЗРАСТ</span><input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={profileData.age} onChange={(e) => handleProfileChange('age', e.target.value)} onFocus={(e) => e.target.select()} /></div>
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">РОСТ, СМ</span><input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={profileData.height} onChange={(e) => handleProfileChange('height', e.target.value)} onFocus={(e) => e.target.select()} /></div>
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ВЕС, КГ</span><input type="number" inputMode="decimal" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={profileData.weight} onChange={(e) => handleProfileChange('weight', e.target.value)} onFocus={(e) => e.target.select()} /></div>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-2">УРОВЕНЬ АКТИВНОСТИ</span>
+                      <div className="flex flex-col gap-2">
+                        {ACTIVITY_LEVELS.map(l => (
+                          <button key={l.key} type="button" onClick={() => handleProfileChange('activity', l.key)} className={`btn-active text-left rounded-xl p-3 border transition-all ${profileData.activity === l.key ? 'bg-emerald-600/15 border-emerald-600/40' : 'bg-[#27272a] border-zinc-700/30'}`}>
+                            <span className={`text-sm font-bold ${profileData.activity === l.key ? 'text-emerald-300' : 'text-zinc-200'}`}>{l.label}</span>
+                            <span className="block text-[10px] text-zinc-500 mt-0.5">{l.hint}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Расчёт КБЖУ */}
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
+                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconCalc className="w-4 h-4" /> Расчёт КБЖУ</h2>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[['auto', 'Автоматически'], ['manual', 'Вручную']].map(([m, label]) => (
+                        <button key={m} type="button" onClick={() => handleProfileChange('mode', m)} className={`btn-active rounded-xl p-3 text-sm font-bold border transition-all ${profileData.mode === m ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-[#27272a] text-zinc-300 border-zinc-700/30'}`}>{label}</button>
+                      ))}
+                    </div>
+                    {profileData.mode === 'auto' ? (
+                      <>
+                        <div>
+                          <span className="text-[9px] text-zinc-500 font-bold block mb-1">ДЕФИЦИТ, ККАЛ/ДЕНЬ</span>
+                          <input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={profileData.deficit} onChange={(e) => handleProfileChange('deficit', e.target.value === '' ? '' : parseInt(e.target.value))} onFocus={(e) => e.target.select()} />
+                          <p className="text-[10px] text-zinc-600 leading-relaxed mt-1.5">По умолчанию 500 — комфортное похудение ~0,5 кг/нед. Поставьте 0, чтобы удерживать вес, или отрицательное значение — для набора массы.</p>
+                        </div>
+                        {kbjuPreview ? (
+                          <div className="bg-[#27272a] rounded-2xl p-4 border border-zinc-700/30">
+                            <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mb-3">Расчёт по формуле Миффлина</p>
+                            <div className="grid grid-cols-2 gap-y-2 text-sm">
+                              <span className="text-zinc-400">Норма (TDEE)</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.maintenance} ккал</span>
+                              <span className="text-zinc-400">Цель калорий</span><span className="text-right font-bold text-emerald-400">{kbjuPreview.calories} ккал</span>
+                              <span className="text-zinc-400">Белок</span><span className="text-right font-bold text-indigo-400">{kbjuPreview.protein} г</span>
+                              <span className="text-zinc-400">Жиры</span><span className="text-right font-bold text-amber-400">{kbjuPreview.fats} г</span>
+                              <span className="text-zinc-400">Углеводы</span><span className="text-right font-bold text-blue-400">{kbjuPreview.carbs} г</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-amber-400/90 leading-relaxed">Заполните пол, возраст, рост и вес выше — расчёт появится здесь.</p>
+                        )}
+                        <button type="button" onClick={applyAutoKbju} disabled={!kbjuPreview} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-35"><IconCheck className="w-5 h-5" /> Рассчитать и применить</button>
+                      </>
+                    ) : (
+                      <p className="text-xs text-zinc-500 leading-relaxed">Ручной режим: задайте КБЖУ самостоятельно во вкладке «База» → «Ваши цели».</p>
+                    )}
+                  </div>
+
+                  {/* Норма воды */}
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
+                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconDrop className="w-4 h-4" /> Норма воды</h2>
+                    <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЦЕЛЬ, МЛ/ДЕНЬ</span><input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={draftGoals.waterGoal} onChange={(e) => handleDraftGoalChange('waterGoal', e.target.value === '' ? '' : parseInt(e.target.value))} onFocus={(e) => e.target.select()} /></div>
+                    {hasUnsavedGoals && <button type="button" onClick={() => setShowGoalModal(true)} className="btn-active w-full bg-indigo-600 text-white p-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2"><IconSave className="w-5 h-5" /> Сохранить цели</button>}
+                  </div>
+
+                  {/* Настройки приложения */}
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
+                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconSliders className="w-4 h-4" /> Размер шрифта</h2>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[['normal', 'Стандартный'], ['large', 'Увеличенный']].map(([sc, label]) => (
+                        <button key={sc} type="button" onClick={() => setFontScale(sc)} className={`btn-active rounded-xl p-3 text-sm font-bold border transition-all ${settings.fontScale === sc ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-[#27272a] text-zinc-300 border-zinc-700/30'}`}>{label}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Блоки дневника */}
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
+                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Блоки в дневнике</h2>
+                    <p className="text-[11px] text-zinc-500 leading-relaxed">По умолчанию включены все блоки. Отключите лишние — они исчезнут из дневника, но данные сохранятся.</p>
+                    <div className="space-y-2">
+                      {TOGGLEABLE_BLOCKS.map(b => (
+                        <button key={b.key} type="button" onClick={() => toggleBlock(b.key)} className="btn-active w-full flex items-center justify-between gap-3 bg-[#27272a] rounded-xl p-3 border border-zinc-700/30 text-left transition-all">
+                          <div className="min-w-0">
+                            <span className="text-sm font-bold text-zinc-200">{b.label}</span>
+                            <span className="block text-[10px] text-zinc-500 mt-0.5">{b.hint}</span>
+                          </div>
+                          <div className={`shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${blocks[b.key] ? 'bg-emerald-500' : 'bg-zinc-700'}`}>
+                            <div className={`w-5 h-5 rounded-full bg-white transition-transform ${blocks[b.key] ? 'translate-x-5' : 'translate-x-0'}`} />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Аккаунт */}
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
+                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Аккаунт</h2>
+                    <p className="text-xs text-zinc-500 break-all">{auth.currentUser ? auth.currentUser.email : ''}</p>
+                    {installPrompt && <button type="button" onClick={installApp} className="btn-active w-full bg-indigo-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2"><IconDownload className="w-5 h-5" />Установить приложение</button>}
+                    <button type="button" onClick={() => { if (confirm('Выйти из аккаунта?')) auth.signOut(); }} className="btn-active w-full bg-zinc-800 text-red-400 rounded-xl p-4 font-bold transition-all">Выйти</button>
+                  </div>
+                </div>
+              )}
+
               {activeTab === 'directory' && (
                 <div className="space-y-6">
                   <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
@@ -2035,7 +2284,8 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">БЕЛОК (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.protein} onChange={(e) => handleDraftGoalChange('protein', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЖИРЫ (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.fats} onChange={(e) => handleDraftGoalChange('fats', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
                       <div className="col-span-2"><span className="text-[9px] text-zinc-500 font-bold block mb-1">УГЛЕВОДЫ (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.carbs} onChange={(e) => handleDraftGoalChange('carbs', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
-                      <div className="col-span-2"><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЦЕЛЬ ПО ЖИРУ (%)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.targetFat} onChange={(e) => handleDraftGoalChange('targetFat', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЦЕЛЬ ПО ЖИРУ (%)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.targetFat} onChange={(e) => handleDraftGoalChange('targetFat', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ВОДА (МЛ)</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.waterGoal} onChange={(e) => handleDraftGoalChange('waterGoal', e.target.value === '' ? '' : parseInt(e.target.value))} /></div>
                     </div>
                     {hasUnsavedGoals && <button onClick={() => setShowGoalModal(true)} className="btn-active w-full bg-indigo-600 text-white p-4 rounded-xl font-bold mt-4 shadow-lg shadow-indigo-900/30 transition-all flex items-center justify-center gap-2"><IconSave className="w-5 h-5" />Сохранить цели</button>}
                   </div>
@@ -2154,15 +2404,18 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
               </AnimatePresence>
             </main>
 
-            <nav className="bottom-nav shrink-0 bg-[#09090b] flex justify-around pb-2 pt-2 safe-pb relative z-40 border-t border-zinc-900">
-              <button onClick={() => setActiveTab('diary')} className={`btn-active w-24 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'diary' ? 'text-emerald-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
-                <IconCalendar className="w-6 h-6" /><span className="text-[10px] font-bold mt-1 uppercase tracking-widest">Дневник</span>
+            <nav className="bottom-nav shrink-0 bg-[#09090b] flex justify-around gap-1 px-1 pb-2 pt-2 safe-pb relative z-40 border-t border-zinc-900">
+              <button onClick={() => setActiveTab('diary')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'diary' ? 'text-emerald-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
+                <IconCalendar className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase tracking-widest">Дневник</span>
               </button>
-              <button onClick={() => setActiveTab('progress')} className={`btn-active w-24 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'progress' ? 'text-violet-300 bg-zinc-900/50' : 'text-zinc-600'}`}>
-                <IconCamera className="w-6 h-6" /><span className="text-[10px] font-bold mt-1 uppercase tracking-widest">Прогресс</span>
+              <button onClick={() => setActiveTab('progress')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'progress' ? 'text-violet-300 bg-zinc-900/50' : 'text-zinc-600'}`}>
+                <IconCamera className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase tracking-widest">Прогресс</span>
               </button>
-              <button onClick={() => setActiveTab('directory')} className={`btn-active w-24 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'directory' ? 'text-indigo-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
-                <IconBook className="w-6 h-6" /><span className="text-[10px] font-bold mt-1 uppercase tracking-widest">База</span>
+              <button onClick={() => setActiveTab('profile')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'profile' ? 'text-emerald-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
+                <IconUser className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase tracking-widest">Профиль</span>
+              </button>
+              <button onClick={() => setActiveTab('directory')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'directory' ? 'text-indigo-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
+                <IconBook className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase tracking-widest">База</span>
               </button>
             </nav>
 
