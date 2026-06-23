@@ -1170,12 +1170,19 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
           if (cals <= (Number(g.calories) || 0)) streak++; else break;
         }
         const fatDates = Object.keys(dailyMetrics).filter(d => dailyMetrics[d]?.fatPercent).sort();
+        // Краткая история веса (последние 14 замеров) — чтобы соперник видел прогресс/тренд.
+        const weightHistory = Object.keys(dailyMetrics)
+          .filter(d => dailyMetrics[d]?.weight)
+          .sort()
+          .slice(-14)
+          .map(d => ({ d, w: Number(dailyMetrics[d].weight) }));
         return {
           weight: measuredWeight != null ? measuredWeight : (Number(profileData.weight) || null),
           fatPercent: fatDates.length ? Number(dailyMetrics[fatDates[fatDates.length - 1]].fatPercent) : null,
           avg7Steps: stepCnt ? Math.round(stepSum / stepCnt) : 0,
           avg7Deficit: defCnt ? Math.round(defSum / defCnt) : 0,
           goalStreak: streak,
+          weightHistory,
         };
       };
       const myStatsNow = computePublicStats();
@@ -1206,10 +1213,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         challenges.forEach(c => (c.members || []).forEach(m => { if (m !== uid) others.add(m); }));
         const ids = [...others];
         if (!ids.length) return;
-        let cancelled = false;
-        Promise.all(ids.map(id => publicProfileRef(id).get().then(d => d.exists ? { id, ...d.data() } : null).catch(() => null)))
-          .then(list => { if (cancelled) return; const map = {}; list.filter(Boolean).forEach(p => { map[p.id] = p; }); setFriendProfiles(prev => ({ ...prev, ...map })); });
-        return () => { cancelled = true; };
+        // Realtime: показатели соперника (вес и т.д.) обновляются у нас вживую,
+        // как только он их изменил — без перезагрузки приложения.
+        const unsubs = ids.map(id => publicProfileRef(id).onSnapshot(
+          d => { if (d.exists) setFriendProfiles(prev => ({ ...prev, [id]: { id, ...d.data() } })); },
+          () => {}));
+        return () => unsubs.forEach(u => u());
       }, [uid, connections, challenges]);
 
       // Публикуем мою витрину (имя, код, показатели) при изменении данных.
@@ -1274,7 +1283,13 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
           const reached = hasV && hasT && (tp.dir === 'down' ? value <= target : value >= target);
           // Остаток до своей цели (0 — достигнута). Им меряем близость к цели.
           const remaining = (hasV && hasT) ? Math.max(0, tp.dir === 'down' ? value - target : target - value) : null;
-          return { uid: m, name: m === uid ? 'Вы' : friendName(m), value, target, reached, remaining };
+          // Прогресс относительно старта спора (снимок показателей при создании/принятии).
+          const startVal = c.start && c.start[m] ? c.start[m][tp.metric] : null;
+          const delta = (hasV && typeof startVal === 'number') ? Math.round((value - startVal) * 10) / 10 : null;
+          // История веса соперника/моя — для мини-графика (из публичной витрины).
+          const profile = m === uid ? myStatsNow : friendProfiles[m];
+          const weightHistory = Array.isArray(profile?.weightHistory) ? profile.weightHistory : [];
+          return { uid: m, name: m === uid ? 'Вы' : friendName(m), value, target, reached, remaining, start: typeof startVal === 'number' ? startVal : null, delta, weightHistory };
         });
         const valid = rows.filter(r => r.remaining != null);
         let leaderUid = null;
@@ -2790,16 +2805,31 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                               <button type="button" onClick={() => removeChallenge(c)} className="btn-active text-zinc-700 active:text-red-400 p-1 shrink-0"><IconTrash className="w-4 h-4" /></button>
                             </div>
                             <div className="space-y-2">
-                              {st.rows.map(r => (
+                              {st.rows.map(r => {
+                                const goodDelta = r.delta != null && r.delta !== 0 && (st.tp.dir === 'down' ? r.delta < 0 : r.delta > 0);
+                                return (
                                 <div key={r.uid} className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 border ${st.leaderUid === r.uid ? 'bg-emerald-600/15 border-emerald-600/40' : 'bg-[#27272a] border-zinc-700/30'}`}>
                                   <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5 min-w-0 truncate">{st.leaderUid === r.uid && <IconFlame className="w-4 h-4 text-amber-400 shrink-0" />}{r.name}</span>
                                   <span className="shrink-0 text-right">
                                     <span className={`text-sm font-black ${r.reached ? 'text-emerald-400' : 'text-zinc-200'}`}>{typeof r.value === 'number' ? Math.round(r.value * 10) / 10 : '—'}{r.reached ? ' ✓' : ''}</span>
                                     {typeof r.target === 'number' && <span className="text-[10px] text-zinc-500 font-bold"> {st.tp.dir === 'down' ? '→ ≤' : '→ ≥'}{r.target} {st.tp.unit}</span>}
+                                    {r.delta != null && r.delta !== 0 && <span className={`block text-[9px] font-bold ${goodDelta ? 'text-emerald-400' : 'text-red-400'}`}>{r.delta > 0 ? '▲ +' : '▼ −'}{Math.abs(r.delta)} {st.tp.unit} от старта</span>}
+                                    {typeof r.start === 'number' && (r.delta == null || r.delta === 0) && <span className="block text-[9px] text-zinc-500">старт {Math.round(r.start * 10) / 10} {st.tp.unit}</span>}
                                   </span>
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
+                            {st.tp.key === 'weight' && st.rows.some(r => (r.weightHistory || []).length >= 2) && (
+                              <div className="mt-3 space-y-2">
+                                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Динамика веса</p>
+                                {st.rows.map(r => {
+                                  const hist = r.weightHistory || [];
+                                  if (hist.length < 2) return null;
+                                  return <MiniWeightChart key={r.uid} title={`${r.name} · вес`} data={hist.map(p => p.w)} dates={hist.map(p => { const a = (p.d || '').split('-'); return a.length === 3 ? `${a[2]}.${a[1]}` : p.d; })} color={st.leaderUid === r.uid ? '#34d399' : '#a3e635'} unit="кг" />;
+                                })}
+                              </div>
+                            )}
                             {isInvite && (
                               <div className="flex gap-2 mt-3">
                                 <button type="button" onClick={() => acceptChallenge(c)} className="btn-active flex-1 bg-emerald-600 text-white rounded-xl p-3 text-xs font-bold">Принять вызов</button>
