@@ -7,7 +7,7 @@ import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
-import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh } from './components/Icons.jsx';
+import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh } from './components/Icons.jsx';
 
     // Плавный «накрут» числа при изменении значения (count-up).
     function AnimatedNumber({ value, className }) {
@@ -1652,23 +1652,20 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                       </div>
                     )}
 
-                    {/* Вес + плюс */}
-                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                      <input ref={gramsInputRef} type="number" step="0.1" inputMode="decimal" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-base border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => e.target.select()} required />
-                      <button type="submit" disabled={!selectedFoodId || !gramsInput} className="btn-active w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-35 disabled:shadow-none"><IconPlus className="w-6 h-6 text-white" /></button>
-                    </div>
-
                     {/* Поиск */}
                     <div className="relative" onClick={(e) => e.stopPropagation()}>
+                      <label htmlFor="food-search" className="sr-only">Поиск продукта</label>
+                      <IconSearch aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500" />
                       <input
                         ref={foodSearchRef}
+                        id="food-search"
                         type="search"
                         enterKeyHint="search"
                         autoComplete="off"
                         autoCorrect="off"
                         spellCheck={false}
-                        placeholder="🔍 Поиск продукта..."
-                        className="w-full bg-[#27272a] rounded-2xl p-3 pr-14 outline-none text-zinc-200 text-base border border-zinc-700/30 focus:border-emerald-500"
+                        placeholder="Поиск продукта"
+                        className="w-full bg-[#27272a] rounded-2xl py-3 pl-11 pr-14 outline-none text-zinc-200 text-base border border-zinc-700/30 focus:border-emerald-500"
                         value={foodSearch}
                         onChange={(e) => setFoodSearch(e.target.value)}
                       />
@@ -1681,7 +1678,7 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
 
                     {/* «Не выбрано» — вне прокрутки (за ней ничего не видно); справа прокручиваемый список не‑избранных продуктов */}
                     <div className="flex items-center gap-1.5 -mx-1 px-1" onClick={(e) => e.stopPropagation()}>
-                      <button type="button" onClick={clearFoodSelection} title="Сбросить выбор" className={`btn-active shrink-0 flex items-center justify-center w-8 h-8 rounded-xl border transition-all ${!selectedFoodId ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-emerald-300 border-emerald-700/40'}`}><span className="leading-none" style={{ fontSize: '20px', marginTop: '-0.1em' }}>×</span></button>
+                      <button type="button" onClick={clearFoodSelection} title="Сбросить выбор" aria-label="Сбросить выбор продукта" className={`btn-active shrink-0 flex items-center justify-center w-8 h-8 rounded-xl border transition-all ${!selectedFoodId ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-emerald-300 border-emerald-700/40'}`}><IconClose className="w-4 h-4" /></button>
                       <div ref={mealListScrollRef} className="hscroll-fade flex gap-2 overflow-x-auto py-2 -my-2 pl-1 -ml-1 min-w-0">
                         {mealListFoods.map(f => (
                           <motion.button whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 22 }} type="button" key={f.id} onClick={() => selectFood(f.id)} className={`shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-colors ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</motion.button>
@@ -1690,6 +1687,13 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                           <span className="self-center text-xs text-zinc-500 px-1 py-2 whitespace-nowrap">{foodSearch.trim() ? 'Ничего не найдено' : 'Нет продуктов'}</span>
                         )}
                       </div>
+                    </div>
+
+                    {/* Вес и добавление — после поиска и списка продуктов. */}
+                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                      <label htmlFor="grams-input" className="sr-only">Вес продукта в граммах</label>
+                      <input ref={gramsInputRef} id="grams-input" type="number" step="0.1" inputMode="decimal" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-base border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => e.target.select()} required />
+                      <button type="submit" disabled={!selectedFoodId || !gramsInput} className="btn-active w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-35 disabled:shadow-none" aria-label="Добавить продукт"><IconPlus className="w-6 h-6 text-white" /></button>
                     </div>
                   </form>
 
