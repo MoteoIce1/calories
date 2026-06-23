@@ -1,7 +1,9 @@
 {
   "name": "functions",
   "description": "Cloud Functions для трекера (расчёт КБЖУ рецептов)",
-  "engines": { "node": "20" },
+  "engines": {
+    "node": "20"
+  },
   "main": "index.js",
   "dependencies": {
     "firebase-admin": "^12.7.0",
