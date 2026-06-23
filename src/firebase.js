@@ -13,7 +13,7 @@ import 'firebase/compat/app-check';
     //   3) В Console → App Check включите Enforcement для Cloud Functions, и в
     //      functions/index.js добавьте `enforceAppCheck: true` в опции onCall(...).
     // Пока ключ пустой — App Check не активируется, ничего не ломается.
-    const APPCHECK_SITE_KEY = '6LddMTAtAAAAAJ5Ctl7Gxr20th1BoyZTYJeCi5Fq';
+    const APPCHECK_SITE_KEY = '6LddMTAtAAAAAAnhVgKqpikUL2G8sUrSdb6HjtUj';
 
     const firebaseConfig = {
       apiKey: "AIzaSyBg9rVgF6WUjuu9abFvV_1KCHdSW3fZ5uQ",
