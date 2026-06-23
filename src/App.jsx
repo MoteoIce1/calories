@@ -7,7 +7,7 @@ import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
-import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh } from './components/Icons.jsx';
+import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter } from './components/Icons.jsx';
 
     // Плавный «накрут» числа при изменении значения (count-up).
     function AnimatedNumber({ value, className }) {
@@ -1222,7 +1222,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
           <div className="app-shell flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 items-center justify-center px-8 relative overflow-hidden">
             <div className="w-full">
               <div className="flex flex-col items-center mb-8">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-600/20 border border-emerald-700/40 flex items-center justify-center mb-4 text-3xl">🥗</div>
+                <div className="w-16 h-16 rounded-2xl bg-emerald-600/20 border border-emerald-700/40 flex items-center justify-center mb-4"><IconBowl className="w-8 h-8 text-amber-400" /></div>
                 <h1 className="text-2xl font-bold">Трекер диеты</h1>
                 <p className="text-zinc-500 text-sm mt-1">{authMode === 'register' ? 'Создание аккаунта' : 'Вход в аккаунт'}</p>
               </div>
@@ -1489,7 +1489,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                 <div key={date} style={{ marginBottom: '15px', borderTop: '1px solid #eee', paddingTop: '8px' }}>
                   <h2 style={{ fontSize: '14px', fontWeight: 'bold', color: '#10b981', margin: '0 0 4px 0' }}>{date}</h2>
                   <p style={{ fontSize: '11px', marginBottom: '5px' }}>
-                    Шаги: {dailySteps[date] || '—'} | <strong>Дефицит: {dayBurned - dayCals} ккал</strong>{dailyWorkouts[date] ? ' | 🏋️ Тренировка' : ''}<br/>
+                    Шаги: {dailySteps[date] || '—'} | <strong>Дефицит: {dayBurned - dayCals} ккал</strong>{dailyWorkouts[date] ? ' | Силовая тренировка' : ''}<br/>
                     {dayLogs.length > 0 && <span>Б: {Math.round(dayPro)}г | Ж: {Math.round(dayFat)}г | У: {Math.round(dayCarb)}г</span>}
                     {mText && <span><br/><span style={{ color: '#005f73' }}>Тело: {mText}</span></span>}
                   </p>
@@ -1528,22 +1528,22 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
       if (showReportView) {
         return (
-          <div className="report-view" style={{ background: 'linear-gradient(180deg, #eceef7 0%, #f8fafc 42%, #f1f2f6 100%)', color: 'black', height: '100lvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '8px', paddingTop: 'max(10px, calc(env(safe-area-inset-top) + 4px))', position: 'relative', zIndex: 2 }}>
-            <div className="print-hide" style={{ position: 'sticky', top: '6px', zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '22px', padding: '10px', background: 'rgba(248, 250, 252, 0.9)', border: '1px solid rgba(100, 116, 139, 0.16)', borderRadius: '18px', boxShadow: '0 12px 28px rgba(15, 23, 42, 0.08)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+          <div className="report-view" style={{ background: '#070706', color: '#f8f1e4', height: '100lvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '8px', paddingTop: 'max(10px, calc(env(safe-area-inset-top) + 4px))', position: 'relative', zIndex: 2 }}>
+            <div className="print-hide" style={{ position: 'sticky', top: '6px', zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '22px', padding: '10px', background: 'rgba(14, 13, 11, 0.94)', border: '1px solid rgba(220, 178, 100, 0.2)', borderRadius: '10px', boxShadow: '0 14px 32px rgba(0, 0, 0, 0.34)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
                <button 
                  onClick={() => { setIsPrinting(false); setShowReportView(false); }} 
                  className="btn-active" 
-                 style={{ padding: '12px 18px', background: '#ffffff', borderRadius: '14px', fontWeight: 'bold', color: '#17212b', border: '1px solid rgba(100, 116, 139, 0.18)', fontSize: '14px', transition: 'all 0.1s', boxShadow: '0 8px 18px rgba(15, 23, 42, 0.06)' }}
+                 style={{ padding: '12px 18px', background: '#16140f', borderRadius: '8px', fontWeight: 'bold', color: '#f5ead4', border: '1px solid rgba(220, 178, 100, 0.18)', fontSize: '14px', transition: 'all 0.2s', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                >
-                 ⬅ Назад
+                 <IconArrowLeft className="w-4 h-4" /> Назад
                </button>
                <button 
                  onClick={handlePrintClick} 
                  disabled={isPrinting}
                  className="btn-active" 
-                 style={{ padding: '12px 18px', background: isPrinting ? '#7f8ed8' : 'linear-gradient(135deg, #7f8ed8, #8c78c6, #a3657b)', borderRadius: '14px', fontWeight: 'bold', color: '#fff', border: 'none', fontSize: '14px', boxShadow: '0 12px 24px rgba(127, 142, 216, 0.24)', transition: 'all 0.1s', opacity: isPrinting ? 0.8 : 1 }}
+                 style={{ padding: '12px 18px', background: isPrinting ? '#9d7737' : 'linear-gradient(110deg, #8f6a32, #e0bb6e, #9b7337)', borderRadius: '8px', fontWeight: 'bold', color: '#17130b', border: 'none', fontSize: '14px', boxShadow: '0 12px 24px rgba(200, 157, 80, 0.18)', transition: 'all 0.2s', opacity: isPrinting ? 0.8 : 1, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                >
-                 {isPrinting ? '⏳ Обработка...' : '🖨 Сохранить PDF'}
+                 {isPrinting ? 'Обработка...' : <><IconPrinter className="w-4 h-4" /> Сохранить PDF</>}
                </button>
             </div>
             <ExportReport />
@@ -1601,7 +1601,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
                     <div className="mt-4 mb-4 flex items-center justify-between bg-zinc-900/40 p-3 rounded-2xl border border-zinc-800/40">
                       <div className="flex items-center gap-3">
-                        <span className="text-xl">👟</span>
+                        <IconSteps className="w-5 h-5 text-amber-400" />
                         <div className="flex flex-col">
                           <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">Шаги</span>
                           {extraCalories !== 0 && <span className={`text-[9px] font-bold mt-0.5 ${extraCalories > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{extraCalories > 0 ? `+${extraCalories}` : extraCalories} ккал к цели</span>}
@@ -1617,7 +1617,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
                     <button onClick={toggleWorkout} className={`btn-active w-full mb-4 flex items-center justify-between p-3 rounded-2xl border transition-all ${dailyWorkouts[currentDate] ? 'bg-emerald-900/30 border-emerald-700/50' : 'bg-zinc-900/40 border-zinc-800/40'}`}>
                       <div className="flex items-center gap-3">
-                        <span className="text-xl">🏋️</span>
+                        <IconDumbbell className="w-5 h-5 text-amber-400" />
                         <span className={`text-[10px] uppercase font-bold tracking-widest ${dailyWorkouts[currentDate] ? 'text-emerald-400' : 'text-zinc-400'}`}>Силовая тренировка</span>
                       </div>
                       <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${dailyWorkouts[currentDate] ? 'bg-emerald-500' : 'bg-zinc-700'}`}>
@@ -1751,7 +1751,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                 <div className="progress-panel space-y-4 w-full max-w-full">
                   {showBodyReminder && (
                     <div className="card-enter bg-amber-500/10 border border-amber-400/30 rounded-3xl p-4 flex gap-3 items-start max-w-full">
-                      <div className="w-10 h-10 shrink-0 rounded-2xl bg-amber-400/15 flex items-center justify-center text-lg">⏱</div>
+                      <div className="w-10 h-10 shrink-0 rounded-2xl bg-amber-400/15 flex items-center justify-center"><IconTimer className="w-5 h-5 text-amber-400" /></div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-amber-100">Пора обновить мерки и фото</p>
                         <p className="text-xs text-amber-200/70 mt-1">Последняя запись была {latestBodyDate ? displayDate(latestBodyDate).toLowerCase() : 'давно'}. Лучше фиксировать прогресс раз в 2 недели.</p>
@@ -2015,7 +2015,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                       <div className="col-span-2"><span className="text-[9px] text-zinc-500 font-bold block mb-1">УГЛЕВОДЫ (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.carbs} onChange={(e) => handleDraftGoalChange('carbs', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
                       <div className="col-span-2"><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЦЕЛЬ ПО ЖИРУ (%)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.targetFat} onChange={(e) => handleDraftGoalChange('targetFat', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
                     </div>
-                    {hasUnsavedGoals && <button onClick={() => setShowGoalModal(true)} className="btn-active w-full bg-indigo-600 text-white p-4 rounded-xl font-bold mt-4 shadow-lg shadow-indigo-900/30 transition-all">💾 Сохранить цели</button>}
+                    {hasUnsavedGoals && <button onClick={() => setShowGoalModal(true)} className="btn-active w-full bg-indigo-600 text-white p-4 rounded-xl font-bold mt-4 shadow-lg shadow-indigo-900/30 transition-all flex items-center justify-center gap-2"><IconSave className="w-5 h-5" />Сохранить цели</button>}
                   </div>
 
                   <form onSubmit={handleAddFood} className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
@@ -2045,7 +2045,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
                   <div className="space-y-2">
                     <p className="text-[11px] text-zinc-500 leading-relaxed px-1 mb-1">
-                      ⭐️ Отмечайте часто используемые продукты звёздочкой — они появятся в «Избранном» для быстрого выбора в дневнике.<br />
+                      Отмечайте часто используемые продукты звёздочкой: они появятся в «Избранном» для быстрого выбора в дневнике.<br />
                       ➕ Не нашли нужный продукт? Добавьте свой с КБЖУ через форму выше.
                     </p>
                     <div className="flex items-center justify-between gap-3 px-1 mb-2">
