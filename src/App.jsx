@@ -157,13 +157,6 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const [mealAiBusy, setMealAiBusy] = useState(false);
       const [mealAiError, setMealAiError] = useState('');
       const [mealAiItems, setMealAiItems] = useState(null);
-      // Фото блюда → ИИ (КБЖУ + вес, с уточняющими вопросами).
-      const [showPhotoModal, setShowPhotoModal] = useState(false);
-      const [photoImage, setPhotoImage] = useState(null); // { data, mime }
-      const [photoBusy, setPhotoBusy] = useState(false);
-      const [photoError, setPhotoError] = useState('');
-      const [photoResult, setPhotoResult] = useState(null);
-      const [photoAnswers, setPhotoAnswers] = useState('');
       const [isRefreshingDay, setIsRefreshingDay] = useState(false);
       
       const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
@@ -1459,85 +1452,6 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         setShowMealAiModal(false); setMealAiText(''); setMealAiItems(null); setMealAiError('');
       };
 
-      // ── ИИ: распознавание блюда по фото ──
-      const resetPhotoAi = () => { setPhotoImage(null); setPhotoResult(null); setPhotoError(''); setPhotoAnswers(''); setPhotoBusy(false); };
-      // Сжимаем фото до ~768px по длинной стороне — экономит токены ИИ и трафик.
-      const analyzePhoto = async (img, answers) => {
-        if (!img) return;
-        setPhotoBusy(true); setPhotoError('');
-        try {
-          const callable = functions.httpsCallable('analyzePhoto');
-          const res = await callable({ imageBase64: img.data, mimeType: img.mime, answers: answers || '', knownNames: foods.map(f => f.name).slice(0, 1000) });
-          setPhotoResult(res.data);
-        } catch (e) {
-          setPhotoError(e.message || 'Не удалось распознать фото. Проверьте, что функция развёрнута.');
-        }
-        setPhotoBusy(false);
-      };
-      const onPhotoPick = (file) => {
-        if (!file) return;
-        setPhotoError(''); setPhotoResult(null); setPhotoAnswers('');
-        const reader = new FileReader();
-        reader.onload = () => {
-          const imgEl = new Image();
-          imgEl.onload = () => {
-            const max = 1024;
-            const scale = Math.min(1, max / Math.max(imgEl.width, imgEl.height));
-            const w = Math.max(1, Math.round(imgEl.width * scale));
-            const h = Math.max(1, Math.round(imgEl.height * scale));
-            const canvas = document.createElement('canvas');
-            canvas.width = w; canvas.height = h;
-            canvas.getContext('2d').drawImage(imgEl, 0, 0, w, h);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            const img = { mime: 'image/jpeg', data: dataUrl.split(',')[1] || '' };
-            setPhotoImage(img);
-            analyzePhoto(img, '');
-          };
-          imgEl.onerror = () => setPhotoError('Не удалось прочитать изображение.');
-          imgEl.src = reader.result;
-        };
-        reader.onerror = () => setPhotoError('Не удалось прочитать файл.');
-        reader.readAsDataURL(file);
-      };
-      const addPhotoMeal = () => {
-        const r = photoResult; if (!r) return;
-        const grams = Math.max(1, Math.round(Number(r.grams) || 0));
-        const dishName = String(r.name || 'Блюдо с фото').trim().slice(0, 80);
-        const per100 = (tot) => Math.round((Number(tot) || 0) / grams * 1000) / 10; // на 100 г, 1 знак
-
-        // Сверка с базой: точный дубль — используем существующий продукт; похожий — спрашиваем.
-        const exact = foods.find(f => foodNameKey(f.name) === foodNameKey(dishName));
-        let food;
-        if (exact) {
-          food = exact; // уже есть такой продукт — берём его КБЖУ, добавляем только вес
-        } else {
-          const similar = findSimilarFood(dishName);
-          if (similar && !confirm(`В базе уже есть похожий продукт «${similar.name}». Всё равно добавить новый «${dishName}»?\n(Отмена — не добавлять; выберите существующий вручную из списка продуктов.)`)) {
-            return;
-          }
-          food = {
-            id: Date.now().toString(),
-            name: dishName,
-            calories: Math.round((Number(r.calories) || 0) / grams * 100),
-            protein: per100(r.protein), fats: per100(r.fats), carbs: per100(r.carbs),
-          };
-          if (isOwner) saveSharedFoods([food, ...sharedFoods]);
-          else savePersonalFoods([food, ...personalFoods]);
-        }
-        // Запись в дневник — КБЖУ считаем от продукта (существующего или нового) и веса.
-        const newLog = {
-          id: (Date.now() + 1).toString(), foodId: food.id, grams,
-          totalCalories: Math.round((food.calories || 0) * grams / 100),
-          totalProtein: Math.round((food.protein || 0) * grams / 100),
-          totalFats: Math.round((food.fats || 0) * grams / 100),
-          totalCarbs: Math.round((food.carbs || 0) * grams / 100),
-        };
-        const updatedLogs = { ...dailyLogs, [currentDate]: [...(dailyLogs[currentDate] || []), newLog] };
-        setDailyLogs(updatedLogs);
-        writeDay(currentDate, { logs: updatedLogs[currentDate] });
-        setShowPhotoModal(false); resetPhotoAi();
-      };
-
       // Избранное — в порядке favoriteIds (порядок задаёт сам пользователь).
       const favoriteFoods = favoriteIds.map(id => foods.find(f => f.id === id)).filter(Boolean);
       const sortedFoods = [
@@ -2310,10 +2224,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                   <form ref={mealFormRef} onSubmit={handleAddLog} className="meal-composer card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-3">
                     <div className="flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button type="button" onClick={() => { setShowPhotoModal(true); resetPhotoAi(); }} className="btn-active flex items-center gap-1 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all"><IconCamera className="w-3.5 h-3.5" /> Фото</button>
-                        <button type="button" onClick={() => { setShowMealAiModal(true); setMealAiText(''); setMealAiError(''); setMealAiItems(null); }} className="btn-active flex items-center gap-1 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all"><IconSparkles className="w-3.5 h-3.5" /> Рецепт</button>
-                      </div>
+                      <button type="button" onClick={() => { setShowMealAiModal(true); setMealAiText(''); setMealAiError(''); setMealAiItems(null); }} className="btn-active shrink-0 flex items-center gap-1 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all"><IconSparkles className="w-3.5 h-3.5" /> Рецепт ИИ</button>
                     </div>
 
                     {/* Избранное — отдельная строка сверху */}
@@ -3268,69 +3179,6 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
             )}
             </AnimatePresence>
 
-            {/* Модалка: блюдо по фото (ИИ) */}
-            <AnimatePresence>
-            {showPhotoModal && (
-              <motion.div key="photo-meal" className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-                <motion.div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm max-h-[88vh] overflow-y-auto" initial={{ opacity: 0, scale: 0.9, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }}>
-                  <h3 className="text-lg font-bold mb-1 text-center flex items-center justify-center gap-2"><IconCamera className="w-5 h-5 text-indigo-400" /> Блюдо по фото</h3>
-                  <p className="text-zinc-500 text-xs mb-4 text-center leading-relaxed">Сфотографируйте блюдо — ИИ оценит КБЖУ и примерный вес. Если что-то не видно, уточнит у вас.</p>
-
-                  {!photoImage && (
-                    <label className="btn-active flex flex-col items-center justify-center gap-2 w-full bg-[#27272a] border border-dashed border-zinc-700 rounded-2xl py-10 cursor-pointer text-zinc-400">
-                      <IconCamera className="w-8 h-8" />
-                      <span className="text-xs font-bold">Сделать фото или выбрать</span>
-                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => onPhotoPick(e.target.files && e.target.files[0])} />
-                    </label>
-                  )}
-
-                  {photoImage && (
-                    <div className="space-y-3">
-                      <div className="relative">
-                        <img src={`data:${photoImage.mime};base64,${photoImage.data}`} alt="Блюдо" className="w-full max-h-48 object-cover rounded-2xl border border-zinc-800" />
-                        <label className="btn-active absolute bottom-2 right-2 bg-black/70 text-white text-[10px] font-bold rounded-lg px-2 py-1 cursor-pointer">Переснять<input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => onPhotoPick(e.target.files && e.target.files[0])} /></label>
-                      </div>
-
-                      {photoBusy && <p className="text-center text-indigo-300 text-sm font-bold py-2 flex items-center justify-center gap-2"><IconSparkles className="w-4 h-4" /> Анализирую…</p>}
-                      {photoError && <p className="text-red-400 text-xs leading-relaxed">{photoError}</p>}
-
-                      {photoResult && !photoBusy && (
-                        <div className="space-y-3">
-                          <div className="bg-[#27272a] rounded-2xl p-3 border border-zinc-700/30 space-y-2">
-                            <input type="text" className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-zinc-200 font-bold outline-none border border-zinc-700/30" value={photoResult.name} onChange={(e) => setPhotoResult({ ...photoResult, name: e.target.value })} />
-                            {photoResult.detectedIngredients?.length > 0 && <p className="text-[10px] text-zinc-500">Видно: {photoResult.detectedIngredients.join(', ')}</p>}
-                            <div className="grid grid-cols-5 gap-1.5">
-                              <label className="text-[9px] text-zinc-500 font-bold">Вес, г<input type="number" inputMode="decimal" className="w-full bg-zinc-900 rounded-lg p-1.5 text-xs text-zinc-200 font-bold outline-none mt-0.5" value={photoResult.grams} onChange={(e) => setPhotoResult({ ...photoResult, grams: e.target.value })} /></label>
-                              <label className="text-[9px] text-zinc-500 font-bold">Ккал<input type="number" inputMode="decimal" className="w-full bg-zinc-900 rounded-lg p-1.5 text-xs text-emerald-400 font-bold outline-none mt-0.5" value={photoResult.calories} onChange={(e) => setPhotoResult({ ...photoResult, calories: e.target.value })} /></label>
-                              <label className="text-[9px] text-zinc-500 font-bold">Б<input type="number" inputMode="decimal" className="w-full bg-zinc-900 rounded-lg p-1.5 text-xs text-indigo-400 font-bold outline-none mt-0.5" value={photoResult.protein} onChange={(e) => setPhotoResult({ ...photoResult, protein: e.target.value })} /></label>
-                              <label className="text-[9px] text-zinc-500 font-bold">Ж<input type="number" inputMode="decimal" className="w-full bg-zinc-900 rounded-lg p-1.5 text-xs text-amber-400 font-bold outline-none mt-0.5" value={photoResult.fats} onChange={(e) => setPhotoResult({ ...photoResult, fats: e.target.value })} /></label>
-                              <label className="text-[9px] text-zinc-500 font-bold">У<input type="number" inputMode="decimal" className="w-full bg-zinc-900 rounded-lg p-1.5 text-xs text-blue-400 font-bold outline-none mt-0.5" value={photoResult.carbs} onChange={(e) => setPhotoResult({ ...photoResult, carbs: e.target.value })} /></label>
-                            </div>
-                            <p className="text-[10px] text-zinc-500">Указано на всю порцию ({Math.max(1, Math.round(Number(photoResult.grams) || 0))} г){photoResult.note ? ' · ' + photoResult.note : ''}</p>
-                          </div>
-
-                          {photoResult.needClarification && photoResult.questions?.length > 0 && (
-                            <div className="bg-amber-500/10 border border-amber-400/30 rounded-2xl p-3 space-y-2">
-                              <p className="text-[11px] font-bold text-amber-200">Уточните, чтобы расчёт был точнее:</p>
-                              <ul className="text-[11px] text-amber-100/90 list-disc pl-4 space-y-0.5">
-                                {photoResult.questions.map((q, k) => <li key={k}>{q}</li>)}
-                              </ul>
-                              <textarea rows={2} placeholder="Например: да, добавил 10 г сливочного масла; соус — сметанный" className="w-full bg-zinc-900 rounded-lg p-2 text-xs text-zinc-200 outline-none border border-zinc-700/30 resize-none" value={photoAnswers} onChange={(e) => setPhotoAnswers(e.target.value)} />
-                              <button type="button" onClick={() => analyzePhoto(photoImage, photoAnswers)} disabled={photoBusy || !photoAnswers.trim()} className="btn-active w-full bg-amber-600 text-white rounded-lg p-2.5 text-xs font-bold transition-all disabled:opacity-35">Пересчитать с уточнениями</button>
-                            </div>
-                          )}
-
-                          <button type="button" onClick={addPhotoMeal} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-3 font-bold transition-all">Добавить в дневник</button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <button type="button" onClick={() => { setShowPhotoModal(false); resetPhotoAi(); }} className="btn-active w-full mt-3 border border-zinc-800 text-zinc-500 rounded-xl p-3 font-bold transition-all">Закрыть</button>
-                </motion.div>
-              </motion.div>
-            )}
-            </AnimatePresence>
 
             <AnimatePresence>
             {showBodyPhotoCompare && (

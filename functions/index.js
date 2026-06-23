@@ -14,10 +14,6 @@ const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 // КБЖУ ей более чем по силам. Поменяйте на 'claude-sonnet-4-6' / 'claude-opus-4-8'
 // для большей точности (дороже).
 const MODEL = 'claude-haiku-4-5';
-// Для распознавания блюд ПО ФОТО нужна сильная зрительная модель — Haiku/Sonnet путают
-// блюда и сильно мажут по весу. Opus 4.8 — лучшее качество vision (распознавание +
-// оценка порции). Дороже, но фото будет лимитировано (≈5/день), качество приоритетно.
-const VISION_MODEL = 'claude-opus-4-8';
 
 // Дневной лимит ИИ-запросов на пользователя (защита от перерасхода бюджета).
 // Каждый вызов calcRecipe/parseIngredients/analyzePhoto (включая уточнения) считается.
@@ -268,106 +264,4 @@ exports.parseIngredients = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-ce
   const result = { ingredients };
   await putCachedResult(cacheKey, result);
   return result;
-});
-
-// Распознавание блюда по фото: название, КБЖУ всей порции и примерный вес.
-// Если на фото не видно компонентов, сильно влияющих на КБЖУ (масло, соус, сахар),
-// возвращает needClarification=true с вопросами. Учитывает ответы пользователя.
-exports.analyzePhoto = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1', enforceAppCheck: true, memory: '512MiB' }, async (request) => {
-  if (!request.auth) throw new HttpsError('unauthenticated', 'Войдите в аккаунт.');
-  await enforceAiLimit(request.auth.uid);
-  const imageBase64 = String((request.data && request.data.imageBase64) || '');
-  const mimeType = String((request.data && request.data.mimeType) || 'image/jpeg');
-  const answers = String((request.data && request.data.answers) || '').trim().slice(0, 1500);
-  // Названия продуктов из базы пользователя — чтобы при совпадении вернуть имя дословно.
-  const knownNames = Array.isArray(request.data && request.data.knownNames)
-    ? request.data.knownNames.map((n) => String(n || '').trim()).filter(Boolean).slice(0, 1000)
-    : [];
-  if (!imageBase64) throw new HttpsError('invalid-argument', 'Нет изображения.');
-  if (imageBase64.length > 7000000) throw new HttpsError('invalid-argument', 'Слишком большое изображение.');
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) throw new HttpsError('invalid-argument', 'Поддерживаются JPEG, PNG, WebP.');
-
-  const schema = {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      name: { type: 'string' },
-      needClarification: { type: 'boolean' },
-      questions: { type: 'array', items: { type: 'string' } },
-      detectedIngredients: { type: 'array', items: { type: 'string' } },
-      grams: { type: 'number' },
-      calories: { type: 'number' },
-      protein: { type: 'number' },
-      fats: { type: 'number' },
-      carbs: { type: 'number' },
-      note: { type: 'string' },
-    },
-    required: ['name', 'needClarification', 'questions', 'detectedIngredients', 'grams', 'calories', 'protein', 'fats', 'carbs', 'note'],
-  };
-
-  const system = 'Ты нутрициолог-эксперт по распознаванию еды на фото. Внимательно рассмотри изображение и определи блюдо ПО ТОМУ, ЧТО РЕАЛЬНО ВИДНО, не угадывай наугад. '
-    + 'name — короткое точное название блюда на русском (если это просто хлеб — так и пиши «Хлеб» или «Чиабатта», не выдумывай начинку). '
-    + 'detectedIngredients — перечисли ТОЛЬКО то, что действительно видно на фото. НЕ придумывай ингредиенты, которых не видно (например, не пиши «арахисовое масло», «соус» и т.п., если их нет на картинке). Если уверенности в блюде нет — выбери наиболее вероятный обычный вариант и отметь это в note. '
-    + 'ОЦЕНКА ВЕСА — критично, не завышай: оцени порцию по видимым ориентирам размера (стандартная тарелка ≈26 см, вилка ≈20 см, ломтик хлеба, рука) и по типичным порциям. Будь реалистичен: тонкий ломтик/кусок хлеба обычно 25–40 г, не 60–80. Если есть ориентир масштаба — используй его. grams — оценка веса ВСЕЙ порции на фото в граммах. '
-    + 'calories/protein/fats/carbs — КБЖУ ВСЕЙ порции (ккал и граммы, не на 100 г), пересчитанные под выбранный вес. '
-    + (knownNames.length ? 'СВЕРКА С БАЗОЙ: если распознанное блюдо совпадает с продуктом из переданного списка «база» (тот же продукт, даже если иначе сформулировано — например «Чиабатта» и «Ломтик хлеба чиабатта»), верни name ДОСЛОВНО как в базе. ' : '')
-    + 'ВАЖНО про уточнения: некоторые компоненты сильно меняют КБЖУ, но на фото их не видно (масло, соус, заправка, майонез, сахар, сливки). Если такой скрытый компонент реально вероятен для этого блюда — поставь needClarification=true и задай 1–3 коротких конкретных вопроса в questions (например «Добавляли сливочное масло?», «Чем заправлен салат?»). Это НЕ значит выдумывать ингредиент — это значит СПРОСИТЬ. Если всё ясно или пользователь уже ответил — needClarification=false, questions=[]. '
-    + 'В любом случае дай свою лучшую числовую оценку КБЖУ и веса (с учётом ответов пользователя). note — одна короткая строка с допущениями (включая на что опирался при оценке веса). Отвечай строго в требуемом JSON, без пояснений вне него.';
-
-  const userText = 'Определи блюдо и его КБЖУ по фото.'
-    + (knownNames.length ? '\n\nБаза (если блюдо совпадает — верни название ДОСЛОВНО отсюда):\n' + knownNames.join('\n') : '')
-    + (answers ? '\n\nОтветы пользователя на уточнения (учти их и больше не спрашивай про это):\n' + answers : '');
-
-  const body = {
-    model: VISION_MODEL,
-    max_tokens: 1024,
-    system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-    output_config: { format: { type: 'json_schema', schema } },
-    messages: [{
-      role: 'user',
-      content: [
-        { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } },
-        { type: 'text', text: userText },
-      ],
-    }],
-  };
-
-  let resp;
-  try {
-    resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': ANTHROPIC_API_KEY.value(),
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-  } catch (e) {
-    throw new HttpsError('unavailable', 'Не удалось связаться с ИИ.');
-  }
-
-  if (!resp.ok) {
-    const t = await resp.text().catch(() => '');
-    throw new HttpsError('internal', 'Ошибка ИИ (' + resp.status + '): ' + t.slice(0, 300));
-  }
-
-  const data = await resp.json();
-  const out = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
-  let parsed;
-  try { parsed = JSON.parse(out); } catch (e) { throw new HttpsError('internal', 'ИИ вернул некорректный ответ. Попробуйте ещё раз.'); }
-
-  const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10;
-  return {
-    name: String(parsed.name || 'Блюдо').slice(0, 80),
-    needClarification: !!parsed.needClarification,
-    questions: (Array.isArray(parsed.questions) ? parsed.questions : []).map((q) => String(q || '').trim()).filter(Boolean).slice(0, 5),
-    detectedIngredients: (Array.isArray(parsed.detectedIngredients) ? parsed.detectedIngredients : []).map((q) => String(q || '').trim()).filter(Boolean).slice(0, 20),
-    grams: Math.round(Number(parsed.grams) || 0),
-    calories: Math.round(Number(parsed.calories) || 0),
-    protein: round1(parsed.protein),
-    fats: round1(parsed.fats),
-    carbs: round1(parsed.carbs),
-    note: String(parsed.note || '').slice(0, 200),
-  };
 });
