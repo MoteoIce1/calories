@@ -78,7 +78,7 @@ import { movingAverage } from '../utils/stats.js';
       );
     };
 
-    const MiniWeightChart = ({ title = 'Динамика веса', data, dates, color = '#a3e635', unit = 'кг' }) => {
+    const MiniWeightChart = ({ title = 'Динамика веса', data, dates, color = '#a3e635', unit = 'кг', positiveIsGood = false }) => {
       const points = (data || [])
         .map((v, i) => ({ v: Number(v), i, raw: v }))
         .filter(p => p.raw !== null && p.raw !== undefined && p.raw !== '' && !isNaN(p.v));
@@ -102,7 +102,7 @@ import { movingAverage } from '../utils/stats.js';
         <div className="card-enter bg-zinc-900/40 rounded-2xl border border-zinc-800/40 p-3 mb-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">{title}</span>
-            <span className={`text-[11px] font-bold ${delta > 0 ? 'text-red-400' : delta < 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>{delta > 0 ? '+' : ''}{delta} {unit}</span>
+            <span className={`text-[11px] font-bold ${delta === 0 ? 'text-zinc-500' : ((delta > 0) === positiveIsGood ? 'text-emerald-400' : 'text-red-400')}`}>{delta > 0 ? '+' : ''}{delta} {unit}</span>
           </div>
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block">
             {yTicks.map((tick) => (

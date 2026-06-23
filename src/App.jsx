@@ -13,6 +13,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
     const CHALLENGE_TYPES = [
       { key: 'weight', label: 'Сбросить вес', short: 'Вес', unit: 'кг', metric: 'weight', dir: 'down', help: 'Кто первым дойдёт до целевого веса' },
       { key: 'fat', label: 'Снизить % жира', short: 'Жир', unit: '%', metric: 'fatPercent', dir: 'down', help: 'Кто первым дойдёт до целевого % жира' },
+      { key: 'waist', label: 'Уменьшить талию', short: 'Талия', unit: 'см', metric: 'waist', dir: 'down', help: 'Кто первым дойдёт до целевого обхвата талии' },
       { key: 'steps', label: 'Среднее шагов в день', short: 'Шаги', unit: 'шаг', metric: 'avg7Steps', dir: 'up', help: 'У кого выше среднее за 7 дней' },
       { key: 'deficit', label: 'Средний дефицит', short: 'Дефицит', unit: 'ккал', metric: 'avg7Deficit', dir: 'up', help: 'У кого выше средний дефицит за 7 дней' },
       { key: 'streak', label: 'Дни подряд в цели', short: 'Серия', unit: 'дн', metric: 'goalStreak', dir: 'up', help: 'Кто дольше держит дефицит без срыва' },
@@ -1170,19 +1171,21 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
           if (cals <= (Number(g.calories) || 0)) streak++; else break;
         }
         const fatDates = Object.keys(dailyMetrics).filter(d => dailyMetrics[d]?.fatPercent).sort();
-        // Краткая история веса (последние 14 замеров) — чтобы соперник видел прогресс/тренд.
-        const weightHistory = Object.keys(dailyMetrics)
-          .filter(d => dailyMetrics[d]?.weight)
-          .sort()
-          .slice(-14)
-          .map(d => ({ d, w: Number(dailyMetrics[d].weight) }));
+        // Тренды (последние 14 точек) по метрикам — чтобы соперник видел прогресс по той
+        // метрике, на которую идёт спор: вес/жир/шаги/талия. Каждый пункт {d: дата, v: число}.
+        const mkHist = (entries) => entries.filter(e => e.v != null && !isNaN(e.v)).sort((a, b) => a.d.localeCompare(b.d)).slice(-14);
+        const weightHistory = mkHist(Object.keys(dailyMetrics).filter(d => dailyMetrics[d]?.weight).map(d => ({ d, v: Number(dailyMetrics[d].weight) })));
+        const fatHistory = mkHist(Object.keys(dailyMetrics).filter(d => dailyMetrics[d]?.fatPercent).map(d => ({ d, v: Number(dailyMetrics[d].fatPercent) })));
+        const stepsHistory = mkHist(Object.keys(dailySteps).filter(d => dailySteps[d] != null && dailySteps[d] !== '').map(d => ({ d, v: Number(dailySteps[d]) })));
+        const waistHistory = mkHist((bodyEntries || []).filter(e => e?.measures?.waist).map(e => ({ d: e.date, v: Number(e.measures.waist) })));
         return {
           weight: measuredWeight != null ? measuredWeight : (Number(profileData.weight) || null),
           fatPercent: fatDates.length ? Number(dailyMetrics[fatDates[fatDates.length - 1]].fatPercent) : null,
+          waist: waistHistory.length ? waistHistory[waistHistory.length - 1].v : null,
           avg7Steps: stepCnt ? Math.round(stepSum / stepCnt) : 0,
           avg7Deficit: defCnt ? Math.round(defSum / defCnt) : 0,
           goalStreak: streak,
-          weightHistory,
+          weightHistory, fatHistory, stepsHistory, waistHistory,
         };
       };
       const myStatsNow = computePublicStats();
@@ -1226,7 +1229,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         if (!uid) return;
         const stats = computePublicStats();
         publicProfileRef(uid).set({ uid, friendCode: myFriendCode, displayName: myDisplayName, ...stats, updatedAt: Date.now() }, { merge: true }).catch(() => {});
-      }, [uid, myDisplayName, dailyLogs, dailySteps, dailyMetrics, goals, dailyGoals, measuredWeight]);
+      }, [uid, myDisplayName, dailyLogs, dailySteps, dailyMetrics, goals, dailyGoals, measuredWeight, bodyEntries]);
 
       // ── Действия с друзьями и спорами ──
       const sendFriendRequest = async () => {
@@ -1288,10 +1291,11 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
           // Прогресс относительно старта спора (снимок показателей при создании/принятии).
           const startVal = c.start && c.start[m] ? c.start[m][tp.metric] : null;
           const delta = (hasV && typeof startVal === 'number') ? Math.round((value - startVal) * 10) / 10 : null;
-          // История веса соперника/моя — для мини-графика (из публичной витрины).
+          // Тренд именно по метрике спора (вес/жир/шаги/талия) — из публичной витрины.
+          const histKey = { weight: 'weightHistory', fatPercent: 'fatHistory', avg7Steps: 'stepsHistory', waist: 'waistHistory' }[tp.metric];
           const profile = m === uid ? myStatsNow : friendProfiles[m];
-          const weightHistory = Array.isArray(profile?.weightHistory) ? profile.weightHistory : [];
-          return { uid: m, name: m === uid ? 'Вы' : friendName(m), value, target, reached, remaining, start: typeof startVal === 'number' ? startVal : null, delta, weightHistory };
+          const history = (histKey && Array.isArray(profile?.[histKey])) ? profile[histKey] : [];
+          return { uid: m, name: m === uid ? 'Вы' : friendName(m), value, target, reached, remaining, start: typeof startVal === 'number' ? startVal : null, delta, history };
         });
         const valid = rows.filter(r => r.remaining != null);
         let leaderUid = null;
@@ -2857,13 +2861,13 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                                 );
                               })}
                             </div>
-                            {st.tp.key === 'weight' && st.rows.some(r => (r.weightHistory || []).length >= 2) && (
+                            {['weight', 'fat', 'steps', 'waist'].includes(st.tp.key) && st.rows.some(r => (r.history || []).length >= 2) && (
                               <div className="mt-3 space-y-2">
-                                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Динамика веса</p>
+                                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Динамика · {st.tp.short.toLowerCase()}</p>
                                 {st.rows.map(r => {
-                                  const hist = r.weightHistory || [];
+                                  const hist = r.history || [];
                                   if (hist.length < 2) return null;
-                                  return <MiniWeightChart key={r.uid} title={`${r.name} · вес`} data={hist.map(p => p.w)} dates={hist.map(p => { const a = (p.d || '').split('-'); return a.length === 3 ? `${a[2]}.${a[1]}` : p.d; })} color={st.leaderUid === r.uid ? '#34d399' : '#a3e635'} unit="кг" />;
+                                  return <MiniWeightChart key={r.uid} title={`${r.name} · ${st.tp.short.toLowerCase()}`} data={hist.map(p => p.v)} dates={hist.map(p => { const a = (p.d || '').split('-'); return a.length === 3 ? `${a[2]}.${a[1]}` : p.d; })} color={st.leaderUid === r.uid ? '#34d399' : '#a3e635'} unit={st.tp.unit} positiveIsGood={st.tp.dir === 'up'} />;
                                 })}
                               </div>
                             )}
