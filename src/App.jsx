@@ -1256,6 +1256,8 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const createChallenge = async () => {
         const { friendUid, type, myTarget, friendTarget, deadline } = challengeDraft;
         if (!uid || !friendUid || myTarget === '' || friendTarget === '' || !deadline) { alert('Заполните соперника, обе цели и срок.'); return; }
+        // Срок строго в будущем — нельзя сегодня/вчера (жёсткая проверка, не только min инпута).
+        if (deadline <= getLocalDateString(new Date())) { alert('Срок спора должен быть в будущем — выберите дату от завтра.'); return; }
         const members = [uid, friendUid].sort();
         const start = { [uid]: myStatsNow, [friendUid]: friendProfiles[friendUid] || null };
         // У каждого участника своя цель: я худею до своей, друг — до своей.
@@ -1352,6 +1354,22 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       // Ключ названия — набор слов без учёта порядка/регистра: «масло сливочное» == «Сливочное масло».
       const foodNameKey = (name) => getFoodNameWords(name || '').sort().join(' ');
       const foodAlreadyExists = (name) => { const key = foodNameKey(name); return !!key && foods.some(f => foodNameKey(f.name) === key); };
+      // Ищет ПОХОЖИЙ продукт в базе (не точный дубль): по значимым словам названия,
+      // чтобы «Чиабатта» нашло «Ломтик хлеба чиабатта». Точные дубли обрабатываются отдельно.
+      const findSimilarFood = (name) => {
+        const key = foodNameKey(name);
+        if (!key) return null;
+        const seen = new Set();
+        const queries = [name, ...getFoodNameWords(name).filter(w => w.length >= 4)];
+        for (const q of queries) {
+          for (const f of searchFoodsByName(foods, q, 3)) {
+            if (seen.has(f.id)) continue;
+            seen.add(f.id);
+            if (foodNameKey(f.name) !== key) return f;
+          }
+        }
+        return null;
+      };
       const runMealAi = async () => {
         const text = mealAiText.trim();
         if (!text) return;
@@ -1382,6 +1400,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       }));
       const confirmMealAi = () => {
         const toAdd = (mealAiItems || []).filter(it => it.add && !it.exists && String(it.name || '').trim());
+        // Предупреждаем о похожих продуктах, уже имеющихся в базе.
+        const similars = toAdd.map(it => ({ it, sim: findSimilarFood(it.name) })).filter(x => x.sim);
+        if (similars.length && !confirm('Похоже, такие продукты уже есть в базе:\n' + similars.map(x => `• «${x.it.name}» ≈ «${x.sim.name}»`).join('\n') + '\n\nВсё равно добавить как новые?')) return;
         if (toAdd.length) {
           const newFoods = toAdd.map((it, i) => ({
             id: (Date.now() + i).toString(),
@@ -1405,7 +1426,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         setPhotoBusy(true); setPhotoError('');
         try {
           const callable = functions.httpsCallable('analyzePhoto');
-          const res = await callable({ imageBase64: img.data, mimeType: img.mime, answers: answers || '' });
+          const res = await callable({ imageBase64: img.data, mimeType: img.mime, answers: answers || '', knownNames: foods.map(f => f.name).slice(0, 1000) });
           setPhotoResult(res.data);
         } catch (e) {
           setPhotoError(e.message || 'Не удалось распознать фото. Проверьте, что функция развёрнута.');
@@ -1440,20 +1461,36 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const addPhotoMeal = () => {
         const r = photoResult; if (!r) return;
         const grams = Math.max(1, Math.round(Number(r.grams) || 0));
-        const totalCal = Math.round(Number(r.calories) || 0);
-        const totalP = Math.round(Number(r.protein) || 0);
-        const totalF = Math.round(Number(r.fats) || 0);
-        const totalC = Math.round(Number(r.carbs) || 0);
+        const dishName = String(r.name || 'Блюдо с фото').trim().slice(0, 80);
         const per100 = (tot) => Math.round((Number(tot) || 0) / grams * 1000) / 10; // на 100 г, 1 знак
-        const food = {
-          id: Date.now().toString(),
-          name: String(r.name || 'Блюдо с фото').trim().slice(0, 80),
-          calories: Math.round((Number(r.calories) || 0) / grams * 100),
-          protein: per100(r.protein), fats: per100(r.fats), carbs: per100(r.carbs),
+
+        // Сверка с базой: точный дубль — используем существующий продукт; похожий — спрашиваем.
+        const exact = foods.find(f => foodNameKey(f.name) === foodNameKey(dishName));
+        let food;
+        if (exact) {
+          food = exact; // уже есть такой продукт — берём его КБЖУ, добавляем только вес
+        } else {
+          const similar = findSimilarFood(dishName);
+          if (similar && !confirm(`В базе уже есть похожий продукт «${similar.name}». Всё равно добавить новый «${dishName}»?\n(Отмена — не добавлять; выберите существующий вручную из списка продуктов.)`)) {
+            return;
+          }
+          food = {
+            id: Date.now().toString(),
+            name: dishName,
+            calories: Math.round((Number(r.calories) || 0) / grams * 100),
+            protein: per100(r.protein), fats: per100(r.fats), carbs: per100(r.carbs),
+          };
+          if (isOwner) saveSharedFoods([food, ...sharedFoods]);
+          else savePersonalFoods([food, ...personalFoods]);
+        }
+        // Запись в дневник — КБЖУ считаем от продукта (существующего или нового) и веса.
+        const newLog = {
+          id: (Date.now() + 1).toString(), foodId: food.id, grams,
+          totalCalories: Math.round((food.calories || 0) * grams / 100),
+          totalProtein: Math.round((food.protein || 0) * grams / 100),
+          totalFats: Math.round((food.fats || 0) * grams / 100),
+          totalCarbs: Math.round((food.carbs || 0) * grams / 100),
         };
-        if (isOwner) saveSharedFoods([food, ...sharedFoods]);
-        else savePersonalFoods([food, ...personalFoods]);
-        const newLog = { id: (Date.now() + 1).toString(), foodId: food.id, grams, totalCalories: totalCal, totalProtein: totalP, totalFats: totalF, totalCarbs: totalC };
         const updatedLogs = { ...dailyLogs, [currentDate]: [...(dailyLogs[currentDate] || []), newLog] };
         setDailyLogs(updatedLogs);
         writeDay(currentDate, { logs: updatedLogs[currentDate] });
