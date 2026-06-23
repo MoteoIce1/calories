@@ -1,21 +1,82 @@
 :root {
-  /* Neutral near-black base — true minimalist dark */
+  /* ── Neutral dark base (shared by lime / sky / violet) ── */
   --bg-deep: #0a0a0b;
-  --bg-ink: #0e0e10;
+  --bg-ink: #050506;
   --surface: #161618;
-  --surface-strong: #202023;
-  --surface-soft: #161618;
+  --surface-strong: #212124;
+  --surface-3: #1b1b1e;
+  --header-bg: rgba(12, 12, 13, 0.72);
+  --nav-solid: rgba(10, 10, 11, 0.94);
+  --text: #fafafa;
+  --text-2: #d4d4d8;
+  --text-muted: #8b8b91;
+  --text-faint: #6b6b71;
   --line: rgba(255, 255, 255, 0.07);
   --line-strong: rgba(255, 255, 255, 0.13);
-  --text-muted: #8b8b91;
-  /* Single confident accent — lime green (energy / progress) */
+  --track: rgba(255, 255, 255, 0.08);
+  --danger: #f87171;
+  --card-shadow: none;
+  /* Fixed semantic macro colors (fats / carbs+water) */
+  --c-fat: #f59e0b;
+  --c-fat-text: #fbbf24;
+  --c-carb: #38bdf8;
+  /* ── Accent: lime (default theme) ── */
   --accent: #a3e635;
   --accent-strong: #84cc16;
   --accent-soft: rgba(163, 230, 53, 0.12);
   --accent-light: #d9f99d;
   --accent-ink: #0a0a0b;
-  --danger: #f87171;
+  --glow: rgba(163, 230, 53, 0.06);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── Theme: голубая (тёмная) ── */
+[data-theme="sky"] {
+  --accent: #38bdf8;
+  --accent-strong: #0ea5e9;
+  --accent-soft: rgba(56, 189, 248, 0.13);
+  --accent-light: #bae6fd;
+  --accent-ink: #06283a;
+  --glow: rgba(56, 189, 248, 0.08);
+}
+
+/* ── Theme: фиолетовая (тёмная) ── */
+[data-theme="violet"] {
+  --accent: #a78bfa;
+  --accent-strong: #8b5cf6;
+  --accent-soft: rgba(167, 139, 250, 0.14);
+  --accent-light: #ddd6fe;
+  --accent-ink: #1a1038;
+  --glow: rgba(167, 139, 250, 0.08);
+}
+
+/* ── Theme: светлая · голубая ── */
+[data-theme="light"] {
+  --bg-deep: #eef3f8;
+  --bg-ink: #e2e8f0;
+  --surface: #ffffff;
+  --surface-strong: #f1f5f9;
+  --surface-3: #eaeff5;
+  --header-bg: rgba(255, 255, 255, 0.82);
+  --nav-solid: rgba(255, 255, 255, 0.96);
+  --text: #0f172a;
+  --text-2: #1e293b;
+  --text-muted: #64748b;
+  --text-faint: #94a3b8;
+  --line: rgba(15, 23, 42, 0.10);
+  --line-strong: rgba(15, 23, 42, 0.20);
+  --track: rgba(15, 23, 42, 0.10);
+  --danger: #ef4444;
+  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --c-fat: #f59e0b;
+  --c-fat-text: #d97706;
+  --c-carb: #0284c7;
+  --accent: #0ea5e9;
+  --accent-strong: #0284c7;
+  --accent-soft: rgba(14, 165, 233, 0.12);
+  --accent-light: #38bdf8;
+  --accent-ink: #ffffff;
+  --glow: rgba(14, 165, 233, 0.10);
 }
 
 html,
@@ -39,7 +100,7 @@ body {
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
   background: var(--bg-deep) !important;
-  color: #fafafa;
+  color: var(--text);
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -52,7 +113,7 @@ body::before {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: radial-gradient(120% 60% at 50% -10%, rgba(163, 230, 53, 0.06) 0%, transparent 60%);
+  background: radial-gradient(120% 60% at 50% -10%, var(--glow) 0%, transparent 60%);
 }
 
 #root {
@@ -94,7 +155,7 @@ body::before {
 
 .app-header,
 .bottom-nav {
-  background: rgba(10, 10, 11, 0.72) !important;
+  background: var(--header-bg) !important;
   border-color: var(--line) !important;
   backdrop-filter: blur(18px) saturate(1.1);
   -webkit-backdrop-filter: blur(18px) saturate(1.1);
@@ -107,7 +168,7 @@ body::before {
   right: 0;
   bottom: calc(env(safe-area-inset-bottom) * -1);
   height: env(safe-area-inset-bottom);
-  background: rgba(10, 10, 11, 0.92);
+  background: var(--nav-solid);
   pointer-events: none;
 }
 
@@ -116,9 +177,9 @@ body::before {
   border-bottom: 1px solid var(--line);
 }
 
-/* Clean wordmark — solid white, tight tracking, no animated sheen */
+/* Clean wordmark — solid text, tight tracking */
 .app-header h1 {
-  color: #fafafa !important;
+  color: var(--text) !important;
   background: none !important;
   -webkit-background-clip: border-box;
   background-clip: border-box;
@@ -143,7 +204,7 @@ body::before {
 }
 
 .date-toolbar > div {
-  color: #fafafa !important;
+  color: var(--text) !important;
 }
 
 .calorie-overview {
@@ -152,7 +213,7 @@ body::before {
   padding: clamp(18px, 4vw, 26px) !important;
   background: var(--surface) !important;
   border-color: var(--line) !important;
-  box-shadow: none !important;
+  box-shadow: var(--card-shadow) !important;
 }
 
 .calorie-overview::before,
@@ -174,7 +235,7 @@ body::before {
 
 .movement-panel,
 .workout-toggle {
-  background: var(--surface) !important;
+  background: var(--surface-3) !important;
   border-color: var(--line) !important;
 }
 
@@ -204,7 +265,7 @@ body::before {
 }
 
 .workout-toggle.bg-emerald-900\/30 {
-  border-color: rgba(163, 230, 53, 0.45) !important;
+  border-color: var(--accent) !important;
   background: var(--accent-soft) !important;
 }
 
@@ -218,16 +279,15 @@ body::before {
   margin-bottom: 4px !important;
 }
 
-/* Macro accents — distinct but muted */
 .macro-bar .bg-indigo-500 { background: var(--accent) !important; }
-.macro-bar .bg-amber-500 { background: #f59e0b !important; }
-.macro-bar .bg-blue-500 { background: #38bdf8 !important; }
+.macro-bar .bg-amber-500 { background: var(--c-fat) !important; }
+.macro-bar .bg-blue-500 { background: var(--c-carb) !important; }
 
 .meal-composer {
   padding: 18px !important;
   background: var(--surface) !important;
   border-color: var(--line) !important;
-  box-shadow: none !important;
+  box-shadow: var(--card-shadow) !important;
 }
 
 .meal-composer > :first-child {
@@ -243,7 +303,7 @@ body::before {
 
 .meal-composer input[type="search"]:focus,
 .meal-composer input[type="number"]:focus {
-  background-color: #26262a !important;
+  background-color: var(--surface-3) !important;
 }
 
 .food-log-list {
@@ -255,7 +315,7 @@ body::before {
   min-height: 76px;
   background: var(--surface) !important;
   border-color: var(--line) !important;
-  box-shadow: none !important;
+  box-shadow: var(--card-shadow) !important;
 }
 
 .food-log-row:hover {
@@ -271,44 +331,44 @@ body::before {
 .bg-\[\#09090b\] { background: transparent !important; }
 .bg-\[\#18181b\] {
   background: var(--surface) !important;
-  box-shadow: none;
+  box-shadow: var(--card-shadow);
 }
 .bg-\[\#27272a\],
 .bg-zinc-800,
-.bg-zinc-900 { background-color: var(--surface) !important; }
+.bg-zinc-900 { background-color: var(--surface-strong) !important; }
 .bg-zinc-950 { background-color: var(--bg-ink) !important; }
-.bg-zinc-900\/40 { background-color: rgba(22, 22, 24, 0.7) !important; }
+.bg-zinc-900\/40 { background-color: var(--surface-3) !important; }
 .bg-zinc-900\/50 { background-color: var(--accent-soft) !important; }
-.bg-zinc-900\/70 { background-color: rgba(22, 22, 24, 0.85) !important; }
+.bg-zinc-900\/70 { background-color: var(--surface-3) !important; }
 .bg-zinc-800\/60 { background-color: var(--surface-strong) !important; }
 
 .border-zinc-900,
 [class*="border-zinc-800"],
 [class*="border-zinc-700"] { border-color: var(--line) !important; }
 
-.text-zinc-100 { color: #fafafa !important; }
-.text-zinc-200 { color: #ededee !important; }
-.text-zinc-300 { color: #d4d4d8 !important; }
+.text-zinc-100 { color: var(--text) !important; }
+.text-zinc-200 { color: var(--text-2) !important; }
+.text-zinc-300 { color: var(--text-2) !important; }
 .text-zinc-400,
 .text-zinc-500 { color: var(--text-muted) !important; }
 .text-zinc-600,
-.text-zinc-700 { color: #6b6b71 !important; }
+.text-zinc-700 { color: var(--text-faint) !important; }
 
 .text-emerald-300,
 .text-emerald-400,
 .text-emerald-500 { color: var(--accent) !important; }
 .text-amber-400,
-.text-amber-500 { color: #fbbf24 !important; }
+.text-amber-500 { color: var(--c-fat-text) !important; }
 .text-indigo-400,
 .text-indigo-500 { color: var(--accent) !important; }
 .text-violet-200,
 .text-violet-300 { color: var(--accent) !important; }
 .text-blue-400,
-.text-blue-500 { color: #38bdf8 !important; }
+.text-blue-500 { color: var(--c-carb) !important; }
 .text-red-400,
 .text-red-500 { color: var(--danger) !important; }
 
-/* Primary actions — solid lime, dark ink text, flat */
+/* Primary actions — solid accent, ink text, flat */
 .bg-emerald-500,
 .bg-emerald-600,
 .bg-indigo-500,
@@ -325,16 +385,20 @@ body::before {
 .bg-emerald-900\/20,
 .bg-emerald-900\/30,
 .bg-emerald-900\/40 { background-color: var(--accent-soft) !important; }
-.bg-amber-500 { background: #f59e0b !important; }
+.bg-amber-500 { background: var(--c-fat) !important; }
 .bg-blue-500,
-.bg-blue-600 { background: #38bdf8 !important; }
+.bg-blue-600 { background: var(--c-carb) !important; }
 .bg-indigo-500\/20,
 .bg-violet-500\/15 { background-color: var(--accent-soft) !important; }
 .border-indigo-400\/20,
 .border-indigo-600\/30,
-.border-violet-400\/15 { border-color: rgba(163, 230, 53, 0.28) !important; }
+.border-violet-400\/15 { border-color: var(--line-strong) !important; }
 .bg-gradient-to-r { background: var(--accent) !important; }
 .bg-red-500 { background: var(--danger) !important; }
+
+/* text-white that isn't on an accent button must stay readable per theme */
+.app-shell input.text-white { color: var(--text) !important; }
+.app-shell .bg-gradient-to-r.text-white { color: var(--accent-ink) !important; }
 
 .border-emerald-500,
 .border-emerald-600\/30,
@@ -358,9 +422,9 @@ body::before {
 .card-enter:nth-child(4) { animation-delay: 105ms; }
 .hscroll-fade { transition: -webkit-mask-image 140ms linear, mask-image 140ms linear; }
 
-/* Progress — flat track, solid accent fill, no glow/sheen */
+/* Progress — flat track, solid accent fill */
 .progress-track {
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: var(--track) !important;
   box-shadow: none;
 }
 .progress-fill {
@@ -375,7 +439,7 @@ select {
 }
 input:focus,
 select:focus { box-shadow: 0 0 0 3px var(--accent-soft); }
-input::placeholder { color: #5f5f64 !important; }
+input::placeholder { color: var(--text-faint) !important; }
 
 .modal-card { animation: modalIn 280ms var(--ease-out) both; }
 .reorder-item { transition: opacity 200ms var(--ease-out), border-color 200ms var(--ease-out), box-shadow 200ms var(--ease-out), background-color 200ms var(--ease-out); }
@@ -393,11 +457,11 @@ input::placeholder { color: #5f5f64 !important; }
   padding: 12px !important;
   border-radius: 0;
   background: var(--bg-deep) !important;
-  color: #fafafa !important;
+  color: var(--text) !important;
 }
 .report-modern h1 {
   margin: 0 0 18px !important;
-  color: #fafafa !important;
+  color: var(--text) !important;
   font-size: 24px !important;
   letter-spacing: -0.02em;
   text-align: left !important;
@@ -424,18 +488,18 @@ input::placeholder { color: #5f5f64 !important; }
 .report-modern > div:first-of-type { border-color: var(--line-strong) !important; }
 .report-modern h2,
 .report-modern h3,
-.report-modern h4 { color: #fafafa !important; letter-spacing: -0.01em; }
+.report-modern h4 { color: var(--text) !important; letter-spacing: -0.01em; }
 .report-modern h2 { font-size: 15px !important; margin-bottom: 10px !important; }
 .report-modern h3 { font-size: 13px !important; }
 .report-modern p,
 .report-modern em,
-.report-modern span { color: #c8c8cc !important; line-height: 1.45; }
+.report-modern span { color: var(--text-2) !important; line-height: 1.45; }
 .report-modern table { width: 100% !important; border-collapse: separate !important; border-spacing: 0 !important; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-ink); }
 .report-modern thead,
 .report-modern tr[style*="backgroundColor"],
 .report-modern tr[style*="background-color"] { background: var(--surface-strong) !important; }
 .report-modern th { color: var(--accent) !important; border-color: var(--line) !important; font-size: 10px; letter-spacing: 0.04em; }
-.report-modern td { color: #e4e4e7 !important; border-color: var(--line) !important; }
+.report-modern td { color: var(--text-2) !important; border-color: var(--line) !important; }
 .report-modern .avoid-break { box-shadow: none !important; border-radius: 14px !important; }
 .report-modern .report-chart {
   background: var(--bg-ink) !important;
@@ -444,7 +508,7 @@ input::placeholder { color: #5f5f64 !important; }
 .report-modern .report-chart h4 { color: var(--accent) !important; }
 .report-modern .report-chart .text-slate-500 { color: var(--text-muted) !important; }
 
-.loader { border: 3px solid rgba(255, 255, 255, 0.12); border-top-color: var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+.loader { border: 3px solid var(--line-strong); border-top-color: var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
 
 @keyframes floatIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes titleIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }

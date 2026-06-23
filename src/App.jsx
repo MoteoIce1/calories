@@ -30,8 +30,17 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
     ];
 
     const DEFAULT_PROFILE = { sex: 'male', age: '', height: '', weight: '', activity: '1.375', mode: 'manual', deficit: 500 };
-    const DEFAULT_SETTINGS = { fontScale: 'normal', blocks: TOGGLEABLE_BLOCKS.reduce((acc, b) => ({ ...acc, [b.key]: true }), {}) };
+    const DEFAULT_SETTINGS = { fontScale: 'normal', theme: 'lime', blocks: TOGGLEABLE_BLOCKS.reduce((acc, b) => ({ ...acc, [b.key]: true }), {}) };
     const WATER_QUICK = [100, 300, 500];
+
+    // Темы оформления (выбираются в профиле). bg/dot — для превью-чипа.
+    const THEMES = [
+      { key: 'lime', label: 'Тёмная · лайм', bg: '#0a0a0b', dot: '#a3e635' },
+      { key: 'sky', label: 'Тёмная · голубая', bg: '#0a0a0b', dot: '#38bdf8' },
+      { key: 'violet', label: 'Тёмная · фиолетовая', bg: '#0a0a0b', dot: '#a78bfa' },
+      { key: 'light', label: 'Светлая · голубая', bg: '#eef3f8', dot: '#0ea5e9' },
+    ];
+    const THEME_META_COLOR = { lime: '#0a0a0b', sky: '#0a0a0b', violet: '#0a0a0b', light: '#eef3f8' };
 
     // Формула Миффлина — Сан-Жеора: BMR → TDEE (норма) → цель с дефицитом, затем БЖУ от веса.
     function computeKbju(p) {
@@ -179,6 +188,14 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         document.documentElement.style.fontSize = settings.fontScale === 'large' ? '18px' : '';
         return () => { document.documentElement.style.fontSize = ''; };
       }, [settings.fontScale]);
+
+      // Тема оформления: переключаем data-theme и цвет статус-бара PWA.
+      useEffect(() => {
+        const theme = settings.theme || 'lime';
+        document.documentElement.dataset.theme = theme;
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', THEME_META_COLOR[theme] || '#0a0a0b');
+      }, [settings.theme]);
 
       const doAuth = async () => {
         setAuthError(''); setAuthBusy(true);
@@ -476,6 +493,14 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       };
 
       const handleDraftGoalChange = (field, val) => setDraftGoals({ ...draftGoals, [field]: val });
+      // Дефицит и цель калорий связаны через норму: цель = норма − дефицит.
+      // Меняем дефицит → пересчитываем цель калорий (и наоборот цель сама задаёт дефицит).
+      const handleDeficitChange = (val) => {
+        const maintenance = Number(draftGoals.maintenance) || 0;
+        const deficit = val === '' ? 0 : parseInt(val);
+        setDraftGoals({ ...draftGoals, calories: Math.max(0, maintenance - deficit) });
+      };
+      const draftDeficit = (Number(draftGoals.maintenance) || 0) - (Number(draftGoals.calories) || 0);
 
       const confirmGoalSave = (mode) => {
         if (!confirm('Вы уверены, что хотите применить новые настройки?')) return;
@@ -941,6 +966,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const handleProfileChange = (field, value) => saveProfileData({ ...profileData, [field]: value });
       const toggleBlock = (key) => saveSettings({ ...settings, blocks: { ...settings.blocks, [key]: !settings.blocks[key] } });
       const setFontScale = (scale) => saveSettings({ ...settings, fontScale: scale });
+      const setTheme = (theme) => saveSettings({ ...settings, theme });
 
       // Автоматический расчёт КБЖУ по формуле и открытие модалки применения целей.
       const applyAutoKbju = () => {
@@ -1647,12 +1673,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
       if (showReportView) {
         return (
-          <div className="report-view" style={{ background: '#0a0a0b', color: '#fafafa', height: '100lvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '8px', paddingTop: 'max(10px, calc(env(safe-area-inset-top) + 4px))', position: 'relative', zIndex: 2 }}>
-            <div className="print-hide" style={{ position: 'sticky', top: '6px', zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '22px', padding: '10px', background: 'rgba(10, 10, 11, 0.85)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '14px', boxShadow: 'none', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+          <div className="report-view" style={{ background: 'var(--bg-deep)', color: 'var(--text)', height: '100lvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '8px', paddingTop: 'max(10px, calc(env(safe-area-inset-top) + 4px))', position: 'relative', zIndex: 2 }}>
+            <div className="print-hide" style={{ position: 'sticky', top: '6px', zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '22px', padding: '10px', background: 'var(--header-bg)', border: '1px solid var(--line)', borderRadius: '14px', boxShadow: 'none', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
                <button 
                  onClick={() => { setIsPrinting(false); setShowReportView(false); }} 
                  className="btn-active" 
-                 style={{ padding: '12px 18px', background: '#202023', borderRadius: '12px', fontWeight: 'bold', color: '#fafafa', border: '1px solid rgba(255, 255, 255, 0.1)', fontSize: '14px', transition: 'all 0.2s', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                 style={{ padding: '12px 18px', background: 'var(--surface-strong)', borderRadius: '12px', fontWeight: 'bold', color: 'var(--text)', border: '1px solid var(--line-strong)', fontSize: '14px', transition: 'all 0.2s', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                >
                  <IconArrowLeft className="w-4 h-4" /> Назад
                </button>
@@ -1660,7 +1686,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                  onClick={handlePrintClick} 
                  disabled={isPrinting}
                  className="btn-active" 
-                 style={{ padding: '12px 18px', background: isPrinting ? '#84cc16' : '#a3e635', borderRadius: '12px', fontWeight: 'bold', color: '#0a0a0b', border: 'none', fontSize: '14px', boxShadow: 'none', transition: 'all 0.2s', opacity: isPrinting ? 0.8 : 1, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                 style={{ padding: '12px 18px', background: isPrinting ? 'var(--accent-strong)' : 'var(--accent)', borderRadius: '12px', fontWeight: 'bold', color: 'var(--accent-ink)', border: 'none', fontSize: '14px', boxShadow: 'none', transition: 'all 0.2s', opacity: isPrinting ? 0.8 : 1, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                >
                  {isPrinting ? 'Обработка...' : <><IconPrinter className="w-4 h-4" /> Сохранить PDF</>}
                </button>
@@ -2240,6 +2266,19 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     {hasUnsavedGoals && <button type="button" onClick={() => setShowGoalModal(true)} className="btn-active w-full bg-indigo-600 text-white p-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2"><IconSave className="w-5 h-5" /> Сохранить цели</button>}
                   </div>
 
+                  {/* Тема оформления */}
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
+                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconSliders className="w-4 h-4" /> Тема оформления</h2>
+                    <div className="grid grid-cols-2 gap-2">
+                      {THEMES.map(t => (
+                        <button key={t.key} type="button" onClick={() => setTheme(t.key)} className={`btn-active flex items-center gap-2.5 rounded-xl p-3 border transition-all ${(settings.theme || 'lime') === t.key ? 'border-emerald-500 bg-emerald-600/15' : 'bg-[#27272a] border-zinc-700/30'}`}>
+                          <span className="shrink-0 w-7 h-7 rounded-lg border border-white/10 flex items-center justify-center" style={{ background: t.bg }}><span className="w-3 h-3 rounded-full" style={{ background: t.dot }} /></span>
+                          <span className={`text-xs font-bold text-left leading-tight ${(settings.theme || 'lime') === t.key ? 'text-emerald-300' : 'text-zinc-300'}`}>{t.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* Настройки приложения */}
                   <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconSliders className="w-4 h-4" /> Размер шрифта</h2>
@@ -2285,14 +2324,16 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><IconTarget className="w-4 h-4" /> Ваши цели</h2>
                     <div className="grid grid-cols-2 gap-3 mb-3">
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ (ЦЕЛЬ)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.calories} onChange={(e) => handleDraftGoalChange('calories', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЖЕЛАЕМЫЙ ДЕФИЦИТ</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftDeficit} onChange={(e) => handleDeficitChange(e.target.value)} onFocus={(e) => e.target.select()} /></div>
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">НОРМА (БЕЗ ДЕФИЦИТА)</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-white font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.maintenance} onChange={(e) => handleDraftGoalChange('maintenance', e.target.value === '' ? '' : parseInt(e.target.value))} /></div>
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">БАЗА ШАГОВ</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-300 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.baseSteps} onChange={(e) => handleDraftGoalChange('baseSteps', e.target.value === '' ? '' : parseInt(e.target.value))} /></div>
-                      <div className="col-span-2"><span className="text-[9px] text-zinc-500 font-bold block mb-1">НОРМА (БЕЗ ДЕФИЦИТА)</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-white font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.maintenance} onChange={(e) => handleDraftGoalChange('maintenance', e.target.value === '' ? '' : parseInt(e.target.value))} /></div>
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">БЕЛОК (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.protein} onChange={(e) => handleDraftGoalChange('protein', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЖИРЫ (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.fats} onChange={(e) => handleDraftGoalChange('fats', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
                       <div className="col-span-2"><span className="text-[9px] text-zinc-500 font-bold block mb-1">УГЛЕВОДЫ (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.carbs} onChange={(e) => handleDraftGoalChange('carbs', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЦЕЛЬ ПО ЖИРУ (%)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.targetFat} onChange={(e) => handleDraftGoalChange('targetFat', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ВОДА (МЛ)</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.waterGoal} onChange={(e) => handleDraftGoalChange('waterGoal', e.target.value === '' ? '' : parseInt(e.target.value))} /></div>
                     </div>
+                    <p className="text-[10px] text-zinc-600 leading-relaxed px-1">Дефицит и цель калорий связаны: цель = норма − дефицит. Измените дефицит — пересчитается цель, и наоборот.</p>
                     {hasUnsavedGoals && <button onClick={() => setShowGoalModal(true)} className="btn-active w-full bg-indigo-600 text-white p-4 rounded-xl font-bold mt-4 shadow-lg shadow-indigo-900/30 transition-all flex items-center justify-center gap-2"><IconSave className="w-5 h-5" />Сохранить цели</button>}
                   </div>
 
