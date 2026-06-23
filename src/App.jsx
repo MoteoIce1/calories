@@ -1388,19 +1388,22 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       // Ключ названия — набор слов без учёта порядка/регистра: «масло сливочное» == «Сливочное масло».
       const foodNameKey = (name) => getFoodNameWords(name || '').sort().join(' ');
       const foodAlreadyExists = (name) => { const key = foodNameKey(name); return !!key && foods.some(f => foodNameKey(f.name) === key); };
-      // Ищет ПОХОЖИЙ продукт в базе (не точный дубль): по значимым словам названия,
-      // чтобы «Чиабатта» нашло «Ломтик хлеба чиабатта». Точные дубли обрабатываются отдельно.
+      // Ищет ПОХОЖИЙ продукт в базе (не точный дубль). Похоже = значимые слова одного
+      // названия ПОЛНОСТЬЮ входят в другое («Чиабатта» ⊂ «Ломтик хлеба чиабатта»). Просто
+      // общее слово-категория («Йогурт чудо клубничный» vs «Йогурт фрутис») похожим НЕ считается.
       const findSimilarFood = (name) => {
-        const key = foodNameKey(name);
-        if (!key) return null;
-        const seen = new Set();
-        const queries = [name, ...getFoodNameWords(name).filter(w => w.length >= 4)];
-        for (const q of queries) {
-          for (const f of searchFoodsByName(foods, q, 3)) {
-            if (seen.has(f.id)) continue;
-            seen.add(f.id);
-            if (foodNameKey(f.name) !== key) return f;
-          }
+        const a = getFoodNameWords(name).filter(w => w.length >= 3);
+        if (!a.length) return null;
+        const aKey = foodNameKey(name);
+        const aSet = new Set(a);
+        for (const f of foods) {
+          if (foodNameKey(f.name) === aKey) continue; // точный дубль — обрабатывается отдельно
+          const b = getFoodNameWords(f.name).filter(w => w.length >= 3);
+          if (!b.length) continue;
+          const bSet = new Set(b);
+          const aInB = a.every(w => bSet.has(w)); // все значимые слова нового есть в кандидате
+          const bInA = b.every(w => aSet.has(w)); // или наоборот
+          if (aInB || bInA) return f;
         }
         return null;
       };
