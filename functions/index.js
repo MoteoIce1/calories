@@ -1,5 +1,9 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
+const admin = require('firebase-admin');
+
+admin.initializeApp();
+const db = admin.firestore();
 
 // Ключ Anthropic хранится как секрет Firebase (никогда не попадает в клиент).
 // Установить: firebase functions:secrets:set ANTHROPIC_API_KEY
@@ -10,8 +14,31 @@ const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 // для большей точности (дороже).
 const MODEL = 'claude-haiku-4-5';
 
+// Дневной лимит ИИ-запросов на пользователя (защита от перерасхода бюджета).
+// Каждый вызов calcRecipe/parseIngredients/analyzePhoto (включая уточнения) считается.
+const AI_DAILY_LIMIT = 20;
+// Дата по Москве (UTC+3) — лимит обнуляется в полночь по МСК.
+const aiUsageDay = () => new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+// Атомарно проверяет и увеличивает счётчик. Бросает resource-exhausted при превышении.
+async function enforceAiLimit(uid) {
+  const ref = db.collection('aiUsage').doc(uid);
+  const day = aiUsageDay();
+  const used = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.exists ? snap.data() : {};
+    const count = data.date === day ? (data.count || 0) : 0;
+    if (count >= AI_DAILY_LIMIT) return -1;
+    tx.set(ref, { date: day, count: count + 1, updatedAt: Date.now() }, { merge: true });
+    return count + 1;
+  });
+  if (used === -1) {
+    throw new HttpsError('resource-exhausted', `Дневной лимит ИИ-запросов исчерпан (${AI_DAILY_LIMIT} в день). Лимит обновится завтра. Чтобы поднять лимит — потребуется подписка.`);
+  }
+}
+
 exports.calcRecipe = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1' }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Войдите в аккаунт.');
+  await enforceAiLimit(request.auth.uid);
   const text = String((request.data && request.data.text) || '').trim();
   if (!text) throw new HttpsError('invalid-argument', 'Опишите ингредиенты блюда.');
   if (text.length > 4000) throw new HttpsError('invalid-argument', 'Слишком длинный текст (макс. 4000 символов).');
@@ -94,6 +121,7 @@ exports.calcRecipe = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1
 // ингредиентов, новые из которых (после подтверждения) добавляются в базу продуктов.
 exports.parseIngredients = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1' }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Войдите в аккаунт.');
+  await enforceAiLimit(request.auth.uid);
   const text = String((request.data && request.data.text) || '').trim();
   if (!text) throw new HttpsError('invalid-argument', 'Опишите ингредиенты блюда.');
   if (text.length > 4000) throw new HttpsError('invalid-argument', 'Слишком длинный текст (макс. 4000 символов).');
@@ -213,6 +241,7 @@ exports.parseIngredients = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-ce
 // возвращает needClarification=true с вопросами. Учитывает ответы пользователя.
 exports.analyzePhoto = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1', memory: '512MiB' }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Войдите в аккаунт.');
+  await enforceAiLimit(request.auth.uid);
   const imageBase64 = String((request.data && request.data.imageBase64) || '');
   const mimeType = String((request.data && request.data.mimeType) || 'image/jpeg');
   const answers = String((request.data && request.data.answers) || '').trim().slice(0, 1500);
