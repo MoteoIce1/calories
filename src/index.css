@@ -198,11 +198,12 @@ body::before {
 }
 
 .movement-panel {
-  padding: 12px 0 12px 0 !important;
-  border-width: 1px 0 !important;
-  border-radius: 0 !important;
+  padding: 12px !important;
+  border-width: 1px !important;
+  border-radius: 8px !important;
   gap: 12px;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 .step-summary,
@@ -481,7 +482,7 @@ input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
 @media (max-width: 420px) {
-  .movement-panel { gap: 8px; }
+  .movement-panel { gap: 8px; padding: 10px !important; }
   .step-summary { gap: 8px; }
   .step-controls { gap: 6px; }
   .step-controls > button { width: 38px !important; height: 38px !important; }
