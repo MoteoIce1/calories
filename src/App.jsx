@@ -1550,12 +1550,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
       if (showReportView) {
         return (
-          <div className="report-view" style={{ background: '#0b0f0d', color: '#dcfce7', height: '100lvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '8px', paddingTop: 'max(10px, calc(env(safe-area-inset-top) + 4px))', position: 'relative', zIndex: 2 }}>
-            <div className="print-hide" style={{ position: 'sticky', top: '6px', zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '22px', padding: '10px', background: 'rgba(15, 21, 18, 0.94)', border: '1px solid rgba(52, 211, 153, 0.2)', borderRadius: '10px', boxShadow: '0 14px 32px rgba(0, 0, 0, 0.34)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+          <div className="report-view" style={{ background: '#141414', color: '#fff0ed', height: '100lvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '8px', paddingTop: 'max(10px, calc(env(safe-area-inset-top) + 4px))', position: 'relative', zIndex: 2 }}>
+            <div className="print-hide" style={{ position: 'sticky', top: '6px', zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '22px', padding: '10px', background: 'rgba(28, 28, 28, 0.94)', border: '1px solid rgba(251, 111, 97, 0.2)', borderRadius: '10px', boxShadow: '0 14px 32px rgba(0, 0, 0, 0.34)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
                <button 
                  onClick={() => { setIsPrinting(false); setShowReportView(false); }} 
                  className="btn-active" 
-                 style={{ padding: '12px 18px', background: '#18211c', borderRadius: '8px', fontWeight: 'bold', color: '#d1fae5', border: '1px solid rgba(52, 211, 153, 0.18)', fontSize: '14px', transition: 'all 0.2s', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                 style={{ padding: '12px 18px', background: '#2a2a2a', borderRadius: '8px', fontWeight: 'bold', color: '#ffe4df', border: '1px solid rgba(251, 111, 97, 0.18)', fontSize: '14px', transition: 'all 0.2s', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                >
                  <IconArrowLeft className="w-4 h-4" /> Назад
                </button>
@@ -1563,7 +1563,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                  onClick={handlePrintClick} 
                  disabled={isPrinting}
                  className="btn-active" 
-                 style={{ padding: '12px 18px', background: isPrinting ? '#187a58' : 'linear-gradient(110deg, #0f8b61, #34d399, #a7f3d0, #12805d)', borderRadius: '8px', fontWeight: 'bold', color: '#082016', border: 'none', fontSize: '14px', boxShadow: '0 12px 24px rgba(52, 211, 153, 0.18)', transition: 'all 0.2s', opacity: isPrinting ? 0.8 : 1, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                 style={{ padding: '12px 18px', background: isPrinting ? '#c34c43' : 'linear-gradient(110deg, #d84f46, #fb6f61, #ffc1b9, #d95047)', borderRadius: '8px', fontWeight: 'bold', color: '#260d0b', border: 'none', fontSize: '14px', boxShadow: '0 12px 24px rgba(251, 111, 97, 0.18)', transition: 'all 0.2s', opacity: isPrinting ? 0.8 : 1, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                >
                  {isPrinting ? 'Обработка...' : <><IconPrinter className="w-4 h-4" /> Сохранить PDF</>}
                </button>
@@ -1622,18 +1622,18 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     </div>
 
                     <div className="movement-panel mt-4 mb-4 flex items-center justify-between bg-zinc-900/40 p-3 rounded-2xl border border-zinc-800/40">
-                      <div className="flex items-center gap-3">
+                      <div className="step-summary flex min-w-0 flex-1 items-center gap-3">
                         <IconSteps className="w-5 h-5 text-amber-400" />
                         <div className="flex flex-col">
                           <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">Шаги</span>
                           {extraCalories !== 0 && <span className={`text-[9px] font-bold mt-0.5 ${extraCalories > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{extraCalories > 0 ? `+${extraCalories}` : extraCalories} ккал к цели</span>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="step-controls flex shrink-0 items-center gap-2">
                         <button type="button" onClick={refreshCurrentDayVitals} disabled={isRefreshingDay || !uid} className="btn-active w-10 h-10 rounded-xl bg-zinc-800 text-zinc-300 flex items-center justify-center border border-zinc-700/30 disabled:opacity-40 transition-all" title="Обновить шаги">
                           <IconRefresh className={`w-5 h-5 ${isRefreshingDay ? 'animate-spin' : ''}`} />
                         </button>
-                        <input type="number" className="w-24 bg-zinc-800 rounded-xl p-2 text-center text-sm font-bold outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={todaySteps} onChange={(e) => handleUpdateSteps(e.target.value)} onFocus={(e) => e.target.select()} />
+                        <input type="number" className="step-input w-24 bg-zinc-800 rounded-xl p-2 text-center text-sm font-bold outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={todaySteps} onChange={(e) => handleUpdateSteps(e.target.value)} onFocus={(e) => e.target.select()} />
                       </div>
                     </div>
 
