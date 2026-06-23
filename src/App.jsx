@@ -1250,7 +1250,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const removeConnection = (c) => { if (confirm('Удалить?')) connectionRef(c.id).delete().catch(e => alert('Ошибка: ' + e.message)); };
 
       const openChallengeWith = (friendUid) => {
-        setChallengeDraft({ friendUid: friendUid || (acceptedFriends[0] ? otherUid(acceptedFriends[0]) : ''), type: 'weight', myTarget: '', friendTarget: '', deadline: getDefaultExportEndDate() });
+        setChallengeDraft({ friendUid: friendUid || (acceptedFriends[0] ? otherUid(acceptedFriends[0]) : ''), type: 'weight', myTarget: '', friendTarget: '', deadline: getLocalDateString(new Date(Date.now() + 30 * 86400000)) });
         setShowChallengeModal(true);
       };
       const createChallenge = async () => {
