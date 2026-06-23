@@ -992,9 +992,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       );
       const metricChartLabels = metricChartDates.map(date => date.slice(5));
       const metricChartSeries = [
-        { key: 'weight', title: 'Вес', unit: 'кг', color: '#8c78c6' },
+        { key: 'weight', title: 'Вес', unit: 'кг', color: '#d8b46d' },
         { key: 'fatPercent', title: 'Жир', unit: '%', color: '#e06d6d' },
-        { key: 'leanMass', title: 'БЖМ', unit: 'кг', color: '#7f8ed8' },
+        { key: 'leanMass', title: 'БЖМ', unit: 'кг', color: '#83b3ae' },
         { key: 'fatMass', title: 'Масса жира', unit: 'кг', color: '#c6a56d' },
       ].map(series => ({ ...series, data: metricChartDates.map(date => dailyMetrics[date]?.[series.key]) }));
 
@@ -1477,9 +1477,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 10px 0', color: '#005f73' }}>Графики прогресса:</h3>
                {/* Адаптивная сетка графиков: 1 колонка на мобильном, 2 при печати */}
                <div className="grid grid-cols-1 print:grid-cols-2 sm:grid-cols-2 gap-4 w-full">
-                  <ProgressChart title="Вес (кг)" data={allWeight} dates={chartDates} color="#3b82f6" showAverage={true} />
+                  <ProgressChart title="Вес (кг)" data={allWeight} dates={chartDates} color="#d8b46d" showAverage={true} />
                   <ProgressChart title="Жир (%)" data={allFat} dates={chartDates} color="#ef4444" />
-                  <ProgressChart title="БЖМ (кг)" data={allLean} dates={chartDates} color="#8b5cf6" />
+                  <ProgressChart title="БЖМ (кг)" data={allLean} dates={chartDates} color="#83b3ae" />
                   <ProgressChart title="Масса жира (кг)" data={allFatMass} dates={chartDates} color="#f59e0b" />
                </div>
             </div>
@@ -1589,12 +1589,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
               </div>
             </header>
 
-            <main ref={scrollContainerRef} onClick={() => { if (selectedFoodId) setSelectedFoodId(''); }} className="flex-1 overflow-y-auto overflow-x-hidden px-3 pt-2 pb-8">
+            <main ref={scrollContainerRef} onClick={() => { if (selectedFoodId) setSelectedFoodId(''); }} className="app-main flex-1 overflow-y-auto overflow-x-hidden px-3 pt-2 pb-8">
               <AnimatePresence mode="wait">
               <motion.div key={activeTab} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}>
               {activeTab === 'diary' && (
                 <div className="space-y-4">
-                  <div className="card-enter flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
+                  <div className="date-toolbar card-enter flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
                     <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(getLocalDateString(d));}} className="btn-active p-3 text-zinc-400"><IconChevronLeft className="w-5 h-5" /></button>
                     <div className="relative font-bold text-sm text-zinc-200 flex items-center justify-center cursor-pointer px-4">
                       {displayDate(currentDate)}
@@ -1603,7 +1603,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()+1); setCurrentDate(getLocalDateString(d));}} disabled={currentDate === getLocalDateString(new Date())} className="btn-active p-3 text-zinc-400 disabled:opacity-20"><IconChevronRight className="w-5 h-5" /></button>
                   </div>
 
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 shadow-xl border border-zinc-800/50">
+                  <div className="calorie-overview card-enter bg-[#18181b] rounded-3xl p-5 shadow-xl border border-zinc-800/50">
                     <div className="flex justify-between items-end mb-3">
                       <div>
                         <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-widest">Калории</p>
@@ -1621,7 +1621,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                       <motion.div className={`h-full ${isOver ? 'bg-red-500' : 'bg-emerald-500'}`} initial={false} animate={{ width: `${progressCals}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }}></motion.div>
                     </div>
 
-                    <div className="mt-4 mb-4 flex items-center justify-between bg-zinc-900/40 p-3 rounded-2xl border border-zinc-800/40">
+                    <div className="movement-panel mt-4 mb-4 flex items-center justify-between bg-zinc-900/40 p-3 rounded-2xl border border-zinc-800/40">
                       <div className="flex items-center gap-3">
                         <IconSteps className="w-5 h-5 text-amber-400" />
                         <div className="flex flex-col">
@@ -1637,7 +1637,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                       </div>
                     </div>
 
-                    <button onClick={toggleWorkout} className={`btn-active w-full mb-4 flex items-center justify-between p-3 rounded-2xl border transition-all ${dailyWorkouts[currentDate] ? 'bg-emerald-900/30 border-emerald-700/50' : 'bg-zinc-900/40 border-zinc-800/40'}`}>
+                    <button onClick={toggleWorkout} className={`workout-toggle btn-active w-full mb-4 flex items-center justify-between p-3 rounded-2xl border transition-all ${dailyWorkouts[currentDate] ? 'bg-emerald-900/30 border-emerald-700/50' : 'bg-zinc-900/40 border-zinc-800/40'}`}>
                       <div className="flex items-center gap-3">
                         <IconDumbbell className="w-5 h-5 text-amber-400" />
                         <span className={`text-[10px] uppercase font-bold tracking-widest ${dailyWorkouts[currentDate] ? 'text-emerald-400' : 'text-zinc-400'}`}>Силовая тренировка</span>
@@ -1647,7 +1647,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                       </div>
                     </button>
 
-                    <div className="flex flex-col gap-3 mt-4 border-t border-zinc-800/50 pt-4">
+                    <div className="macro-stack flex flex-col gap-3 mt-4 border-t border-zinc-800/50 pt-4">
                       <MacroBar label="Белок" current={totalPro} goal={activeGoals.protein} colorClass="text-indigo-400" bgClass="bg-indigo-500" />
                       <MacroBar label="Жиры" current={totalFats} goal={activeGoals.fats} colorClass="text-amber-400" bgClass="bg-amber-500" />
                       <MacroBar label="Углеводы" current={totalCarbs} goal={activeGoals.carbs} colorClass="text-blue-400" bgClass="bg-blue-500" />
@@ -1660,7 +1660,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     </div>
                   </div>
 
-                  <form ref={mealFormRef} onSubmit={handleAddLog} className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-3">
+                  <form ref={mealFormRef} onSubmit={handleAddLog} className="meal-composer card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-3">
                     <div className="flex items-center">
                       <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</span>
                     </div>
@@ -1719,10 +1719,10 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     </div>
                   </form>
 
-                  <div className="space-y-3 pt-2">
+                  <div className="food-log-list space-y-3 pt-2">
                     <AnimatePresence initial={false}>
                     {currentDayLogs.map(log => (
-                      <motion.div key={log.id} layout initial={{ opacity: 0, y: -10, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, x: 60, scale: 0.95 }} transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }} className="list-item-active bg-[#18181b] rounded-2xl p-4 flex justify-between items-center border border-zinc-800/30 transition-colors">
+                      <motion.div key={log.id} layout initial={{ opacity: 0, y: -10, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, x: 60, scale: 0.95 }} transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }} className="food-log-row list-item-active bg-[#18181b] rounded-2xl p-4 flex justify-between items-center border border-zinc-800/30 transition-colors">
                         <div className="flex-1 cursor-pointer pr-4 overflow-hidden" onClick={() => { if(editingLogId !== log.id) { setEditingLogId(log.id); setEditValue({ grams: log.grams }); setModifier({ type: null, value: '' }); }}}>
                           {editingLogId === log.id ? (
                             <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>

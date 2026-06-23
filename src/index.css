@@ -77,6 +77,8 @@ body::before {
 .safe-pb { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 
 .app-shell {
+  width: min(100%, 700px) !important;
+  max-width: 700px !important;
   background: linear-gradient(160deg, rgba(15, 14, 12, 0.98), rgba(5, 5, 4, 0.99)) !important;
   border-color: rgba(222, 190, 132, 0.11) !important;
   box-shadow: 0 32px 84px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 244, 218, 0.045);
@@ -128,6 +130,143 @@ body::before {
   animation: titleIn 360ms var(--ease-out) both, goldSheen 9s linear infinite;
 }
 
+.app-main {
+  padding: 14px clamp(14px, 3vw, 22px) 30px !important;
+}
+
+.date-toolbar {
+  min-height: 48px;
+  background: rgba(18, 16, 13, 0.86) !important;
+  border-color: rgba(222, 190, 132, 0.16) !important;
+  box-shadow: none;
+}
+
+.date-toolbar button {
+  color: #c7bca9 !important;
+}
+
+.date-toolbar > div {
+  color: #f5ead7 !important;
+}
+
+.calorie-overview {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(18px, 4vw, 26px) !important;
+  border-color: rgba(222, 190, 132, 0.22) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 244, 219, 0.05), 0 18px 44px rgba(0, 0, 0, 0.26) !important;
+}
+
+.calorie-overview::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 42%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e5c782, transparent);
+}
+
+.calorie-overview::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 42%, rgba(228, 191, 112, 0.06) 51%, transparent 60%);
+  background-size: 190% 100%;
+  animation: ambientSweep 12s ease-in-out infinite alternate;
+}
+
+.calorie-overview > * { position: relative; z-index: 1; }
+
+.calorie-overview .text-4xl {
+  font-size: clamp(40px, 7vw, 52px) !important;
+  line-height: 0.95;
+  letter-spacing: 0;
+}
+
+.calorie-overview .progress-track {
+  height: 6px !important;
+  margin-bottom: 20px !important;
+}
+
+.movement-panel,
+.workout-toggle {
+  background: rgba(13, 12, 10, 0.5) !important;
+  border-color: rgba(222, 190, 132, 0.1) !important;
+}
+
+.movement-panel {
+  padding: 12px 0 12px 0 !important;
+  border-width: 1px 0 !important;
+  border-radius: 0 !important;
+}
+
+.movement-panel input {
+  background: #17140f !important;
+  border-color: rgba(222, 190, 132, 0.12) !important;
+}
+
+.workout-toggle {
+  min-height: 52px;
+}
+
+.workout-toggle.bg-emerald-900\/30 {
+  border-color: rgba(223, 186, 112, 0.5) !important;
+  background: rgba(212, 175, 103, 0.11) !important;
+}
+
+.macro-stack {
+  gap: 14px !important;
+  border-color: rgba(222, 190, 132, 0.1) !important;
+}
+
+.macro-bar .progress-track {
+  height: 4px !important;
+  margin-bottom: 4px !important;
+}
+
+.macro-bar .bg-indigo-500 { background: linear-gradient(90deg, #8c7340, #d8b46d) !important; }
+.macro-bar .bg-amber-500 { background: linear-gradient(90deg, #875844, #d6a273) !important; }
+.macro-bar .bg-blue-500 { background: linear-gradient(90deg, #426f70, #83b3ae) !important; }
+
+.meal-composer {
+  padding: 18px !important;
+  border-color: rgba(222, 190, 132, 0.17) !important;
+  box-shadow: none !important;
+}
+
+.meal-composer > :first-child {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(222, 190, 132, 0.1);
+}
+
+.meal-composer input[type="search"],
+.meal-composer input[type="number"] {
+  background-color: #12110e !important;
+  border-color: rgba(222, 190, 132, 0.13) !important;
+}
+
+.meal-composer input[type="search"]:focus,
+.meal-composer input[type="number"]:focus {
+  background-color: #18150f !important;
+}
+
+.food-log-list {
+  border-top: 1px solid rgba(222, 190, 132, 0.08);
+  padding-top: 16px !important;
+}
+
+.food-log-row {
+  min-height: 76px;
+  border-color: rgba(222, 190, 132, 0.1) !important;
+  box-shadow: none !important;
+}
+
+.food-log-row:hover {
+  border-color: rgba(222, 190, 132, 0.24) !important;
+}
+
 .app-shell .rounded-3xl { border-radius: 10px !important; }
 .app-shell .rounded-2xl { border-radius: 8px !important; }
 .app-shell .rounded-xl { border-radius: 7px !important; }
@@ -167,6 +306,8 @@ body::before {
 .text-amber-500 { color: #dfba70 !important; }
 .text-indigo-400,
 .text-indigo-500 { color: #c1b6a5 !important; }
+.text-violet-200,
+.text-violet-300 { color: #dfba70 !important; }
 .text-blue-400,
 .text-blue-500 { color: #9bb9b9 !important; }
 .text-red-400,
@@ -190,6 +331,14 @@ body::before {
 .bg-emerald-900\/30,
 .bg-emerald-900\/40 { background-color: var(--accent-soft) !important; }
 .bg-amber-500 { background: linear-gradient(110deg, #997139, #e1bc70, #a3783b) !important; }
+.bg-blue-500,
+.bg-blue-600 { background: linear-gradient(110deg, #416f70, #83b3ae) !important; }
+.bg-indigo-500\/20,
+.bg-violet-500\/15 { background-color: rgba(212, 175, 103, 0.1) !important; }
+.border-indigo-400\/20,
+.border-indigo-600\/30,
+.border-violet-400\/15 { border-color: rgba(223, 186, 112, 0.2) !important; }
+.bg-gradient-to-r { background: linear-gradient(110deg, #8b6733, #e1bc70, #9a7137) !important; }
 .bg-red-500 { background: linear-gradient(110deg, #b85f56, #e57b70) !important; }
 
 .border-emerald-500,
@@ -293,6 +442,12 @@ input::placeholder { color: #847b6e !important; }
 .report-modern th { color: #e0bd78 !important; border-color: rgba(222, 190, 132, 0.15) !important; font-size: 10px; letter-spacing: 0.04em; }
 .report-modern td { color: #d9cfbf !important; border-color: rgba(222, 190, 132, 0.1) !important; }
 .report-modern .avoid-break { box-shadow: none !important; border-radius: 8px !important; }
+.report-modern .report-chart {
+  background: #0c0b09 !important;
+  border-color: rgba(222, 190, 132, 0.14) !important;
+}
+.report-modern .report-chart h4 { color: #e7c882 !important; }
+.report-modern .report-chart .text-slate-500 { color: #a69b8a !important; }
 
 .loader { border: 3px solid rgba(222, 190, 132, 0.14); border-top-color: var(--accent); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; box-shadow: 0 0 22px rgba(220, 178, 100, 0.14); }
 
@@ -332,6 +487,7 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
   .report-modern th,
   .report-modern td { color: black !important; }
   .report-modern table { background: white !important; border-color: #ddd !important; }
+  .report-modern .report-chart { background: white !important; border-color: #ddd !important; }
   @page { margin: 10mm; }
   .avoid-break { page-break-inside: auto !important; break-inside: auto !important; margin-bottom: 10px !important; }
   tr { page-break-inside: avoid !important; }
