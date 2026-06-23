@@ -31,9 +31,12 @@ import 'firebase/compat/auth';
     const bodyCol = (uid) => db.collection('users').doc(uid).collection('body');
     const bodyDocRef = (uid, id) => db.collection('users').doc(uid).collection('body').doc(id);
     // Общая база продуктов: один документ shared/foods (читают все, пишет только владелец).
-    const OWNER_EMAIL = 'bulgakov.qa@gmail.com';
+    const OWNER_EMAIL = 'i9293658888@mail.ru';
     const sharedFoodsRef = db.collection('shared').doc('foods');
     const legacyRef = db.collection('users').doc('main_profile'); // старая единая структура (для переноса)
+
+    // Доступ из консоли браузера для разовых операций с данными (правила Firestore по-прежнему защищают).
+    if (typeof window !== 'undefined') { window.__db = db; window.__auth = auth; }
 
 export default firebase;
 export { db, auth, profileRef, dayRef, daysCol, bodyCol, bodyDocRef, OWNER_EMAIL, sharedFoodsRef, legacyRef };

@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion';
 import { movingAverage } from '../utils/stats.js';
 
     const MacroBar = ({ label, current, goal, colorClass, bgClass }) => {
@@ -11,7 +12,7 @@ import { movingAverage } from '../utils/stats.js';
             <span className={`text-[11px] font-bold ${colorClass}`}>{Math.round(current)} / {goal || 0}</span>
           </div>
           <div className="progress-track h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-1">
-            <div className={`progress-fill h-full transition-all duration-500 ${bgClass}`} style={{ width: `${progress}%` }}></div>
+            <motion.div className={`h-full ${bgClass}`} initial={false} animate={{ width: `${progress}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }}></motion.div>
           </div>
           <p className="text-[9px] text-zinc-500 font-bold uppercase text-right opacity-80">Ост: {remaining}</p>
         </div>

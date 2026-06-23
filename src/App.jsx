@@ -1,13 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 import firebase, { db, auth, profileRef, dayRef, daysCol, bodyCol, bodyDocRef, OWNER_EMAIL, sharedFoodsRef, legacyRef } from './firebase.js';
-import { EASE_OUT, mAnimate } from './lib/animate.js';
+import { motion, AnimatePresence, animate } from 'framer-motion';
 import { evaluateMath } from './utils/math.js';
 import { searchFoodsByName } from './utils/food.js';
 import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
-import { HARDCODED_FOODS, BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS, INITIAL_BODY_ENTRIES } from './constants.js';
+import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
 import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh } from './components/Icons.jsx';
+
+    // Плавный «накрут» числа при изменении значения (count-up).
+    function AnimatedNumber({ value, className }) {
+      const [display, setDisplay] = useState(Math.round(Number(value) || 0));
+      const prev = useRef(Math.round(Number(value) || 0));
+      useEffect(() => {
+        const target = Math.round(Number(value) || 0);
+        const controls = animate(prev.current, target, {
+          duration: 0.5,
+          ease: [0.22, 1, 0.36, 1],
+          onUpdate: (v) => setDisplay(Math.round(v)),
+        });
+        prev.current = target;
+        return () => controls.stop();
+      }, [value]);
+      return <span className={className}>{display}</span>;
+    }
 
     function App() {
       const [isLoading, setIsLoading] = useState(true);
@@ -35,14 +52,14 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
       const isOwner = userEmail === OWNER_EMAIL;
       // Итоговый список: общая база + личные поверх (личные перекрывают по id); избранное вычисляется из favoriteIds.
       const foods = (() => {
-        const base = sharedFoods.length ? sharedFoods : HARDCODED_FOODS;
+        const base = sharedFoods;
         const personalIds = new Set(personalFoods.map(f => f.id));
         const favSet = new Set(favoriteIds);
         const baseList = base.filter(f => !personalIds.has(f.id)).map(f => ({ ...f, _shared: true, isFavorite: favSet.has(f.id) }));
         const personalList = personalFoods.map(f => ({ ...f, _shared: false, isFavorite: favSet.has(f.id) }));
         return [...baseList, ...personalList];
       })();
-      const [bodyEntries, setBodyEntries] = useState(INITIAL_BODY_ENTRIES);
+      const [bodyEntries, setBodyEntries] = useState([]);
       const [bodyDraft, setBodyDraft] = useState({ date: getLocalDateString(new Date()), measures: { ...EMPTY_BODY_MEASURES }, photos: [] });
       const [compareBodyIds, setCompareBodyIds] = useState(['', '']);
       const [comparePhotoIndexes, setComparePhotoIndexes] = useState([0, 0]);
@@ -284,12 +301,15 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
             const colSnap = await bodyCol(uid).get();
             if (cancelled) return;
             if (!colSnap.empty) { profileRef(uid).set({ bodyMigrated: true }, { merge: true }).catch(() => {}); return; }
+            // Переносим ТОЛЬКО собственные старые замеры пользователя (если были в profile.bodyEntries).
+            // Никаких начальных данных из кода — новые пользователи начинают с пустого.
             const legacy = Array.isArray(pdata.bodyEntries) ? pdata.bodyEntries : null;
-            const source = (legacy && legacy.length) ? legacy : INITIAL_BODY_ENTRIES;
-            const batch = db.batch();
-            source.forEach((e) => batch.set(bodyDocRef(uid, e.id), e));
-            await batch.commit();
-            if (cancelled) return;
+            if (legacy && legacy.length) {
+              const batch = db.batch();
+              legacy.forEach((e) => batch.set(bodyDocRef(uid, e.id), e));
+              await batch.commit();
+              if (cancelled) return;
+            }
             const upd = { bodyMigrated: true };
             if (legacy) upd.bodyEntries = firebase.firestore.FieldValue.delete();
             profileRef(uid).set(upd, { merge: true }).catch(() => {});
@@ -298,17 +318,26 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
         return () => { cancelled = true; };
       }, [uid]);
 
+      // Разовая чистка: у НЕ-владельцев удаляем замеры, которые раньше ошибочно засевались из кода.
+      // У них детерминированные id (без timestamp), реальные записи пользователя так не называются.
+      useEffect(() => {
+        if (!uid || isOwner) return;
+        const flag = 'body-seed-cleaned-' + uid;
+        if (localStorage.getItem(flag)) return;
+        const SEEDED_IDS = ['body-2026-03-02', 'body-2026-04-15', 'body-2026-05-09', 'body-2026-05-26'];
+        (async () => {
+          try {
+            await Promise.all(SEEDED_IDS.map((id) => bodyDocRef(uid, id).delete().catch(() => {})));
+            localStorage.setItem(flag, '1');
+          } catch (e) { /* no-op */ }
+        })();
+      }, [uid, isOwner]);
+
       useEffect(() => {
         if (!showReportView && scrollContainerRef.current) {
             scrollContainerRef.current.scrollTop = 0;
         }
       }, [activeTab, showReportView]);
-
-      // Плавный переход контента при смене вкладки (Motion One).
-      useEffect(() => {
-        if (showReportView) return;
-        mAnimate(scrollContainerRef.current, { opacity: [0, 1], y: [10, 0] }, { duration: 0.34, easing: EASE_OUT });
-      }, [activeTab]);
 
       useEffect(() => {
         if (bodyEditorScrollRef.current === null) return;
@@ -539,6 +568,21 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
       const saveSharedFoods = (list) => { setSharedFoods(list); sharedFoodsRef.set({ list }, { merge: true }).catch(err => alert('Не удалось сохранить общую базу: ' + err.message)); };
       const savePersonalFoods = (list) => { setPersonalFoods(list); if (profileDoc) profileDoc.set({ foods: list }, { merge: true }).catch(() => {}); };
       const saveFavoriteIds = (ids) => { setFavoriteIds(ids); if (profileDoc) profileDoc.set({ favoriteIds: ids }, { merge: true }).catch(() => {}); };
+
+      // Владелец публикует текущий список продуктов в общую базу shared/foods (видят все).
+      const publishSharedBase = async () => {
+        const list = foods.map(({ _shared, isFavorite, ...f }) => f);
+        if (!list.length) { alert('Список продуктов пуст — публиковать нечего.'); return; }
+        if (!confirm('Опубликовать ' + list.length + ' продуктов в общую базу для всех пользователей?')) return;
+        try {
+          await sharedFoodsRef.set({ list });
+          // Продукты теперь в общей базе — очищаем личный список владельца, чтобы не дублировать.
+          if (personalFoods.length && profileDoc) await profileDoc.set({ foods: [] }, { merge: true });
+          alert('Готово! В общей базе теперь ' + list.length + ' продуктов. Они видны всем.');
+        } catch (e) {
+          alert('Не удалось опубликовать: ' + e.message + '\n\nПроверь правила Firestore для shared/foods (запись разрешена только владельцу).');
+        }
+      };
 
       const handleAddFood = (e) => {
         e.preventDefault();
@@ -1524,6 +1568,8 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
             </header>
 
             <main ref={scrollContainerRef} onClick={() => { if (selectedFoodId) setSelectedFoodId(''); }} className="flex-1 overflow-y-auto overflow-x-hidden px-3 pt-2 pb-8">
+              <AnimatePresence mode="wait">
+              <motion.div key={activeTab} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}>
               {activeTab === 'diary' && (
                 <div className="space-y-4">
                   <div className="card-enter flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
@@ -1540,7 +1586,7 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                       <div>
                         <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-widest">Калории</p>
                         <div className="flex items-baseline gap-1">
-                          <span className="text-4xl font-black">{totalCals}</span>
+                          <AnimatedNumber value={totalCals} className="text-4xl font-black" />
                           <span className="text-zinc-600 text-sm">/ {targetCalories}</span>
                         </div>
                       </div>
@@ -1550,7 +1596,7 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                       </div>
                     </div>
                     <div className="progress-track h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-5">
-                      <div className={`progress-fill h-full transition-all duration-500 ${isOver ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${progressCals}%` }}></div>
+                      <motion.div className={`h-full ${isOver ? 'bg-red-500' : 'bg-emerald-500'}`} initial={false} animate={{ width: `${progressCals}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }}></motion.div>
                     </div>
 
                     <div className="mt-4 mb-4 flex items-center justify-between bg-zinc-900/40 p-3 rounded-2xl border border-zinc-800/40">
@@ -1601,7 +1647,7 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                     {favoriteFoods.length > 0 && (
                       <div ref={favScrollRef} className="hscroll-fade flex gap-2 overflow-x-auto py-2 -my-2 px-1 -mx-1" onClick={(e) => e.stopPropagation()}>
                         {favoriteFoods.map(f => (
-                          <button type="button" key={f.id} onClick={() => selectedFoodId === f.id ? clearFoodSelection() : selectFood(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
+                          <motion.button whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 22 }} type="button" key={f.id} onClick={() => selectedFoodId === f.id ? clearFoodSelection() : selectFood(f.id)} className={`shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-colors ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</motion.button>
                         ))}
                       </div>
                     )}
@@ -1638,7 +1684,7 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                       <button type="button" onClick={clearFoodSelection} title="Сбросить выбор" className={`btn-active shrink-0 flex items-center justify-center w-8 h-8 rounded-xl border transition-all ${!selectedFoodId ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-emerald-300 border-emerald-700/40'}`}><span className="leading-none" style={{ fontSize: '20px', marginTop: '-0.1em' }}>×</span></button>
                       <div ref={mealListScrollRef} className="hscroll-fade flex gap-2 overflow-x-auto py-2 -my-2 pl-1 -ml-1 min-w-0">
                         {mealListFoods.map(f => (
-                          <button type="button" key={f.id} onClick={() => selectFood(f.id)} className={`btn-active shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-all ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</button>
+                          <motion.button whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 22 }} type="button" key={f.id} onClick={() => selectFood(f.id)} className={`shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-colors ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</motion.button>
                         ))}
                         {mealListFoods.length === 0 && (
                           <span className="self-center text-xs text-zinc-500 px-1 py-2 whitespace-nowrap">{foodSearch.trim() ? 'Ничего не найдено' : 'Нет продуктов'}</span>
@@ -1648,8 +1694,9 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                   </form>
 
                   <div className="space-y-3 pt-2">
+                    <AnimatePresence initial={false}>
                     {currentDayLogs.map(log => (
-                      <div key={log.id} className="card-enter list-item-active bg-[#18181b] rounded-2xl p-4 flex justify-between items-center border border-zinc-800/30 transition-colors">
+                      <motion.div key={log.id} layout initial={{ opacity: 0, y: -10, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, x: 60, scale: 0.95 }} transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }} className="list-item-active bg-[#18181b] rounded-2xl p-4 flex justify-between items-center border border-zinc-800/30 transition-colors">
                         <div className="flex-1 cursor-pointer pr-4 overflow-hidden" onClick={() => { if(editingLogId !== log.id) { setEditingLogId(log.id); setEditValue({ grams: log.grams }); setModifier({ type: null, value: '' }); }}}>
                           {editingLogId === log.id ? (
                             <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
@@ -1688,8 +1735,9 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                           </div>
                           <button onClick={() => deleteLog(log.id)} className="btn-active text-zinc-700 active:text-red-500 p-2 transition-colors"><IconTrash className="w-5 h-5" /></button>
                         </div>
-                      </div>
+                      </motion.div>
                     ))}
+                    </AnimatePresence>
                     {currentDayLogs.length === 0 && <div className="text-center text-zinc-600 text-sm mt-10">Записей нет. Добавьте первый прием пищи.</div>}
                   </div>
                 </div>
@@ -1992,6 +2040,10 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                   )}
 
                   <div className="space-y-2">
+                    <p className="text-[11px] text-zinc-500 leading-relaxed px-1 mb-1">
+                      ⭐️ Отмечайте часто используемые продукты звёздочкой — они появятся в «Избранном» для быстрого выбора в дневнике.<br />
+                      ➕ Не нашли нужный продукт? Добавьте свой с КБЖУ через форму выше.
+                    </p>
                     <div className="flex items-center justify-between gap-3 px-1 mb-2">
                       <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">База продуктов ({foods.length})</h2>
                       {favoriteFoods.length > 1 && (
@@ -2058,6 +2110,12 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                     ))}
                   </div>
 
+                  {isOwner && (
+                    <button type="button" onClick={publishSharedBase} className="btn-active w-full bg-indigo-600/15 text-indigo-300/90 border border-indigo-600/30 rounded-2xl p-3 text-[11px] font-bold uppercase tracking-widest transition-all">
+                      Опубликовать базу для всех ({foods.length})
+                    </button>
+                  )}
+
                   <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Аккаунт</h2>
                     <p className="text-xs text-zinc-500 break-all">{auth.currentUser ? auth.currentUser.email : ''}</p>
@@ -2065,6 +2123,8 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                   </div>
                 </div>
               )}
+              </motion.div>
+              </AnimatePresence>
             </main>
 
             <nav className="bottom-nav shrink-0 bg-[#09090b] flex justify-around pb-2 pt-2 safe-pb relative z-40 border-t border-zinc-900">
@@ -2080,9 +2140,10 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
             </nav>
 
             {/* Модалки */}
+            <AnimatePresence>
             {showExportModal && (
-              <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                <div className="modal-card bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm">
+              <motion.div key="export" className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+                <motion.div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm" initial={{ opacity: 0, scale: 0.9, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }}>
                   <h3 className="text-lg font-bold mb-4 text-center">Выгрузка данных</h3>
                   <div className="space-y-4 mb-6">
                     <div>
@@ -2107,13 +2168,15 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                       <button onClick={startExport} className="btn-active flex-1 p-4 rounded-xl bg-emerald-600 font-bold text-white transition-all">PDF-отчёт</button>
                     </div>
                   </div>
-                </div>
-              </div>
+                </motion.div>
+              </motion.div>
             )}
+            </AnimatePresence>
 
+            <AnimatePresence>
             {showGoalModal && (
-              <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                <div className="modal-card bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm">
+              <motion.div key="goal" className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+                <motion.div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm" initial={{ opacity: 0, scale: 0.9, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }}>
                   <h3 className="text-lg font-bold mb-3 text-center">Применить цели?</h3>
                   <p className="text-zinc-400 text-sm mb-6 text-center leading-relaxed">Выберите, с какого момента изменятся цели по КБЖУ</p>
                   <div className="flex flex-col gap-3">
@@ -2121,12 +2184,14 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                     <button onClick={() => confirmGoalSave('all')} className="btn-active w-full p-4 rounded-xl bg-zinc-800 font-bold text-zinc-200 transition-all">Применить ко всей истории</button>
                     <button onClick={() => setShowGoalModal(false)} className="btn-active w-full p-4 rounded-xl border border-zinc-800 text-zinc-500 font-bold mt-2 transition-all">Отмена</button>
                   </div>
-                </div>
-              </div>
+                </motion.div>
+              </motion.div>
             )}
+            </AnimatePresence>
 
+            <AnimatePresence>
             {showBodyPhotoCompare && (
-              <div className="fixed inset-0 z-[70] bg-black text-white flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+              <motion.div key="photo-compare" className="fixed inset-0 z-[70] bg-black text-white flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }} initial={{ opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.05 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>
                 <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-3" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
                   <button type="button" onClick={() => setShowBodyPhotoCompare(false)} className="btn-active rounded-full bg-black/60 border border-white/10 px-4 py-2 text-xs font-black backdrop-blur-md">Закрыть</button>
                   <button type="button" onClick={() => setBodyPhotoZoom(prev => !prev)} className="btn-active rounded-full bg-white/12 border border-white/10 px-4 py-2 text-xs font-black backdrop-blur-md">{bodyPhotoZoom ? 'Обычный' : 'Ближе'}</button>
@@ -2151,11 +2216,13 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                     </div>
                   ))}
                 </div>
-              </div>
+              </motion.div>
             )}
+            </AnimatePresence>
 
+            <AnimatePresence>
             {singleBodyPhoto && (
-              <div className="fixed inset-0 z-[75] bg-black text-white flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+              <motion.div key="single-photo" className="fixed inset-0 z-[75] bg-black text-white flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }} initial={{ opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.05 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>
                 <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-3" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
                   <button type="button" onClick={() => setSingleBodyPhoto(null)} className="btn-active rounded-full bg-black/60 border border-white/10 px-4 py-2 text-xs font-black backdrop-blur-md">Закрыть</button>
                   <button type="button" onClick={() => setSingleBodyPhotoZoom(prev => !prev)} className="btn-active rounded-full bg-white/12 border border-white/10 px-4 py-2 text-xs font-black backdrop-blur-md">{singleBodyPhotoZoom ? 'Целиком' : 'Ближе'}</button>
@@ -2164,8 +2231,9 @@ import { IconStar, IconPlus, IconClose, IconBook, IconCalendar, IconChevronLeft,
                   <img src={singleBodyPhoto.src} className={`w-full h-full object-contain transition-transform duration-300 ${singleBodyPhotoZoom ? 'scale-125' : 'scale-100'}`} />
                   <span className="absolute left-3 bottom-4 rounded-full bg-black/25 border border-white/5 px-3 py-1.5 text-[10px] font-bold text-white/45 backdrop-blur-sm">{displayDate(singleBodyPhoto.date)} · {singleBodyPhoto.label || 'Фото'}</span>
                 </button>
-              </div>
+              </motion.div>
             )}
+            </AnimatePresence>
         </div>
       );
     }
