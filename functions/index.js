@@ -49,7 +49,7 @@ async function putCachedResult(key, result) {
   catch (e) { /* кеш не критичен — игнорируем ошибки записи */ }
 }
 
-exports.calcRecipe = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1', enforceAppCheck: true }, async (request) => {
+exports.calcRecipe = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1' }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Войдите в аккаунт.');
   const text = String((request.data && request.data.text) || '').trim();
   if (!text) throw new HttpsError('invalid-argument', 'Опишите ингредиенты блюда.');
@@ -141,7 +141,7 @@ exports.calcRecipe = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1
 // Разбор произвольного текста рецепта на ОТДЕЛЬНЫЕ продукты с КБЖУ на 100 г каждого.
 // Используется в дневнике: пользователь описывает блюдо, ИИ возвращает список
 // ингредиентов, новые из которых (после подтверждения) добавляются в базу продуктов.
-exports.parseIngredients = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1', enforceAppCheck: true }, async (request) => {
+exports.parseIngredients = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1' }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Войдите в аккаунт.');
   const text = String((request.data && request.data.text) || '').trim();
   if (!text) throw new HttpsError('invalid-argument', 'Опишите ингредиенты блюда.');
@@ -269,7 +269,7 @@ exports.parseIngredients = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-ce
 // Распознавание блюда по фото: название, КБЖУ всей порции и примерный вес.
 // Если на фото не видно компонентов, сильно влияющих на КБЖУ (масло, соус, сахар),
 // возвращает needClarification=true с вопросами. Учитывает ответы пользователя.
-exports.analyzePhoto = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1', enforceAppCheck: true, memory: '512MiB' }, async (request) => {
+exports.analyzePhoto = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1', memory: '512MiB' }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Войдите в аккаунт.');
   await enforceAiLimit(request.auth.uid);
   const imageBase64 = String((request.data && request.data.imageBase64) || '');
