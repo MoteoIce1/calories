@@ -265,3 +265,34 @@ exports.parseIngredients = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-ce
   await putCachedResult(cacheKey, result);
   return result;
 });
+
+// Полное удаление аккаунта и всех данных пользователя (требование App Store/Google Play).
+// Каскадно удаляет профиль с подколлекциями (дни, замеры тела/фото), публичную витрину,
+// счётчик ИИ, связи и споры, затем самого пользователя из Firebase Auth.
+exports.deleteAccount = onCall({ region: 'us-central1', enforceAppCheck: true }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Войдите в аккаунт.');
+  const uid = request.auth.uid;
+  try {
+    // Профиль + подколлекции days/body (включая фото тела).
+    await db.recursiveDelete(db.collection('users').doc(uid));
+    // Публичная витрина и счётчик ИИ.
+    await db.collection('publicProfiles').doc(uid).delete().catch(() => {});
+    await db.collection('aiUsage').doc(uid).delete().catch(() => {});
+    // Связи (друзья) и споры, где пользователь участник.
+    for (const col of ['connections', 'challenges']) {
+      const snap = await db.collection(col).where('members', 'array-contains', uid).get();
+      let batch = db.batch();
+      let n = 0;
+      for (const d of snap.docs) {
+        batch.delete(d.ref);
+        if (++n >= 400) { await batch.commit(); batch = db.batch(); n = 0; }
+      }
+      if (n) await batch.commit();
+    }
+    // Сам пользователь из Auth.
+    await admin.auth().deleteUser(uid);
+    return { ok: true };
+  } catch (e) {
+    throw new HttpsError('internal', 'Не удалось удалить аккаунт: ' + (e && e.message ? e.message : String(e)));
+  }
+});

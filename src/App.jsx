@@ -102,8 +102,13 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const [authPass, setAuthPass] = useState('');
       const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
       const [authError, setAuthError] = useState('');
+      const [authInfo, setAuthInfo] = useState('');
       const [authBusy, setAuthBusy] = useState(false);
-      
+      // Онбординг при регистрации: собираем данные для расчёта КБЖУ и минимум шагов.
+      const [showOnboarding, setShowOnboarding] = useState(false);
+      const [onboardDraft, setOnboardDraft] = useState({ sex: 'male', age: '', height: '', weight: '', activity: '1.375', deficit: 500, minSteps: 6000 });
+      const [deleteBusy, setDeleteBusy] = useState(false);
+
       const [sharedFoods, setSharedFoods] = useState([]);   // общая база (shared/foods)
       const [personalFoods, setPersonalFoods] = useState([]); // личные добавки пользователя (profile.foods)
       const [favoriteIds, setFavoriteIds] = useState([]);    // избранное — у каждого своё (profile.favoriteIds)
@@ -230,10 +235,16 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       }, [settings.theme]);
 
       const doAuth = async () => {
-        setAuthError(''); setAuthBusy(true);
+        setAuthError(''); setAuthInfo(''); setAuthBusy(true);
         try {
-          if (authMode === 'register') await auth.createUserWithEmailAndPassword(authEmail.trim(), authPass);
-          else await auth.signInWithEmailAndPassword(authEmail.trim(), authPass);
+          if (authMode === 'register') {
+            await auth.createUserWithEmailAndPassword(authEmail.trim(), authPass);
+            // Новый пользователь → онбординг (пол/возраст/рост/вес/активность/дефицит/минимум шагов).
+            setOnboardDraft({ sex: 'male', age: '', height: '', weight: '', activity: '1.375', deficit: 500, minSteps: 6000 });
+            setShowOnboarding(true);
+          } else {
+            await auth.signInWithEmailAndPassword(authEmail.trim(), authPass);
+          }
           setAuthPass('');
         } catch (err) {
           const map = {
@@ -248,6 +259,22 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
             'auth/operation-not-allowed': 'Вход по e-mail не включён в консоли Firebase (Authentication → Sign-in method).',
             'auth/network-request-failed': 'Нет сети.',
           };
+          setAuthError(map[err.code] || err.message);
+        }
+        setAuthBusy(false);
+      };
+
+      // Сброс пароля: Firebase присылает на e-mail ссылку для установки нового пароля.
+      const doPasswordReset = async () => {
+        const email = authEmail.trim();
+        setAuthError(''); setAuthInfo('');
+        if (!email) { setAuthError('Введите e-mail — на него придёт письмо для сброса пароля.'); return; }
+        setAuthBusy(true);
+        try {
+          await auth.sendPasswordResetEmail(email);
+          setAuthInfo('Письмо для сброса пароля отправлено на ' + email + '. Перейдите по ссылке из письма (проверьте и «Спам»).');
+        } catch (err) {
+          const map = { 'auth/invalid-email': 'Неверный формат e-mail.', 'auth/user-not-found': 'Аккаунт с таким e-mail не найден.', 'auth/network-request-failed': 'Нет сети.' };
           setAuthError(map[err.code] || err.message);
         }
         setAuthBusy(false);
@@ -1026,6 +1053,36 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         setShowGoalModal(true);
       };
 
+      // Завершение онбординга: сохраняем профиль, считаем КБЖУ и ставим минимум шагов в цели.
+      const finishOnboarding = () => {
+        const o = onboardDraft;
+        if (!o.age || !o.height || !o.weight) { alert('Заполните возраст, рост и вес — по ним считается КБЖУ.'); return; }
+        const today = getLocalDateString(new Date());
+        const p = { ...profileData, sex: o.sex, age: o.age, height: o.height, weight: o.weight, activity: o.activity, deficit: o.deficit, mode: 'auto', onboardedAt: today, lastKbjuAt: today };
+        const kbju = computeKbju(p);
+        const baseSteps = Math.max(0, Math.round(Number(o.minSteps) || 6000));
+        const newGoals = { ...goals, baseSteps, ...(kbju ? { calories: kbju.calories, protein: kbju.protein, fats: kbju.fats, carbs: kbju.carbs, maintenance: kbju.maintenance, deficit: Number(o.deficit) || 0 } : {}) };
+        setProfileData(p); setGoals(newGoals); setDraftGoals(newGoals);
+        if (profileDoc) profileDoc.set({ profileData: p, goals: newGoals }, { merge: true }).catch(() => {});
+        setShowOnboarding(false);
+      };
+
+      // Удаление аккаунта и всех данных (через Cloud Function), затем выход.
+      const deleteAccountNow = async () => {
+        if (!confirm('Удалить аккаунт? Все данные (дневник, замеры, фото, друзья, споры) удалятся безвозвратно.')) return;
+        if (!confirm('Точно удалить? Это необратимо.')) return;
+        setDeleteBusy(true);
+        try {
+          const callable = functions.httpsCallable('deleteAccount');
+          await callable({});
+          await auth.signOut().catch(() => {});
+          alert('Аккаунт удалён.');
+        } catch (e) {
+          alert('Не удалось удалить аккаунт: ' + (e.message || e));
+        }
+        setDeleteBusy(false);
+      };
+
       const copyPreviousDay = () => {
         const d = new Date(currentDate); d.setDate(d.getDate() - 1);
         const prev = getLocalDateString(d);
@@ -1756,8 +1813,11 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                 <input type="email" autoCapitalize="none" autoCorrect="off" placeholder="E-mail" className="w-full bg-[#18181b] rounded-2xl p-4 outline-none text-zinc-200 border border-zinc-800 focus:border-emerald-500" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} />
                 <input type="password" placeholder="Пароль (минимум 6 символов)" className="w-full bg-[#18181b] rounded-2xl p-4 outline-none text-zinc-200 border border-zinc-800 focus:border-emerald-500" value={authPass} onChange={(e) => setAuthPass(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') doAuth(); }} />
                 {authError && <p className="text-red-400 text-xs px-1">{authError}</p>}
+                {authInfo && <p className="text-emerald-400 text-xs px-1 leading-relaxed">{authInfo}</p>}
                 <button onClick={doAuth} disabled={authBusy} className="btn-active w-full bg-emerald-600 text-white rounded-2xl p-4 font-bold transition-all disabled:opacity-50">{authBusy ? '...' : (authMode === 'register' ? 'Зарегистрироваться' : 'Войти')}</button>
-                <button onClick={() => { setAuthMode(authMode === 'register' ? 'login' : 'register'); setAuthError(''); }} className="btn-active w-full text-zinc-400 text-sm p-2">{authMode === 'register' ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}</button>
+                {authMode === 'login' && <button onClick={doPasswordReset} disabled={authBusy} className="btn-active w-full text-zinc-500 text-xs p-1">Забыли пароль? Отправить письмо для сброса</button>}
+                <button onClick={() => { setAuthMode(authMode === 'register' ? 'login' : 'register'); setAuthError(''); setAuthInfo(''); }} className="btn-active w-full text-zinc-400 text-sm p-2">{authMode === 'register' ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}</button>
+                <p className="text-zinc-600 text-[10px] text-center px-2 mt-1">Расчёты КБЖУ и ИИ-оценки — ориентировочные и не являются медицинской рекомендацией.</p>
               </div>
             </div>
           </div>
@@ -2340,8 +2400,8 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     <div className="card-enter bg-amber-500/10 border border-amber-400/30 rounded-3xl p-4 flex gap-3 items-start max-w-full">
                       <div className="w-10 h-10 shrink-0 rounded-2xl bg-amber-400/15 flex items-center justify-center"><IconTimer className="w-5 h-5 text-amber-400" /></div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-amber-100">Пора обновить мерки и фото</p>
-                        <p className="text-xs text-amber-200/70 mt-1">Последняя запись была {latestBodyDate ? displayDate(latestBodyDate).toLowerCase() : 'давно'}. Лучше фиксировать прогресс раз в 2 недели.</p>
+                        <p className="text-sm font-bold text-amber-100">Добавьте замеры (талия и др.) и фото</p>
+                        <p className="text-xs text-amber-200/70 mt-1">{latestBodyDate ? `Последняя запись была ${displayDate(latestBodyDate).toLowerCase()}.` : 'Замеров пока нет.'} Фиксируйте талию, вес и фото раз в 2 недели — по ним считается прогресс и споры.</p>
                       </div>
                       <button type="button" onClick={dismissBodyReminder} className="btn-active shrink-0 text-[10px] font-bold text-amber-100/70 bg-amber-950/40 rounded-xl px-3 py-2">Позже</button>
                     </div>
@@ -2966,6 +3026,8 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     <p className="text-xs text-zinc-500 break-all">{auth.currentUser ? auth.currentUser.email : ''}</p>
                     {installPrompt && <button type="button" onClick={installApp} className="btn-active w-full bg-indigo-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2"><IconDownload className="w-5 h-5" />Установить приложение</button>}
                     <button onClick={() => { if (confirm('Выйти из аккаунта?')) auth.signOut(); }} className="btn-active w-full bg-zinc-800 text-red-400 rounded-xl p-4 font-bold transition-all">Выйти</button>
+                    <button type="button" onClick={deleteAccountNow} disabled={deleteBusy} className="btn-active w-full bg-red-950/40 text-red-400 border border-red-900/50 rounded-xl p-3 font-bold transition-all disabled:opacity-50">{deleteBusy ? 'Удаление…' : 'Удалить аккаунт'}</button>
+                    <p className="text-[10px] text-zinc-600 leading-relaxed">Удаление аккаунта стирает все данные безвозвратно. Расчёты КБЖУ и ИИ-оценки — ориентировочные, не медицинская рекомендация.</p>
                   </div>
                 </div>
               )}
@@ -3094,6 +3156,52 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     )}
                     <button type="button" onClick={createChallenge} disabled={!challengeDraft.friendUid || challengeDraft.myTarget === '' || challengeDraft.friendTarget === '' || !challengeDraft.deadline} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all disabled:opacity-35">Бросить вызов</button>
                     <button type="button" onClick={() => setShowChallengeModal(false)} className="btn-active w-full border border-zinc-800 text-zinc-500 rounded-xl p-3 font-bold transition-all">Отмена</button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+            </AnimatePresence>
+
+            {/* Модалка: онбординг при регистрации (данные для КБЖУ + минимум шагов) */}
+            <AnimatePresence>
+            {showOnboarding && (
+              <motion.div key="onboarding" className="fixed inset-0 bg-black/85 z-[60] flex items-center justify-center p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+                <motion.div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm max-h-[90vh] overflow-y-auto" initial={{ opacity: 0, scale: 0.9, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }}>
+                  <h3 className="text-lg font-bold mb-1 text-center">Расскажите о себе</h3>
+                  <p className="text-zinc-500 text-xs mb-4 text-center leading-relaxed">По этим данным посчитаем вашу норму КБЖУ. Можно поменять позже в профиле.</p>
+                  <div className="space-y-3">
+                    <div>
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ПОЛ</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[['male', 'Мужской'], ['female', 'Женский']].map(([k, l]) => (
+                          <button key={k} type="button" onClick={() => setOnboardDraft({ ...onboardDraft, sex: k })} className={`btn-active rounded-xl p-3 text-sm font-bold border transition-all ${onboardDraft.sex === k ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-[#27272a] text-zinc-300 border-zinc-700/30'}`}>{l}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <label className="text-[9px] text-zinc-500 font-bold">Возраст<input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 mt-1" value={onboardDraft.age} onChange={(e) => setOnboardDraft({ ...onboardDraft, age: e.target.value })} /></label>
+                      <label className="text-[9px] text-zinc-500 font-bold">Рост, см<input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 mt-1" value={onboardDraft.height} onChange={(e) => setOnboardDraft({ ...onboardDraft, height: e.target.value })} /></label>
+                      <label className="text-[9px] text-zinc-500 font-bold">Вес, кг<input type="number" inputMode="decimal" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 mt-1" value={onboardDraft.weight} onChange={(e) => setOnboardDraft({ ...onboardDraft, weight: e.target.value })} /></label>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">АКТИВНОСТЬ</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {ACTIVITY_LEVELS.map(l => (
+                          <button key={l.key} type="button" onClick={() => setOnboardDraft({ ...onboardDraft, activity: l.key })} className={`btn-active text-left rounded-xl p-2.5 border transition-all ${onboardDraft.activity === l.key ? 'bg-emerald-600/15 border-emerald-600/40' : 'bg-[#27272a] border-zinc-700/30'}`}>
+                            <span className={`text-xs font-bold block ${onboardDraft.activity === l.key ? 'text-emerald-300' : 'text-zinc-200'}`}>{l.label}</span>
+                            <span className="text-[9px] text-zinc-500">{l.hint}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-[9px] text-zinc-500 font-bold">Дефицит, ккал/день<input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 mt-1" value={onboardDraft.deficit} onChange={(e) => setOnboardDraft({ ...onboardDraft, deficit: e.target.value })} /></label>
+                      <label className="text-[9px] text-zinc-500 font-bold">Минимум шагов/день<input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 mt-1" value={onboardDraft.minSteps} onChange={(e) => setOnboardDraft({ ...onboardDraft, minSteps: e.target.value })} /></label>
+                    </div>
+                    {(() => { const k = computeKbju({ ...onboardDraft }); return k ? <p className="text-[11px] text-emerald-400 font-bold text-center">Ваша норма ≈ {k.calories} ккал/день</p> : <p className="text-[10px] text-zinc-600 text-center">Заполните возраст, рост и вес — покажем норму.</p>; })()}
+                    <button type="button" onClick={finishOnboarding} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all">Готово</button>
+                    <button type="button" onClick={() => setShowOnboarding(false)} className="btn-active w-full text-zinc-500 text-xs p-1">Заполнить позже</button>
+                    <p className="text-zinc-600 text-[10px] text-center leading-relaxed">Расчёты — ориентировочные, не медицинская рекомендация.</p>
                   </div>
                 </motion.div>
               </motion.div>
