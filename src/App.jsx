@@ -2274,20 +2274,15 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                   )}
 
                   {blocks.bodyMetrics && (
-                    <div className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <h2 className="text-sm font-bold text-zinc-100">Показатели тела</h2>
-                          <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mt-1">Вес, жир, БЖМ</p>
+                    <div className="section-card card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
+                      <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Показатели тела</h2>
+                      <div className="metric-date-nav flex items-center w-full min-h-14 bg-zinc-900 rounded-2xl border border-zinc-800/70 p-1">
+                        <button type="button" onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() - 1); setCurrentDate(getLocalDateString(d)); }} className="btn-active h-12 w-14 shrink-0 rounded-xl text-zinc-400 flex items-center justify-center" aria-label="Предыдущий день"><IconChevronLeft className="w-5 h-5" /></button>
+                        <div className="relative flex-1 self-stretch flex items-center justify-center">
+                          <span className="text-sm font-bold text-zinc-200">{displayDate(currentDate)}</span>
+                          <input type="date" aria-label="Дата показателей тела" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" value={currentDate} max={getLocalDateString(new Date())} onChange={(e) => { if(e.target.value) setCurrentDate(e.target.value); }} />
                         </div>
-                        <div className="shrink-0 flex items-center bg-zinc-900 rounded-2xl border border-zinc-800/70 p-1">
-                          <button type="button" onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() - 1); setCurrentDate(getLocalDateString(d)); }} className="btn-active p-2 text-zinc-400" aria-label="Предыдущий день"><IconChevronLeft className="w-4 h-4" /></button>
-                          <div className="relative px-2">
-                            <span className="text-xs font-bold text-zinc-200">{displayDate(currentDate)}</span>
-                            <input type="date" aria-label="Дата показателей тела" className="absolute inset-0 opacity-0 cursor-pointer" value={currentDate} max={getLocalDateString(new Date())} onChange={(e) => { if(e.target.value) setCurrentDate(e.target.value); }} />
-                          </div>
-                          <button type="button" onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() + 1); setCurrentDate(getLocalDateString(d)); }} disabled={currentDate === getLocalDateString(new Date())} className="btn-active p-2 text-zinc-400 disabled:opacity-20" aria-label="Следующий день"><IconChevronRight className="w-4 h-4" /></button>
-                        </div>
+                        <button type="button" onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() + 1); setCurrentDate(getLocalDateString(d)); }} disabled={currentDate === getLocalDateString(new Date())} className="btn-active h-12 w-14 shrink-0 rounded-xl text-zinc-400 flex items-center justify-center disabled:opacity-20" aria-label="Следующий день"><IconChevronRight className="w-5 h-5" /></button>
                       </div>
                       <div className="grid grid-cols-4 gap-2">
                         {DAILY_BODY_METRICS.map((metric) => (
@@ -2311,10 +2306,10 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                   )}
 
                   {blocks.water && (
-                    <div className="water-card card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
+                    <div className="water-card section-card card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
+                      <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest flex items-center gap-1.5"><IconDrop className="w-3.5 h-3.5 text-blue-400" /> Вода</h2>
                       <div className="flex justify-between items-end mb-3">
                         <div>
-                          <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-widest flex items-center gap-1.5"><IconDrop className="w-3.5 h-3.5 text-blue-400" /> Вода</p>
                           <div className="flex items-baseline gap-1">
                             <AnimatedNumber value={todayWater} className="text-4xl font-black" />
                             <span className="text-zinc-600 text-sm">/ {waterGoal} мл</span>
@@ -2342,9 +2337,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     </div>
                   )}
 
-                  <form ref={mealFormRef} onSubmit={handleAddLog} className="meal-composer card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-3">
-                    <div className="flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
-                      <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</span>
+                  <form ref={mealFormRef} onSubmit={handleAddLog} className="meal-composer section-card card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-3">
+                    <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</h2>
+                    <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
                       <button type="button" onClick={() => { setShowMealAiModal(true); setMealAiText(''); setMealAiError(''); setMealAiItems(null); }} className="btn-active shrink-0 flex items-center gap-1 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all"><IconSparkles className="w-3.5 h-3.5" /> Рецепт ИИ</button>
                     </div>
 

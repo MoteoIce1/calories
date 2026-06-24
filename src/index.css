@@ -290,9 +290,37 @@ body::before {
   box-shadow: var(--card-shadow) !important;
 }
 
-.meal-composer > :first-child {
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line);
+.section-card {
+  position: relative;
+}
+
+.section-legend {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  margin: 0;
+  padding: 0 8px;
+  transform: translateY(-50%);
+  background: var(--surface);
+  line-height: 1;
+}
+
+.metric-date-nav {
+  background: var(--surface-strong) !important;
+  border-color: var(--line) !important;
+}
+
+.metric-date-nav button {
+  min-width: 56px;
+  min-height: 48px;
+}
+
+.meal-composer.section-card {
+  padding-top: 22px !important;
 }
 
 .meal-composer input[type="search"],
