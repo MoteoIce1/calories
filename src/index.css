@@ -319,7 +319,7 @@ body::before {
   flex: 1;
   min-width: 12px;
   height: 1px;
-  margin-left: 10px;
+  margin-left: 4px;
   background: var(--line);
   pointer-events: none;
 }
