@@ -3,4 +3,6 @@ dist/
 .firebase/
 .DS_Store
 *.log
+.env
+.env.local
 __pycache__/

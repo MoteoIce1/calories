@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test",
     "preview": "vite preview",
     "login": "firebase login",
     "deploy": "vite build && firebase deploy --only hosting"

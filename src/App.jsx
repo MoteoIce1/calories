@@ -3,16 +3,12 @@ import firebase, { db, auth, functions, profileRef, dayRef, daysCol, bodyCol, bo
 import { motion, AnimatePresence, animate } from 'framer-motion';
 import { evaluateMath } from './utils/math.js';
 import { searchFoodsByName, getFoodNameWords } from './utils/food.js';
+import { AI_UNAVAILABLE_MESSAGE, formatParsedFoodAmount, MAX_FOOD_TEXT_LENGTH, parseFoodText } from './services/foodAi.js';
 import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
 import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconCopy, IconFlame, IconSparkles } from './components/Icons.jsx';
-
-    // Временно выключено: облачный AI-аккаунт недоступен. Чтобы вернуть функции,
-    // переключите флаг в true вместе с AI_ENABLED в functions/index.js.
-    const AI_ENABLED = false;
-    const AI_UNAVAILABLE_MESSAGE = 'AI temporarily unavailable';
 
     // Типы споров (вызовов). dir: 'down' — цель достичь значения не выше target; 'up' — не ниже target.
     const CHALLENGE_TYPES = [
@@ -257,13 +253,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const [friendCodeInput, setFriendCodeInput] = useState('');
       const [showChallengeModal, setShowChallengeModal] = useState(false);
       const [challengeDraft, setChallengeDraft] = useState({ friendUid: '', type: 'weight', myTarget: '', friendTarget: '', deadline: '' });
-      // ИИ-расчёт рецепта.
-      const [showRecipeModal, setShowRecipeModal] = useState(false);
-      const [recipeText, setRecipeText] = useState('');
-      const [recipeBusy, setRecipeBusy] = useState(false);
-      const [recipeResult, setRecipeResult] = useState(null);
-      const [recipeError, setRecipeError] = useState('');
-      // ИИ-разбор рецепта на продукты в дневнике (добавление новых в базу).
+      // ИИ разбирает текст на продукты только через VPS API; ключи остаются на сервере.
       const [showMealAiModal, setShowMealAiModal] = useState(false);
       const [mealAiText, setMealAiText] = useState('');
       const [mealAiBusy, setMealAiBusy] = useState(false);
@@ -798,13 +788,8 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         setGramsInput('');
       };
 
-      const handleAddLog = (e) => {
-        e.preventDefault();
-        const food = foods.find(f => f.id === selectedFoodId);
-        if (!food || !gramsInput) return;
-        
-        const grams = evaluateMath(gramsInput);
-        if (grams <= 0) return;
+      const addFoodLog = (food, grams) => {
+        if (!food || !Number.isFinite(grams) || grams <= 0) return false;
 
         const newLog = {
           id: Date.now().toString(), foodId: food.id, grams,
@@ -816,6 +801,15 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         const updatedLogs = { ...dailyLogs, [currentDate]: [...(dailyLogs[currentDate] || []), newLog] };
         setDailyLogs(updatedLogs); 
         writeDay(currentDate, { logs: updatedLogs[currentDate] });
+        return true;
+      };
+
+      const handleAddLog = (e) => {
+        e.preventDefault();
+        const food = foods.find(f => f.id === selectedFoodId);
+        if (!food || !gramsInput) return;
+        const grams = evaluateMath(gramsInput);
+        if (!addFoodLog(food, grams)) return;
         resetMealForm();
       };
 
@@ -1610,112 +1604,60 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         return `Темп ${who} ~${worst.toFixed(1)}% жира в неделю — слишком быстро и вредно (безопасно ≈0,5%/нед). Лучше увеличьте срок.`;
       })();
 
-      // ── ИИ-расчёт рецепта ──
-      const calcRecipe = async () => {
-        const text = recipeText.trim();
-        if (!text) return;
-        if (!AI_ENABLED) {
-          setRecipeError(AI_UNAVAILABLE_MESSAGE);
-          return;
-        }
-        setRecipeBusy(true); setRecipeError(''); setRecipeResult(null);
-        try {
-          const callable = functions.httpsCallable('calcRecipe');
-          const res = await callable({ text });
-          setRecipeResult(res.data);
-        } catch (e) {
-          setRecipeError(e.message || 'Не удалось рассчитать. Проверьте, что функция развёрнута.');
-        }
-        setRecipeBusy(false);
-      };
-      const addRecipeToBase = () => {
-        if (!recipeResult) return;
-        const foodItem = {
-          id: Date.now().toString(),
-          name: recipeResult.name || 'Блюдо',
-          calories: Number(recipeResult.calories) || 0,
-          protein: Number(recipeResult.protein) || 0,
-          fats: Number(recipeResult.fats) || 0,
-          carbs: Number(recipeResult.carbs) || 0,
-        };
-        if (isOwner) saveSharedFoods([foodItem, ...sharedFoods]);
-        else savePersonalFoods([foodItem, ...personalFoods]);
-        setShowRecipeModal(false); setRecipeText(''); setRecipeResult(null); setRecipeError('');
-      };
-
-      // ── ИИ: разбор рецепта на отдельные продукты для базы (из дневника) ──
+      // ── ИИ: разбор текста на продукты для дневника ──
       // Ключ названия — набор слов без учёта порядка/регистра: «масло сливочное» == «Сливочное масло».
       const foodNameKey = (name) => getFoodNameWords(name || '').sort().join(' ');
-      const foodAlreadyExists = (name) => { const key = foodNameKey(name); return !!key && foods.some(f => foodNameKey(f.name) === key); };
-      // Ищет ПОХОЖИЙ продукт в базе (не точный дубль). Похоже = значимые слова одного
-      // названия ПОЛНОСТЬЮ входят в другое («Чиабатта» ⊂ «Ломтик хлеба чиабатта»). Просто
-      // общее слово-категория («Йогурт чудо клубничный» vs «Йогурт фрутис») похожим НЕ считается.
-      const findSimilarFood = (name) => {
-        const a = getFoodNameWords(name).filter(w => w.length >= 3);
-        if (!a.length) return null;
-        const aKey = foodNameKey(name);
-        const aSet = new Set(a);
-        for (const f of foods) {
-          if (foodNameKey(f.name) === aKey) continue; // точный дубль — обрабатывается отдельно
-          const b = getFoodNameWords(f.name).filter(w => w.length >= 3);
-          if (!b.length) continue;
-          const bSet = new Set(b);
-          const aInB = a.every(w => bSet.has(w)); // все значимые слова нового есть в кандидате
-          const bInA = b.every(w => aSet.has(w)); // или наоборот
-          if (aInB || bInA) return f;
-        }
-        return null;
+      const findExactFood = (name) => {
+        const key = foodNameKey(name);
+        return key ? foods.find(f => foodNameKey(f.name) === key) || null : null;
       };
       const runMealAi = async () => {
         const text = mealAiText.trim();
         if (!text) return;
-        if (!AI_ENABLED) {
-          setMealAiError(AI_UNAVAILABLE_MESSAGE);
-          return;
-        }
         setMealAiBusy(true); setMealAiError(''); setMealAiItems(null);
         try {
-          const callable = functions.httpsCallable('parseIngredients');
-          // Передаём базу, чтобы ИИ переиспользовал существующие названия и не плодил дубли.
-          const res = await callable({ text, knownNames: foods.map(f => f.name).slice(0, 1000) });
-          const list = (res.data?.ingredients || []).map(it => {
-            const exists = foodAlreadyExists(it.name);
-            // baseName/base — «среднее» по умолчанию, к которому можно вернуться после выбора варианта.
-            return { ...it, exists, add: !exists, baseName: it.name, base: { calories: it.calories, protein: it.protein, fats: it.fats, carbs: it.carbs }, chosen: null };
+          const result = await parseFoodText(text);
+          const list = result.items.map((item) => {
+            const food = findExactFood(item.name);
+            return {
+              ...item,
+              grams: item.amount_g === null ? '' : String(item.amount_g),
+              matchedFoodId: food?.id || null,
+              added: false,
+            };
           });
           if (!list.length) setMealAiError('Не удалось распознать продукты. Уточните текст.');
           setMealAiItems(list);
         } catch (e) {
-          setMealAiError(e.message || 'Не удалось распознать. Проверьте, что функция развёрнута.');
+          setMealAiError(e.message || AI_UNAVAILABLE_MESSAGE);
         }
         setMealAiBusy(false);
       };
       const updateMealAiItem = (index, patch) => setMealAiItems(arr => arr.map((x, j) => j === index ? { ...x, ...patch } : x));
-      // Выбор варианта продукта (жирность и т.п.). opt = null → «неважно», вернуть среднее.
-      const selectMealAiVariant = (index, opt) => setMealAiItems(arr => arr.map((x, j) => {
-        if (j !== index) return x;
-        if (!opt) { const name = x.baseName; return { ...x, chosen: null, name, ...x.base, exists: foodAlreadyExists(name) }; }
-        const name = (x.baseName + ' ' + opt.label).trim().slice(0, 80);
-        return { ...x, chosen: opt.label, name, calories: opt.calories, protein: opt.protein, fats: opt.fats, carbs: opt.carbs, exists: foodAlreadyExists(name) };
-      }));
-      const confirmMealAi = () => {
-        const toAdd = (mealAiItems || []).filter(it => it.add && !it.exists && String(it.name || '').trim());
-        // Предупреждаем о похожих продуктах, уже имеющихся в базе.
-        const similars = toAdd.map(it => ({ it, sim: findSimilarFood(it.name) })).filter(x => x.sim);
-        if (similars.length && !confirm('Похоже, такие продукты уже есть в базе:\n' + similars.map(x => `• «${x.it.name}» ≈ «${x.sim.name}»`).join('\n') + '\n\nВсё равно добавить как новые?')) return;
-        if (toAdd.length) {
-          const newFoods = toAdd.map((it, i) => ({
-            id: (Date.now() + i).toString(),
-            name: String(it.name).trim().slice(0, 80),
-            calories: Math.round(Number(it.calories) || 0),
-            protein: Number(it.protein) || 0,
-            fats: Number(it.fats) || 0,
-            carbs: Number(it.carbs) || 0,
-          }));
-          if (isOwner) saveSharedFoods([...newFoods, ...sharedFoods]);
-          else savePersonalFoods([...newFoods, ...personalFoods]);
+      const moveMealAiItemToManualEntry = (item) => {
+        setFoodSearch(item.name);
+        setSelectedFoodId('');
+        setGramsInput(item.grams || '');
+        setShowMealAiModal(false);
+        setMealAiText('');
+        setMealAiItems(null);
+        setMealAiError('');
+        setTimeout(() => foodSearchRef.current?.focus(), 0);
+      };
+      const addMealAiItemToDiary = (index) => {
+        const item = mealAiItems?.[index];
+        if (!item || item.added) return;
+        const food = item.matchedFoodId ? foods.find(f => f.id === item.matchedFoodId) : findExactFood(item.name);
+        const grams = evaluateMath(String(item.grams || ''));
+        if (!food) {
+          moveMealAiItemToManualEntry(item);
+          return;
         }
-        setShowMealAiModal(false); setMealAiText(''); setMealAiItems(null); setMealAiError('');
+        if (!Number.isFinite(grams) || grams <= 0) {
+          updateMealAiItem(index, { needsWeight: true });
+          return;
+        }
+        if (addFoodLog(food, grams)) updateMealAiItem(index, { added: true, needsWeight: false });
       };
 
       // Избранное — в порядке favoriteIds (порядок задаёт сам пользователь).
@@ -2561,11 +2503,8 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                   <form ref={mealFormRef} onSubmit={handleAddLog} className="meal-composer section-card card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-3">
                     <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</h2>
 
-                    <div
-                      className="flex items-center justify-between gap-3"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <p className="min-w-0 text-[10px] text-zinc-500 leading-tight">Не знаете КБЖУ? ИИ поможет с рецептом.</p>
+                    <div className="flex items-center justify-between gap-3" onClick={(e) => e.stopPropagation()}>
+                      <p className="min-w-0 text-[10px] text-zinc-500 leading-tight">Введите список продуктов — ИИ разберёт названия и количество.</p>
                       <button
                         type="button"
                         onClick={() => {
@@ -2577,7 +2516,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                         className="btn-active shrink-0 flex items-center gap-1 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all"
                       >
                         <IconSparkles className="w-3.5 h-3.5" />
-                        Рецепт ИИ
+                        Распознать
                       </button>
                     </div>
 
@@ -3202,10 +3141,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                   </div>
 
                   <form onSubmit={handleAddFood} className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Добавить продукт (на 100г)</h2>
-                      <button type="button" onClick={() => { setShowRecipeModal(true); setRecipeError(''); setRecipeResult(null); }} className="btn-active flex items-center gap-1.5 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-widest transition-all"><IconSparkles className="w-4 h-4" /> Из рецепта (ИИ)</button>
-                    </div>
+                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Добавить продукт (на 100г)</h2>
                     <input type="text" placeholder="Название" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.name} onChange={(e) => setNewFood({...newFood, name: e.target.value})} required />
                     <div className="grid grid-cols-2 gap-3">
                       <input type="number" step="0.1" placeholder="Ккал" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.cals} onChange={(e) => setNewFood({...newFood, cals: e.target.value})} onFocus={(e) => e.target.select()} required />
@@ -3493,80 +3429,48 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
             )}
             </AnimatePresence>
 
-            {/* Модалка: КБЖУ из рецепта (ИИ) */}
-            <AnimatePresence>
-            {showRecipeModal && (
-              <motion.div key="recipe" className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-                <motion.div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm max-h-[88vh] overflow-y-auto" initial={{ opacity: 0, scale: 0.9, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }}>
-                  <h3 className="text-lg font-bold mb-1 text-center flex items-center justify-center gap-2"><IconSparkles className="w-5 h-5 text-indigo-400" /> КБЖУ из рецепта</h3>
-                  <p className="text-zinc-500 text-xs mb-4 text-center leading-relaxed">Впишите ингредиенты с количеством — ИИ посчитает КБЖУ на 100 г.</p>
-                  <textarea rows={5} placeholder={'Например:\nкуриная грудка 500 г\nрис 200 г\nмасло оливковое 1 ст.л.\nсоль, специи'} className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 text-sm outline-none border border-zinc-700/30 focus:border-emerald-500 resize-none" value={recipeText} onChange={(e) => setRecipeText(e.target.value)} />
-                  <button type="button" onClick={calcRecipe} disabled={recipeBusy || !recipeText.trim()} className="btn-active w-full mt-3 bg-indigo-600 text-white rounded-xl p-3 font-bold transition-all disabled:opacity-35 flex items-center justify-center gap-2">{recipeBusy ? 'Считаю…' : <><IconSparkles className="w-5 h-5" /> Рассчитать</>}</button>
-                  {recipeError && <p className="text-red-400 text-xs mt-3 leading-relaxed">{recipeError}</p>}
-                  {recipeResult && (
-                    <div className="mt-4 space-y-3">
-                      <div className="bg-[#27272a] rounded-2xl p-3 border border-zinc-700/30 space-y-2">
-                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Проверьте и поправьте</p>
-                        <input type="text" className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-zinc-200 outline-none border border-zinc-700/30" value={recipeResult.name} onChange={(e) => setRecipeResult({ ...recipeResult, name: e.target.value })} />
-                        <div className="grid grid-cols-2 gap-2">
-                          <label className="text-[10px] text-zinc-500 font-bold">Ккал/100г<input type="number" className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-emerald-400 font-bold outline-none mt-1" value={recipeResult.calories} onChange={(e) => setRecipeResult({ ...recipeResult, calories: e.target.value })} /></label>
-                          <label className="text-[10px] text-zinc-500 font-bold">Белок<input type="number" className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-indigo-400 font-bold outline-none mt-1" value={recipeResult.protein} onChange={(e) => setRecipeResult({ ...recipeResult, protein: e.target.value })} /></label>
-                          <label className="text-[10px] text-zinc-500 font-bold">Жиры<input type="number" className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-amber-400 font-bold outline-none mt-1" value={recipeResult.fats} onChange={(e) => setRecipeResult({ ...recipeResult, fats: e.target.value })} /></label>
-                          <label className="text-[10px] text-zinc-500 font-bold">Углеводы<input type="number" className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-blue-400 font-bold outline-none mt-1" value={recipeResult.carbs} onChange={(e) => setRecipeResult({ ...recipeResult, carbs: e.target.value })} /></label>
-                        </div>
-                        {recipeResult.note && <p className="text-[10px] text-zinc-500 leading-relaxed">{recipeResult.note}{recipeResult.totalGrams ? ` · общая масса ≈ ${recipeResult.totalGrams} г` : ''}</p>}
-                      </div>
-                      <button type="button" onClick={addRecipeToBase} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-3 font-bold transition-all">Добавить в базу</button>
-                    </div>
-                  )}
-                  <button type="button" onClick={() => { setShowRecipeModal(false); setRecipeText(''); setRecipeResult(null); setRecipeError(''); }} className="btn-active w-full mt-3 border border-zinc-800 text-zinc-500 rounded-xl p-3 font-bold transition-all">Закрыть</button>
-                </motion.div>
-              </motion.div>
-            )}
-            </AnimatePresence>
-
-            {/* Модалка: рецепт → отдельные продукты в базу (ИИ, из дневника) */}
+            {/* Модалка: текст → продукты для дневника */}
             <AnimatePresence>
             {showMealAiModal && (
               <motion.div key="meal-ai" className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
                 <motion.div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm max-h-[88vh] overflow-y-auto" initial={{ opacity: 0, scale: 0.9, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }}>
-                  <h3 className="text-lg font-bold mb-1 text-center flex items-center justify-center gap-2"><IconSparkles className="w-5 h-5 text-indigo-400" /> Рецепт → продукты</h3>
-                  <p className="text-zinc-500 text-xs mb-4 text-center leading-relaxed">Опишите блюдо или ингредиенты. ИИ распознает продукты и добавит новые в базу (КБЖУ на 100 г) — после вашего подтверждения.</p>
-                  <textarea rows={5} placeholder={'Например:\nкуриная грудка\nрис\nоливковое масло\nпомидор'} className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 text-sm outline-none border border-zinc-700/30 focus:border-emerald-500 resize-none" value={mealAiText} onChange={(e) => setMealAiText(e.target.value)} />
-                  <button type="button" onClick={runMealAi} disabled={mealAiBusy || !mealAiText.trim()} className="btn-active w-full mt-3 bg-indigo-600 text-white rounded-xl p-3 font-bold transition-all disabled:opacity-35 flex items-center justify-center gap-2">{mealAiBusy ? 'Распознаю…' : <><IconSparkles className="w-5 h-5" /> Распознать</>}</button>
-                  {mealAiError && <p className="text-red-400 text-xs mt-3 leading-relaxed">{mealAiError}</p>}
+                  <h3 className="text-lg font-bold mb-1 text-center flex items-center justify-center gap-2"><IconSparkles className="w-5 h-5 text-indigo-400" /> Распознать продукты</h3>
+                  <p className="text-zinc-500 text-xs mb-4 text-center leading-relaxed">Введите продукты и количество. ИИ только распознаёт позиции; КБЖУ считаются лишь после выбора продукта и указания веса.</p>
+                  <textarea rows={5} maxLength={MAX_FOOD_TEXT_LENGTH} placeholder={'Например:\nтворог 5% 250 г, банан 100 г\nили\n2 яйца, рис 150 г, куриная грудка 200 г'} className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 text-sm outline-none border border-zinc-700/30 focus:border-emerald-500 resize-none" value={mealAiText} onChange={(e) => setMealAiText(e.target.value)} />
+                  <div className="mt-1 flex items-center justify-between gap-3 text-[10px] text-zinc-500">
+                    <span>Пустой вес нужно уточнить перед добавлением.</span>
+                    <span aria-live="polite">{mealAiText.length}/{MAX_FOOD_TEXT_LENGTH}</span>
+                  </div>
+                  <button type="button" onClick={runMealAi} disabled={mealAiBusy || !mealAiText.trim() || mealAiText.length > MAX_FOOD_TEXT_LENGTH} className="btn-active w-full mt-3 bg-indigo-600 text-white rounded-xl p-3 font-bold transition-all disabled:opacity-35 flex items-center justify-center gap-2">
+                    {mealAiBusy ? 'Распознаём продукты…' : <><IconSparkles className="w-5 h-5" /> Распознать</>}
+                  </button>
+                  {mealAiBusy && <p className="text-indigo-300 text-xs mt-3 text-center" role="status" aria-live="polite">Распознаём продукты…</p>}
+                  {mealAiError && <p className="text-red-400 text-xs mt-3 leading-relaxed" role="alert">{mealAiError}</p>}
                   {mealAiItems && mealAiItems.length > 0 && (
                     <div className="mt-4 space-y-2">
-                      <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Отметьте, что добавить · правьте КБЖУ</p>
+                      <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Распознано · уточните вес при необходимости</p>
                       {mealAiItems.map((it, i) => (
-                        <div key={i} className={`rounded-xl p-3 border ${it.exists ? 'bg-zinc-900/40 border-zinc-800/50' : 'bg-[#27272a] border-zinc-700/30'}`}>
-                          <div className="flex items-center gap-2">
-                            <button type="button" disabled={it.exists} onClick={() => updateMealAiItem(i, { add: !it.add })} aria-label={it.add ? 'Не добавлять' : 'Добавить'} className={`btn-active shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${it.exists ? 'border-zinc-700 bg-zinc-800' : it.add ? 'bg-emerald-600 border-emerald-500' : 'border-zinc-600 bg-transparent'}`}>{!it.exists && it.add && <IconCheck className="w-3.5 h-3.5 text-white" />}</button>
-                            <input type="text" className={`flex-1 min-w-0 bg-zinc-900 rounded-lg p-2 text-sm outline-none border border-zinc-700/30 ${it.exists ? 'text-zinc-500' : 'text-zinc-200'}`} value={it.name} onChange={(e) => updateMealAiItem(i, { name: e.target.value, exists: foodAlreadyExists(e.target.value) })} />
-                            {it.exists && <span className="shrink-0 text-[9px] text-zinc-500 font-bold uppercase tracking-wider">в базе</span>}
+                        <div key={`${it.name}-${i}`} className="rounded-xl p-3 border bg-[#27272a] border-zinc-700/30 space-y-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-bold text-sm text-zinc-100 truncate">{it.name}</p>
+                              <p className="text-xs text-zinc-400 mt-0.5">{formatParsedFoodAmount(it)}</p>
+                            </div>
+                            {it.matchedFoodId ? <span className="shrink-0 text-[9px] text-emerald-300 font-bold uppercase tracking-wider">в базе</span> : <span className="shrink-0 text-[9px] text-zinc-500 font-bold uppercase tracking-wider">нет в базе</span>}
                           </div>
-                          {!it.exists && (it.options || []).length > 0 && (
-                            <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                              <span className="w-full text-[9px] text-zinc-500 font-bold">Жирность / вид (или «Неважно» — среднее):</span>
-                              <button type="button" onClick={() => selectMealAiVariant(i, null)} className={`btn-active text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors ${!it.chosen ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>Неважно</button>
-                              {it.options.map((o, k) => (
-                                <button type="button" key={k} onClick={() => selectMealAiVariant(i, o)} className={`btn-active text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors ${it.chosen === o.label ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{o.label}</button>
-                              ))}
-                            </div>
-                          )}
-                          {!it.exists && (
-                            <div className="grid grid-cols-4 gap-1.5 mt-2">
-                              <label className="text-[9px] text-zinc-500 font-bold">Ккал<input type="number" inputMode="decimal" className="w-full bg-zinc-900 rounded-lg p-1.5 text-xs text-emerald-400 font-bold outline-none mt-0.5" value={it.calories} onChange={(e) => updateMealAiItem(i, { calories: e.target.value })} /></label>
-                              <label className="text-[9px] text-zinc-500 font-bold">Б<input type="number" inputMode="decimal" className="w-full bg-zinc-900 rounded-lg p-1.5 text-xs text-indigo-400 font-bold outline-none mt-0.5" value={it.protein} onChange={(e) => updateMealAiItem(i, { protein: e.target.value })} /></label>
-                              <label className="text-[9px] text-zinc-500 font-bold">Ж<input type="number" inputMode="decimal" className="w-full bg-zinc-900 rounded-lg p-1.5 text-xs text-amber-400 font-bold outline-none mt-0.5" value={it.fats} onChange={(e) => updateMealAiItem(i, { fats: e.target.value })} /></label>
-                              <label className="text-[9px] text-zinc-500 font-bold">У<input type="number" inputMode="decimal" className="w-full bg-zinc-900 rounded-lg p-1.5 text-xs text-blue-400 font-bold outline-none mt-0.5" value={it.carbs} onChange={(e) => updateMealAiItem(i, { carbs: e.target.value })} /></label>
-                            </div>
+                          <label className="block text-[10px] text-zinc-500 font-bold">
+                            Вес для КБЖУ, г
+                            <input type="number" min="0" step="0.1" inputMode="decimal" placeholder="Уточните вес" className={`w-full bg-zinc-900 rounded-lg p-2 text-sm text-zinc-100 outline-none border mt-1 ${it.needsWeight ? 'border-amber-400' : 'border-zinc-700/30'} focus:border-emerald-500`} value={it.grams} onChange={(e) => updateMealAiItem(i, { grams: e.target.value, needsWeight: false })} />
+                          </label>
+                          {it.amount_g === null && <p className="text-[10px] text-amber-300 leading-relaxed">{it.unit === 'pcs' ? 'Количество штук не переводим в граммы автоматически.' : it.unit === 'ml' || it.unit === 'l' ? 'Объём не переводим в граммы без отдельной логики плотности.' : 'Укажите граммовку перед расчётом КБЖУ.'}</p>}
+                          {it.needsWeight && <p className="text-[10px] text-amber-300" role="alert">Укажите вес больше нуля, чтобы рассчитать КБЖУ.</p>}
+                          {it.added ? <p className="text-xs font-bold text-emerald-300 flex items-center gap-1"><IconCheck className="w-4 h-4" /> Добавлено в дневник</p> : (
+                            <button type="button" onClick={() => addMealAiItemToDiary(i)} className="btn-active w-full bg-emerald-600 text-white rounded-lg p-2.5 text-xs font-bold transition-all">
+                              {it.matchedFoodId ? 'Добавить в дневник' : 'Выбрать продукт вручную'}
+                            </button>
                           )}
                         </div>
                       ))}
-                      {(() => { const n = mealAiItems.filter(it => it.add && !it.exists).length; return (
-                        <button type="button" onClick={confirmMealAi} disabled={n === 0} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-3 font-bold transition-all disabled:opacity-35">{n > 0 ? `Добавить в базу (${n})` : 'Новых продуктов нет'}</button>
-                      ); })()}
                     </div>
                   )}
                   <button type="button" onClick={() => { setShowMealAiModal(false); setMealAiText(''); setMealAiItems(null); setMealAiError(''); }} className="btn-active w-full mt-3 border border-zinc-800 text-zinc-500 rounded-xl p-3 font-bold transition-all">Закрыть</button>
