@@ -1535,13 +1535,17 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
       // Избранное — в порядке favoriteIds (порядок задаёт сам пользователь).
       const favoriteFoods = favoriteIds.map(id => foods.find(f => f.id === id)).filter(Boolean);
+      const favoriteFoodIds = new Set(favoriteFoods.map(food => food.id));
+      const regularFoods = foods
+        .filter(food => !favoriteFoodIds.has(food.id))
+        .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
       const sortedFoods = [
         ...favoriteFoods,
-        ...foods.filter(f => !f.isFavorite).sort((a, b) => a.name.localeCompare(b.name, 'ru')),
+        ...regularFoods,
       ];
-      // Поиск работает сразу в двух строках: среди избранного и по всей базе.
+      // Поиск работает в обеих строках, но продукт выводится только в одной из них.
       const favoriteMealFoods = foodSearch.trim() ? searchFoodsByName(favoriteFoods, foodSearch, 200) : favoriteFoods;
-      const allMealFoods = foodSearch.trim() ? searchFoodsByName(sortedFoods, foodSearch, 200) : sortedFoods;
+      const allMealFoods = foodSearch.trim() ? searchFoodsByName(regularFoods, foodSearch, 200) : regularFoods;
       const selectedFood = selectedFoodId ? foods.find(f => f.id === selectedFoodId) : null;
       const sortedBodyEntries = [...bodyEntries].sort((a, b) => b.date.localeCompare(a.date));
       const bodyEntryOptions = [...bodyEntries].sort((a, b) => a.date.localeCompare(b.date));
