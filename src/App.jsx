@@ -25,13 +25,43 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
     ];
     const challengeType = (key) => CHALLENGE_TYPES.find(t => t.key === key) || CHALLENGE_TYPES[0];
 
-    // Уровни активности для формулы Миффлина — Сан-Жеора (множитель к BMR).
+    // Каждый уровень отдельно задаёт базовый NEAT и средний расход тренировок за день.
     const ACTIVITY_LEVELS = [
-      { key: '1.2', label: 'Минимальная', hint: 'сидячий образ жизни, мало движения' },
-      { key: '1.375', label: 'Лёгкая', hint: 'без тренировок, но много движения в течение дня' },
-      { key: '1.55', label: 'Средняя', hint: 'тренировки 1–3 раза в неделю' },
-      { key: '1.725', label: 'Высокая', hint: 'тренировки 3–6 раз в неделю' },
-      { key: '1.9', label: 'Очень высокая', hint: 'две тренировки в день или тяжёлая физическая работа' },
+      {
+        key: '1.2',
+        label: 'Минимальная',
+        hint: 'сидячий образ жизни, мало движения',
+        neatFactor: 1.2,
+        trainingCalories: 0,
+      },
+      {
+        key: '1.375',
+        label: 'Лёгкая',
+        hint: 'без тренировок, но много движения в течение дня',
+        neatFactor: 1.3,
+        trainingCalories: 0,
+      },
+      {
+        key: '1.55',
+        label: 'Средняя',
+        hint: 'тренировки 1–3 раза в неделю',
+        neatFactor: 1.2,
+        trainingCalories: 100,
+      },
+      {
+        key: '1.725',
+        label: 'Высокая',
+        hint: 'тренировки 3–6 раз в неделю',
+        neatFactor: 1.2,
+        trainingCalories: 150,
+      },
+      {
+        key: '1.9',
+        label: 'Очень высокая',
+        hint: 'две тренировки в день или тяжёлая физическая работа',
+        neatFactor: 1.3,
+        trainingCalories: 350,
+      },
     ];
 
     // Блоки дневника, которые можно скрыть в настройках профиля.
@@ -53,7 +83,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       { key: 'fatMass', label: 'Жир кг' },
     ];
 
-    const DEFAULT_ACTIVITY_FACTOR = '1.2';
+    const DEFAULT_ACTIVITY_KEY = '1.2';
     const DEFAULT_USUAL_STEPS = 2000;
     const STEP_CALORIE_ADJUSTMENT = 0.04;
     const DEFAULT_PROFILE = {
@@ -61,7 +91,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       age: '',
       height: '',
       weight: '',
-      activity: DEFAULT_ACTIVITY_FACTOR,
+      activity: DEFAULT_ACTIVITY_KEY,
       usualSteps: DEFAULT_USUAL_STEPS,
       mode: 'manual',
       deficit: 500,
@@ -84,18 +114,23 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
     }
 
     function calculateStepCalorieAdjustment(steps, usualSteps) {
-      return Math.round((getUsualSteps(steps) - getUsualSteps(usualSteps)) * STEP_CALORIE_ADJUSTMENT);
+      const stepCalories = (count) => Math.round(getUsualSteps(count) * STEP_CALORIE_ADJUSTMENT);
+      return stepCalories(steps) - stepCalories(usualSteps);
     }
 
-    // Множитель активности учитывает тренировки, а шаги корректируют норму относительно базовых 2 000.
+    // Основа нормы: BMR, базовый NEAT и средняя недельная нагрузка; шаги добавляются отдельно.
     function computeKbju(p) {
       const w = parseFloat(p.weight), h = parseFloat(p.height), age = parseFloat(p.age);
       if (!w || !h || !age) return null;
       const bmr = 10 * w + 6.25 * h - 5 * age + (p.sex === 'female' ? -161 : 5);
-      const activityFactor = parseFloat(p.activity) || Number(DEFAULT_ACTIVITY_FACTOR);
+      const activityLevel = ACTIVITY_LEVELS.find(level => level.key === p.activity)
+        || ACTIVITY_LEVELS[0];
       const usualSteps = getUsualSteps(p.usualSteps);
-      const stepCalories = calculateStepCalorieAdjustment(usualSteps, DEFAULT_USUAL_STEPS);
-      const maintenance = Math.round(bmr * activityFactor + stepCalories);
+      const usualStepCalories = Math.round(usualSteps * STEP_CALORIE_ADJUSTMENT);
+      const baseMaintenance = Math.round(
+        bmr * activityLevel.neatFactor + activityLevel.trainingCalories,
+      );
+      const maintenance = baseMaintenance + usualStepCalories;
       const deficit = Number(p.deficit) || 0;
       const calories = Math.max(0, maintenance - deficit);
       const protein = Math.round(w * 2);
@@ -103,9 +138,11 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const carbs = Math.max(0, Math.round((calories - protein * 4 - fats * 9) / 4));
       return {
         bmr: Math.round(bmr),
-        activityFactor,
+        neatFactor: activityLevel.neatFactor,
+        trainingCalories: activityLevel.trainingCalories,
+        baseMaintenance,
         usualSteps,
-        stepCalories,
+        usualStepCalories,
         maintenance,
         calories,
         protein,
@@ -158,7 +195,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         age: '',
         height: '',
         weight: '',
-        activity: DEFAULT_ACTIVITY_FACTOR,
+        activity: DEFAULT_ACTIVITY_KEY,
         deficit: 500,
         usualSteps: DEFAULT_USUAL_STEPS,
       });
@@ -300,7 +337,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
               age: '',
               height: '',
               weight: '',
-              activity: DEFAULT_ACTIVITY_FACTOR,
+              activity: DEFAULT_ACTIVITY_KEY,
               deficit: 500,
               usualSteps: DEFAULT_USUAL_STEPS,
             });
@@ -2883,9 +2920,11 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                             <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mb-3">Расчёт по формуле Миффлина</p>
                             <div className="grid grid-cols-2 gap-y-2 text-sm">
                               <span className="text-zinc-400">Базовый обмен (BMR)</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.bmr} ккал</span>
-                              <span className="text-zinc-400">Активность</span><span className="text-right font-bold text-zinc-200">× {kbjuPreview.activityFactor}</span>
+                              <span className="text-zinc-400">Базовый NEAT</span><span className="text-right font-bold text-zinc-200">× {kbjuPreview.neatFactor}</span>
+                              <span className="text-zinc-400">Тренировки в среднем</span><span className="text-right font-bold text-zinc-200">+{kbjuPreview.trainingCalories} ккал</span>
+                              <span className="text-zinc-400">База без шагов</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.baseMaintenance} ккал</span>
                               <span className="text-zinc-400">Обычные шаги</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.usualSteps}</span>
-                              <span className="text-zinc-400">Шаги в норме</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.stepCalories > 0 ? `+${kbjuPreview.stepCalories}` : kbjuPreview.stepCalories} ккал</span>
+                              <span className="text-zinc-400">Шаги в норме</span><span className="text-right font-bold text-zinc-200">+{kbjuPreview.usualStepCalories} ккал</span>
                               <span className="text-zinc-400">Норма (TDEE)</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.maintenance} ккал</span>
                               <span className="text-zinc-400">Цель калорий</span><span className="text-right font-bold text-emerald-400">{kbjuPreview.calories} ккал</span>
                               <span className="text-zinc-400">Белок</span><span className="text-right font-bold text-indigo-400">{kbjuPreview.protein} г</span>
