@@ -290,7 +290,7 @@ body::before {
   box-shadow: var(--card-shadow) !important;
 }
 
-.section-card {
+.app-shell .section-card {
   position: relative;
   border-top-color: transparent !important;
 }
@@ -300,34 +300,29 @@ body::before {
   z-index: 2;
   top: 0;
   left: 12px;
-  display: inline-flex;
+  right: 18px;
+  display: flex;
   align-items: center;
-  min-height: 20px;
+  min-height: 22px;
   margin: 0;
   padding: 0;
   transform: translateY(-50%);
-  color: var(--text-muted) !important;
-  font-size: 0.75rem !important;
+  color: var(--accent-light) !important;
+  font-size: 0.8125rem !important;
   line-height: 1.1;
+  white-space: nowrap;
 }
 
-/* Верхний бордер продолжается только после подписи, поэтому линия не проходит под текстом. */
-.section-card::after {
+/* Линия — часть заголовка и начинается только после фактической ширины текста. */
+.section-legend::after {
   content: "";
-  position: absolute;
-  z-index: 1;
-  top: -1px;
-  right: 18px;
-  left: var(--section-legend-cut);
+  flex: 1;
+  min-width: 12px;
   height: 1px;
+  margin-left: 10px;
   background: var(--line);
   pointer-events: none;
 }
-
-.calorie-overview { --section-legend-cut: 150px; }
-.body-metrics-card { --section-legend-cut: 142px; }
-.water-card { --section-legend-cut: 78px; }
-.meal-composer { --section-legend-cut: 174px; }
 
 .section-legend::before { display: none; }
 

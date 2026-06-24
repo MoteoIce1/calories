@@ -2275,7 +2275,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                   )}
 
                   {blocks.bodyMetrics && (
-                    <div className="body-metrics-card section-card card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
+                    <div className="section-card card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
                       <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Показатели тела</h2>
                       <div className="metric-date-nav flex items-center w-full min-h-14 bg-zinc-900 rounded-2xl border border-zinc-800/70 p-1">
                         <button
@@ -2288,7 +2288,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                           className="btn-active h-11 w-14 shrink-0 rounded-xl text-zinc-400 flex items-center justify-center"
                           aria-label="Предыдущий день"
                         >
-                          <IconChevronLeft className="w-5 h-5" />
+                          <IconChevronLeft className="w-7 h-7" />
                         </button>
                         <div className="relative flex-1 self-stretch flex items-center justify-center">
                           <span className="text-sm font-bold text-zinc-200">{displayDate(currentDate)}</span>
@@ -2305,7 +2305,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                           className="btn-active h-11 w-14 shrink-0 rounded-xl text-zinc-400 flex items-center justify-center disabled:opacity-20"
                           aria-label="Следующий день"
                         >
-                          <IconChevronRight className="w-5 h-5" />
+                          <IconChevronRight className="w-7 h-7" />
                         </button>
                       </div>
                       <div className="grid grid-cols-4 gap-2">
