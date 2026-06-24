@@ -292,19 +292,19 @@ body::before {
 
 .section-card {
   position: relative;
-  margin-top: 24px !important;
 }
 
 .section-legend {
   position: absolute;
   z-index: 2;
-  top: -22px;
+  top: 0;
   left: 12px;
   display: inline-flex;
   align-items: center;
   min-height: 18px;
   margin: 0;
   padding: 0;
+  transform: translateY(-50%);
   line-height: 1;
 }
 
