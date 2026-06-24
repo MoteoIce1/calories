@@ -43,6 +43,14 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       { key: 'steps', label: 'Шаги', hint: 'шаги и калории от ходьбы' },
       { key: 'workout', label: 'Силовая тренировка', hint: 'отметка тренировки' },
       { key: 'water', label: 'Вода', hint: 'учёт выпитой воды' },
+      { key: 'bodyMetrics', label: 'Показатели тела', hint: 'вес, жир, БЖМ и масса жира' },
+    ];
+
+    const DAILY_BODY_METRICS = [
+      { key: 'weight', label: 'Вес', unit: 'кг', valueClass: 'text-lime-300' },
+      { key: 'fatPercent', label: 'Жир', unit: '%', valueClass: 'text-red-300' },
+      { key: 'leanMass', label: 'БЖМ', unit: 'кг', valueClass: 'text-sky-300' },
+      { key: 'fatMass', label: 'Жир кг', unit: 'кг', valueClass: 'text-amber-300' },
     ];
 
     const DEFAULT_PROFILE = { sex: 'male', age: '', height: '', weight: '', activity: '1.375', mode: 'manual', deficit: 500 };
@@ -1183,7 +1191,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const waterGoal = Number(activeGoals.waterGoal) || 2500;
       const waterProgress = Math.min(100, (todayWater / (waterGoal || 1)) * 100);
       const blocks = settings.blocks || DEFAULT_SETTINGS.blocks;
-      // Вес для расчёта КБЖУ берём из последних замеров в «Прогрессе», если они есть.
+      // Вес для расчёта КБЖУ берём из последних показателей в дневнике, если они есть.
       const measuredWeight = (() => {
         const ds = Object.keys(dailyMetrics).filter(d => dailyMetrics[d]?.weight).sort();
         return ds.length ? Number(dailyMetrics[ds[ds.length - 1]].weight) : null;
@@ -2265,6 +2273,39 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                   </div>
                   )}
 
+                  {blocks.bodyMetrics && (
+                    <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h2 className="text-sm font-bold text-zinc-100">Показатели тела</h2>
+                          <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mt-1">Вес, жир, БЖМ · за выбранный день</p>
+                        </div>
+                        <span className="shrink-0 text-[10px] font-bold text-zinc-500">{displayDate(currentDate)}</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {DAILY_BODY_METRICS.map((metric) => (
+                          <label key={metric.key} className="bg-[#27272a] rounded-2xl p-3 border border-zinc-700/50 transition-colors focus-within:border-emerald-500">
+                            <span className="block text-[9px] text-zinc-400 uppercase font-bold tracking-widest mb-1">{metric.label}</span>
+                            <div className="flex items-baseline gap-1">
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.1"
+                                min="0"
+                                aria-label={`${metric.label}, ${metric.unit}`}
+                                className={`min-w-0 w-full bg-transparent text-lg font-bold outline-none ${metric.valueClass}`}
+                                value={dailyMetrics[currentDate]?.[metric.key] ?? ''}
+                                onChange={(e) => handleUpdateMetrics(metric.key, e.target.value)}
+                                onFocus={(e) => e.target.select()}
+                              />
+                              <span className="shrink-0 text-[10px] text-zinc-500 font-bold">{metric.unit}</span>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {blocks.water && (
                     <div className="water-card card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
                       <div className="flex justify-between items-end mb-3">
@@ -2414,38 +2455,11 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                       <div className="w-10 h-10 shrink-0 rounded-2xl bg-amber-400/15 flex items-center justify-center"><IconTimer className="w-5 h-5 text-amber-400" /></div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-amber-100">Добавьте замеры (талия и др.) и фото</p>
-                        <p className="text-xs text-amber-200/70 mt-1">{latestBodyDate ? `Последняя запись была ${displayDate(latestBodyDate).toLowerCase()}.` : 'Замеров пока нет.'} Фиксируйте талию, вес и фото раз в 2 недели — по ним считается прогресс и споры.</p>
+                        <p className="text-xs text-amber-200/70 mt-1">{latestBodyDate ? `Последняя запись была ${displayDate(latestBodyDate).toLowerCase()}.` : 'Замеров пока нет.'} Фиксируйте обхваты и фото раз в 2 недели — так будет проще видеть изменения.</p>
                       </div>
                       <button type="button" onClick={dismissBodyReminder} className="btn-active shrink-0 text-[10px] font-bold text-amber-100/70 bg-amber-950/40 rounded-xl px-3 py-2">Позже</button>
                     </div>
                   )}
-
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <h2 className="text-sm font-bold text-zinc-100">Показатели тела</h2>
-                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mt-1">Вес, жир, БЖМ</p>
-                      </div>
-                      <div className="shrink-0 flex items-center bg-zinc-900 rounded-2xl border border-zinc-800/70 p-1">
-                        <button type="button" onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() - 1); setCurrentDate(getLocalDateString(d)); }} className="btn-active p-2 text-zinc-400"><IconChevronLeft className="w-4 h-4" /></button>
-                        <div className="relative px-2">
-                          <span className="text-xs font-bold text-zinc-200">{displayDate(currentDate)}</span>
-                          <input type="date" className="absolute inset-0 opacity-0" value={currentDate} max={getLocalDateString(new Date())} onChange={(e) => { if(e.target.value) setCurrentDate(e.target.value); }} />
-                        </div>
-                        <button type="button" onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() + 1); setCurrentDate(getLocalDateString(d)); }} disabled={currentDate === getLocalDateString(new Date())} className="btn-active p-2 text-zinc-400 disabled:opacity-20"><IconChevronRight className="w-4 h-4" /></button>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-4 gap-2">
-                      {['weight', 'fatPercent', 'leanMass', 'fatMass'].map((field) => (
-                        <div key={field} className="bg-[#27272a] rounded-xl p-2 flex flex-col items-center border border-zinc-700/50">
-                          <span className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest mb-1 text-center leading-tight">
-                            {field === 'weight' ? 'Вес' : field === 'fatPercent' ? 'Жир %' : field === 'leanMass' ? 'БЖМ' : 'Жир кг'}
-                          </span>
-                          <input type="number" step="0.1" className="w-full bg-transparent text-center text-sm font-bold text-zinc-200 outline-none" value={dailyMetrics[currentDate]?.[field] || ''} onChange={(e) => handleUpdateMetrics(field, e.target.value)} onFocus={(e) => e.target.select()} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
 
                   <div className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex items-center justify-between gap-3">
                     <div>
@@ -2675,9 +2689,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     <div className="grid grid-cols-3 gap-3">
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ВОЗРАСТ</span><input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={profileData.age} onChange={(e) => handleProfileChange('age', e.target.value)} onFocus={(e) => e.target.select()} /></div>
                       <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">РОСТ, СМ</span><input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={profileData.height} onChange={(e) => handleProfileChange('height', e.target.value)} onFocus={(e) => e.target.select()} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ВЕС, КГ</span><input type="number" inputMode="decimal" step="0.1" disabled={measuredWeight != null} title={measuredWeight != null ? 'Берётся из замеров в «Прогрессе»' : undefined} className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors disabled:opacity-70" value={measuredWeight != null ? measuredWeight : profileData.weight} onChange={(e) => handleProfileChange('weight', e.target.value)} onFocus={(e) => e.target.select()} /></div>
+                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ВЕС, КГ</span><input type="number" inputMode="decimal" step="0.1" disabled={measuredWeight != null} title={measuredWeight != null ? 'Берётся из показателей в «Дневнике»' : undefined} className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors disabled:opacity-70" value={measuredWeight != null ? measuredWeight : profileData.weight} onChange={(e) => handleProfileChange('weight', e.target.value)} onFocus={(e) => e.target.select()} /></div>
                     </div>
-                    {measuredWeight != null && <p className="text-[10px] text-zinc-600 leading-relaxed">Вес берётся из последних замеров в «Прогрессе» ({measuredWeight} кг). Добавляйте замеры там — он обновится автоматически.</p>}
+                    {measuredWeight != null && <p className="text-[10px] text-zinc-600 leading-relaxed">Вес берётся из последних показателей в «Дневнике» ({measuredWeight} кг). Он обновляется автоматически.</p>}
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-2">УРОВЕНЬ АКТИВНОСТИ</span>
                       <div className="flex flex-col gap-2">
@@ -2763,7 +2777,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     <p className="text-[11px] text-zinc-500 leading-relaxed">По умолчанию включены все блоки. Отключите лишние — они исчезнут из дневника, но данные сохранятся.</p>
                     <div className="space-y-2">
                       {TOGGLEABLE_BLOCKS.map(b => (
-                        <button key={b.key} type="button" onClick={() => toggleBlock(b.key)} className="btn-active w-full flex items-center justify-between gap-3 bg-[#27272a] rounded-xl p-3 border border-zinc-700/30 text-left transition-all">
+                        <button key={b.key} type="button" role="switch" aria-checked={!!blocks[b.key]} onClick={() => toggleBlock(b.key)} className="btn-active w-full flex items-center justify-between gap-3 bg-[#27272a] rounded-xl p-3 border border-zinc-700/30 text-left transition-all">
                           <div className="min-w-0">
                             <span className="text-sm font-bold text-zinc-200">{b.label}</span>
                             <span className="block text-[10px] text-zinc-500 mt-0.5">{b.hint}</span>
