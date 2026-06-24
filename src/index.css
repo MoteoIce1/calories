@@ -26,6 +26,7 @@
   --accent-soft: rgba(163, 230, 53, 0.12);
   --accent-light: #d9f99d;
   --accent-ink: #0a0a0b;
+  --section-heading: #facc15;
   --glow: rgba(163, 230, 53, 0.06);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -37,6 +38,7 @@
   --accent-soft: rgba(56, 189, 248, 0.13);
   --accent-light: #bae6fd;
   --accent-ink: #06283a;
+  --section-heading: #fcd34d;
   --glow: rgba(56, 189, 248, 0.08);
 }
 
@@ -47,6 +49,7 @@
   --accent-soft: rgba(167, 139, 250, 0.14);
   --accent-light: #ddd6fe;
   --accent-ink: #1a1038;
+  --section-heading: #fcd34d;
   --glow: rgba(167, 139, 250, 0.08);
 }
 
@@ -76,6 +79,7 @@
   --accent-soft: rgba(14, 165, 233, 0.12);
   --accent-light: #38bdf8;
   --accent-ink: #ffffff;
+  --section-heading: #a16207;
   --glow: rgba(14, 165, 233, 0.10);
 }
 
@@ -307,7 +311,7 @@ body::before {
   margin: 0;
   padding: 0;
   transform: translateY(-50%);
-  color: var(--accent-light) !important;
+  color: var(--section-heading) !important;
   font-size: 0.8125rem !important;
   line-height: 1.1;
   white-space: nowrap;
@@ -319,7 +323,7 @@ body::before {
   flex: 1;
   min-width: 12px;
   height: 1px;
-  margin-left: 4px;
+  margin-left: 1px;
   background: var(--line);
   pointer-events: none;
 }
