@@ -47,10 +47,10 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
     ];
 
     const DAILY_BODY_METRICS = [
-      { key: 'weight', label: 'Вес', unit: 'кг', valueClass: 'text-lime-300' },
-      { key: 'fatPercent', label: 'Жир', unit: '%', valueClass: 'text-red-300' },
-      { key: 'leanMass', label: 'БЖМ', unit: 'кг', valueClass: 'text-sky-300' },
-      { key: 'fatMass', label: 'Жир кг', unit: 'кг', valueClass: 'text-amber-300' },
+      { key: 'weight', label: 'Вес' },
+      { key: 'fatPercent', label: 'Жир %' },
+      { key: 'leanMass', label: 'БЖМ' },
+      { key: 'fatMass', label: 'Жир кг' },
     ];
 
     const DEFAULT_PROFILE = { sex: 'male', age: '', height: '', weight: '', activity: '1.375', mode: 'manual', deficit: 500 };
@@ -2274,33 +2274,37 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                   )}
 
                   {blocks.bodyMetrics && (
-                    <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
+                    <div className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
                           <h2 className="text-sm font-bold text-zinc-100">Показатели тела</h2>
-                          <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mt-1">Вес, жир, БЖМ · за выбранный день</p>
+                          <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mt-1">Вес, жир, БЖМ</p>
                         </div>
-                        <span className="shrink-0 text-[10px] font-bold text-zinc-500">{displayDate(currentDate)}</span>
+                        <div className="shrink-0 flex items-center bg-zinc-900 rounded-2xl border border-zinc-800/70 p-1">
+                          <button type="button" onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() - 1); setCurrentDate(getLocalDateString(d)); }} className="btn-active p-2 text-zinc-400" aria-label="Предыдущий день"><IconChevronLeft className="w-4 h-4" /></button>
+                          <div className="relative px-2">
+                            <span className="text-xs font-bold text-zinc-200">{displayDate(currentDate)}</span>
+                            <input type="date" aria-label="Дата показателей тела" className="absolute inset-0 opacity-0 cursor-pointer" value={currentDate} max={getLocalDateString(new Date())} onChange={(e) => { if(e.target.value) setCurrentDate(e.target.value); }} />
+                          </div>
+                          <button type="button" onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() + 1); setCurrentDate(getLocalDateString(d)); }} disabled={currentDate === getLocalDateString(new Date())} className="btn-active p-2 text-zinc-400 disabled:opacity-20" aria-label="Следующий день"><IconChevronRight className="w-4 h-4" /></button>
+                        </div>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-4 gap-2">
                         {DAILY_BODY_METRICS.map((metric) => (
-                          <label key={metric.key} className="bg-[#27272a] rounded-2xl p-3 border border-zinc-700/50 transition-colors focus-within:border-emerald-500">
-                            <span className="block text-[9px] text-zinc-400 uppercase font-bold tracking-widest mb-1">{metric.label}</span>
-                            <div className="flex items-baseline gap-1">
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                step="0.1"
-                                min="0"
-                                aria-label={`${metric.label}, ${metric.unit}`}
-                                className={`min-w-0 w-full bg-transparent text-lg font-bold outline-none ${metric.valueClass}`}
-                                value={dailyMetrics[currentDate]?.[metric.key] ?? ''}
-                                onChange={(e) => handleUpdateMetrics(metric.key, e.target.value)}
-                                onFocus={(e) => e.target.select()}
-                              />
-                              <span className="shrink-0 text-[10px] text-zinc-500 font-bold">{metric.unit}</span>
-                            </div>
-                          </label>
+                          <div key={metric.key} className="bg-[#27272a] rounded-xl p-2 flex flex-col items-center border border-zinc-700/50 focus-within:border-emerald-500">
+                            <label htmlFor={`daily-metric-${metric.key}`} className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest mb-1 text-center leading-tight">{metric.label}</label>
+                            <input
+                              id={`daily-metric-${metric.key}`}
+                              type="number"
+                              inputMode="decimal"
+                              step="0.1"
+                              min="0"
+                              className="w-full bg-transparent text-center text-sm font-bold text-zinc-200 outline-none"
+                              value={dailyMetrics[currentDate]?.[metric.key] ?? ''}
+                              onChange={(e) => handleUpdateMetrics(metric.key, e.target.value)}
+                              onFocus={(e) => e.target.select()}
+                            />
+                          </div>
                         ))}
                       </div>
                     </div>
