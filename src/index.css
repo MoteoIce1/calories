@@ -209,7 +209,7 @@ body::before {
 
 .calorie-overview {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   padding: clamp(18px, 4vw, 26px) !important;
   background: var(--surface) !important;
   border-color: var(--line) !important;
@@ -297,6 +297,7 @@ body::before {
 .section-legend {
   position: absolute;
   z-index: 2;
+  isolation: isolate;
   top: 0;
   left: 12px;
   display: inline-flex;
@@ -306,6 +307,19 @@ body::before {
   padding: 0;
   transform: translateY(-50%);
   line-height: 1;
+}
+
+/* Убираем только участок линии под подписью, без фоновой плашки у текста. */
+.section-legend::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: -6px;
+  right: -6px;
+  height: 2px;
+  background: var(--bg-deep);
+  pointer-events: none;
 }
 
 .metric-date-nav {

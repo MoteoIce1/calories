@@ -2207,7 +2207,8 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                   </div>
 
                   {(blocks.calories || blocks.steps || blocks.workout || blocks.protein || blocks.fats || blocks.carbs) && (
-                  <div className="calorie-overview card-enter bg-[#18181b] rounded-3xl p-5 shadow-xl border border-zinc-800/50">
+                  <div className="calorie-overview section-card card-enter bg-[#18181b] rounded-3xl p-5 shadow-xl border border-zinc-800/50">
+                    <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest">КБЖУ и активность</h2>
                     {blocks.calories && (<>
                     <div className="flex justify-between items-end mb-3">
                       <div>
@@ -2393,7 +2394,8 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                       <input ref={gramsInputRef} id="grams-input" type="number" step="0.1" inputMode="decimal" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-base border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => e.target.select()} required />
                       <button type="submit" disabled={!selectedFoodId || !gramsInput} className="btn-active w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-35 disabled:shadow-none" aria-label="Добавить продукт"><IconPlus className="w-6 h-6 text-white" /></button>
                     </div>
-                    <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-between gap-3" onClick={(e) => e.stopPropagation()}>
+                      <p className="min-w-0 text-[10px] text-zinc-500 leading-tight">Не знаете КБЖУ? ИИ поможет с рецептом.</p>
                       <button type="button" onClick={() => { setShowMealAiModal(true); setMealAiText(''); setMealAiError(''); setMealAiItems(null); }} className="btn-active shrink-0 flex items-center gap-1 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all"><IconSparkles className="w-3.5 h-3.5" /> Рецепт ИИ</button>
                     </div>
                   </form>
