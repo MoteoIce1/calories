@@ -329,7 +329,7 @@ body::before {
 
 .metric-date-nav button {
   min-width: 56px;
-  min-height: 48px;
+  min-height: 2.75rem;
 }
 
 .meal-composer.section-card {
