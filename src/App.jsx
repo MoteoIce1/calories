@@ -98,6 +98,18 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
     };
     const DEFAULT_SETTINGS = { fontScale: 'normal', theme: 'lime', blocks: TOGGLEABLE_BLOCKS.reduce((acc, b) => ({ ...acc, [b.key]: true }), {}) };
     const WATER_QUICK = [100, 300, 500];
+    const NON_SELECTABLE_INPUT_TYPES = [
+      'button',
+      'checkbox',
+      'color',
+      'date',
+      'file',
+      'hidden',
+      'radio',
+      'range',
+      'reset',
+      'submit',
+    ];
 
     // Темы оформления (выбираются в профиле). bg/dot — для превью-чипа.
     const THEMES = [
@@ -1137,6 +1149,14 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         setSettings(next);
         if (profileDoc) profileDoc.set({ settings: next }, { merge: true }).catch(() => {});
       };
+      const handleEditableFieldFocus = (event) => {
+        const field = event.target;
+        const isTextInput = field instanceof HTMLInputElement
+          && !NON_SELECTABLE_INPUT_TYPES.includes(field.type);
+        const isTextArea = field instanceof HTMLTextAreaElement;
+        if ((!isTextInput && !isTextArea) || field.disabled || field.readOnly) return;
+        field.select();
+      };
       const handleProfileChange = (field, value) => saveProfileData({ ...profileData, [field]: value });
       const handleUsualStepsChange = (value) => {
         const usualSteps = value === '' ? '' : getUsualSteps(value);
@@ -1961,7 +1981,10 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
       if (!uid) {
         return (
-          <div className="app-shell flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 items-center justify-center px-8 relative overflow-hidden">
+          <div
+            className="app-shell flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 items-center justify-center px-8 relative overflow-hidden"
+            onFocusCapture={handleEditableFieldFocus}
+          >
             <div className="w-full">
               <div className="flex flex-col items-center mb-8">
                 <div className="w-16 h-16 rounded-2xl bg-emerald-600/20 border border-emerald-700/40 flex items-center justify-center mb-4"><IconBowl className="w-8 h-8 text-amber-400" /></div>
@@ -2299,7 +2322,10 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       }
 
       return (
-        <div className="app-shell flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900 relative overflow-hidden">
+        <div
+          className="app-shell flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900 relative overflow-hidden"
+          onFocusCapture={handleEditableFieldFocus}
+        >
             <header className="app-header shrink-0 pt-8 px-4 pb-4 bg-[#09090b] flex justify-between items-center z-10">
               <div>
                 <h1 key={activeTab} className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : activeTab === 'progress' ? 'Прогресс' : activeTab === 'profile' ? 'Профиль' : activeTab === 'social' ? 'Друзья и споры' : 'База'}</h1>
