@@ -125,9 +125,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       return Number.isFinite(steps) ? Math.max(0, Math.round(steps)) : DEFAULT_USUAL_STEPS;
     }
 
+    function calculateStepCalories(steps) {
+      return Math.round(getUsualSteps(steps) * STEP_CALORIE_ADJUSTMENT);
+    }
+
     function calculateStepCalorieAdjustment(steps, usualSteps) {
-      const stepCalories = (count) => Math.round(getUsualSteps(count) * STEP_CALORIE_ADJUSTMENT);
-      return stepCalories(steps) - stepCalories(usualSteps);
+      return calculateStepCalories(steps) - calculateStepCalories(usualSteps);
     }
 
     // Основа нормы: BMR, базовый NEAT и средняя недельная нагрузка; шаги добавляются отдельно.
@@ -138,7 +141,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const activityLevel = ACTIVITY_LEVELS.find(level => level.key === p.activity)
         || ACTIVITY_LEVELS[0];
       const usualSteps = getUsualSteps(p.usualSteps);
-      const usualStepCalories = Math.round(usualSteps * STEP_CALORIE_ADJUSTMENT);
+      const usualStepCalories = calculateStepCalories(usualSteps);
       const baseMaintenance = Math.round(
         bmr * activityLevel.neatFactor + activityLevel.trainingCalories,
       );
@@ -666,10 +669,38 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         }, 300);
       };
 
-      const handleDraftGoalChange = (field, val) => setDraftGoals({ ...draftGoals, [field]: val });
       // Дефицит ↔ цель калорий ↔ норма связаны: цель = норма − дефицит.
       // Каждое поле — обычный редактируемый ввод (можно очищать), при числе пересчитывается связанное.
       const goalNum = (v) => (v === '' || v === null || v === undefined || isNaN(parseFloat(v))) ? null : parseFloat(v);
+      // Активность уже находится в норме, поэтому смена базы шагов меняет только шаговую часть КБЖУ.
+      const applyBaseStepsToGoals = (currentGoals, baseSteps) => {
+        const previousBaseSteps = getUsualSteps(currentGoals.baseSteps);
+        const nextBaseSteps = getUsualSteps(baseSteps);
+        const stepCaloriesDelta = calculateStepCalorieAdjustment(nextBaseSteps, previousBaseSteps);
+        const maintenance = goalNum(currentGoals.maintenance);
+        const calories = goalNum(currentGoals.calories);
+        const carbs = goalNum(currentGoals.carbs);
+        return {
+          ...currentGoals,
+          baseSteps: nextBaseSteps,
+          ...(maintenance === null
+            ? {}
+            : { maintenance: Math.max(0, Math.round(maintenance + stepCaloriesDelta)) }),
+          ...(calories === null
+            ? {}
+            : { calories: Math.max(0, Math.round(calories + stepCaloriesDelta)) }),
+          ...(carbs === null
+            ? {}
+            : { carbs: Math.max(0, Math.round(carbs + stepCaloriesDelta / 4)) }),
+        };
+      };
+      const handleDraftGoalChange = (field, val) => {
+        if (field === 'baseSteps' && val !== '') {
+          setDraftGoals(applyBaseStepsToGoals(draftGoals, val));
+          return;
+        }
+        setDraftGoals({ ...draftGoals, [field]: val });
+      };
       // edited-поле принимает число (или сырую строку для промежуточного «-»); связанное пересчитываем только при числе.
       const editedVal = (val, parsed) => val === '' ? '' : (parsed === null ? val : parsed);
       const handleCaloriesChange = (val) => {
@@ -1161,10 +1192,10 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const handleUsualStepsChange = (value) => {
         const usualSteps = value === '' ? '' : getUsualSteps(value);
         const nextProfile = { ...profileData, usualSteps };
-        const nextGoals = { ...goals, baseSteps: getUsualSteps(usualSteps) };
+        const nextGoals = applyBaseStepsToGoals(goals, usualSteps);
         setProfileData(nextProfile);
         setGoals(nextGoals);
-        setDraftGoals({ ...draftGoals, baseSteps: nextGoals.baseSteps });
+        setDraftGoals(nextGoals);
         if (profileDoc) {
           profileDoc.set({ profileData: nextProfile, goals: nextGoals }, { merge: true }).catch(() => {});
         }
