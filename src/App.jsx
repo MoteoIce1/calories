@@ -53,7 +53,19 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       { key: 'fatMass', label: 'Жир кг' },
     ];
 
-    const DEFAULT_PROFILE = { sex: 'male', age: '', height: '', weight: '', activity: '1.375', mode: 'manual', deficit: 500 };
+    const DEFAULT_ACTIVITY_FACTOR = '1.2';
+    const DEFAULT_USUAL_STEPS = 2000;
+    const STEP_CALORIE_ADJUSTMENT = 0.04;
+    const DEFAULT_PROFILE = {
+      sex: 'male',
+      age: '',
+      height: '',
+      weight: '',
+      activity: DEFAULT_ACTIVITY_FACTOR,
+      usualSteps: DEFAULT_USUAL_STEPS,
+      mode: 'manual',
+      deficit: 500,
+    };
     const DEFAULT_SETTINGS = { fontScale: 'normal', theme: 'lime', blocks: TOGGLEABLE_BLOCKS.reduce((acc, b) => ({ ...acc, [b.key]: true }), {}) };
     const WATER_QUICK = [100, 300, 500];
 
@@ -66,18 +78,40 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
     ];
     const THEME_META_COLOR = { lime: '#0a0a0b', sky: '#0a0a0b', violet: '#0a0a0b', light: '#eef3f8' };
 
-    // Формула Миффлина — Сан-Жеора: BMR → TDEE (норма) → цель с дефицитом, затем БЖУ от веса.
+    function getUsualSteps(value) {
+      const steps = Number(value);
+      return Number.isFinite(steps) ? Math.max(0, Math.round(steps)) : DEFAULT_USUAL_STEPS;
+    }
+
+    function calculateStepCalorieAdjustment(steps, usualSteps) {
+      return Math.round((getUsualSteps(steps) - getUsualSteps(usualSteps)) * STEP_CALORIE_ADJUSTMENT);
+    }
+
+    // Множитель активности учитывает тренировки, а шаги корректируют норму относительно базовых 2 000.
     function computeKbju(p) {
       const w = parseFloat(p.weight), h = parseFloat(p.height), age = parseFloat(p.age);
       if (!w || !h || !age) return null;
       const bmr = 10 * w + 6.25 * h - 5 * age + (p.sex === 'female' ? -161 : 5);
-      const maintenance = Math.round(bmr * (parseFloat(p.activity) || 1.375));
+      const activityFactor = parseFloat(p.activity) || Number(DEFAULT_ACTIVITY_FACTOR);
+      const usualSteps = getUsualSteps(p.usualSteps);
+      const stepCalories = calculateStepCalorieAdjustment(usualSteps, DEFAULT_USUAL_STEPS);
+      const maintenance = Math.round(bmr * activityFactor + stepCalories);
       const deficit = Number(p.deficit) || 0;
       const calories = Math.max(0, maintenance - deficit);
       const protein = Math.round(w * 2);
       const fats = Math.round(w * 1);
       const carbs = Math.max(0, Math.round((calories - protein * 4 - fats * 9) / 4));
-      return { maintenance, calories, protein, fats, carbs };
+      return {
+        bmr: Math.round(bmr),
+        activityFactor,
+        usualSteps,
+        stepCalories,
+        maintenance,
+        calories,
+        protein,
+        fats,
+        carbs,
+      };
     }
 
     // Плавный «накрут» числа при изменении значения (count-up).
@@ -102,7 +136,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const [showReportView, setShowReportView] = useState(false);
       const [isPrinting, setIsPrinting] = useState(false);
       
-      const defaultGoals = { calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: 6000, maintenance: 2300, targetFat: 12, waterGoal: 2500, deficit: 500 };
+      const defaultGoals = { calories: 1800, protein: 150, fats: 60, carbs: 150, baseSteps: DEFAULT_USUAL_STEPS, maintenance: 2300, targetFat: 12, waterGoal: 2500, deficit: 500 };
       const [goals, setGoals] = useState(defaultGoals);
       const [draftGoals, setDraftGoals] = useState(defaultGoals);
       const [dailyGoals, setDailyGoals] = useState({});
@@ -117,9 +151,17 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const [authError, setAuthError] = useState('');
       const [authInfo, setAuthInfo] = useState('');
       const [authBusy, setAuthBusy] = useState(false);
-      // Онбординг при регистрации: собираем данные для расчёта КБЖУ и минимум шагов.
+      // Онбординг при регистрации: собираем данные для расчёта КБЖУ и привычное число шагов.
       const [showOnboarding, setShowOnboarding] = useState(false);
-      const [onboardDraft, setOnboardDraft] = useState({ sex: 'male', age: '', height: '', weight: '', activity: '1.375', deficit: 500, minSteps: 6000 });
+      const [onboardDraft, setOnboardDraft] = useState({
+        sex: 'male',
+        age: '',
+        height: '',
+        weight: '',
+        activity: DEFAULT_ACTIVITY_FACTOR,
+        deficit: 500,
+        usualSteps: DEFAULT_USUAL_STEPS,
+      });
       const [deleteBusy, setDeleteBusy] = useState(false);
 
       const [sharedFoods, setSharedFoods] = useState([]);   // общая база (shared/foods)
@@ -252,8 +294,16 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         try {
           if (authMode === 'register') {
             await auth.createUserWithEmailAndPassword(authEmail.trim(), authPass);
-            // Новый пользователь → онбординг (пол/возраст/рост/вес/активность/дефицит/минимум шагов).
-            setOnboardDraft({ sex: 'male', age: '', height: '', weight: '', activity: '1.375', deficit: 500, minSteps: 6000 });
+            // Новый пользователь указывает исходные данные и обычный уровень повседневной активности.
+            setOnboardDraft({
+              sex: 'male',
+              age: '',
+              height: '',
+              weight: '',
+              activity: DEFAULT_ACTIVITY_FACTOR,
+              deficit: 500,
+              usualSteps: DEFAULT_USUAL_STEPS,
+            });
             setShowOnboarding(true);
           } else {
             await auth.signInWithEmailAndPassword(authEmail.trim(), authPass);
@@ -1051,6 +1101,17 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         if (profileDoc) profileDoc.set({ settings: next }, { merge: true }).catch(() => {});
       };
       const handleProfileChange = (field, value) => saveProfileData({ ...profileData, [field]: value });
+      const handleUsualStepsChange = (value) => {
+        const usualSteps = value === '' ? '' : getUsualSteps(value);
+        const nextProfile = { ...profileData, usualSteps };
+        const nextGoals = { ...goals, baseSteps: getUsualSteps(usualSteps) };
+        setProfileData(nextProfile);
+        setGoals(nextGoals);
+        setDraftGoals({ ...draftGoals, baseSteps: nextGoals.baseSteps });
+        if (profileDoc) {
+          profileDoc.set({ profileData: nextProfile, goals: nextGoals }, { merge: true }).catch(() => {});
+        }
+      };
       const toggleBlock = (key) => saveSettings({ ...settings, blocks: { ...settings.blocks, [key]: !settings.blocks[key] } });
       const setFontScale = (scale) => saveSettings({ ...settings, fontScale: scale });
       const setTheme = (theme) => saveSettings({ ...settings, theme });
@@ -1059,22 +1120,54 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const applyAutoKbju = () => {
         const res = computeKbju(effectiveProfile);
         if (!res) { alert('Заполните пол, возраст, рост и вес — по ним считается КБЖУ.'); return; }
-        setDraftGoals({ ...draftGoals, calories: res.calories, protein: res.protein, fats: res.fats, carbs: res.carbs, maintenance: res.maintenance, deficit: Number(effectiveProfile.deficit) || 0 });
+        const baseSteps = getUsualSteps(effectiveProfile.usualSteps);
+        setDraftGoals({
+          ...draftGoals,
+          calories: res.calories,
+          protein: res.protein,
+          fats: res.fats,
+          carbs: res.carbs,
+          maintenance: res.maintenance,
+          baseSteps,
+          deficit: Number(effectiveProfile.deficit) || 0,
+        });
         // Запоминаем вес из замеров и дату расчёта — чтобы раз в месяц напоминать о пересчёте.
         saveProfileData({ ...profileData, weight: effectiveProfile.weight, lastKbjuAt: getLocalDateString(new Date()) });
         setActiveTab('directory');
         setShowGoalModal(true);
       };
 
-      // Завершение онбординга: сохраняем профиль, считаем КБЖУ и ставим минимум шагов в цели.
+      // Завершение онбординга: сохраняем профиль, считаем КБЖУ и привычное число шагов в цели.
       const finishOnboarding = () => {
         const o = onboardDraft;
         if (!o.age || !o.height || !o.weight) { alert('Заполните возраст, рост и вес — по ним считается КБЖУ.'); return; }
         const today = getLocalDateString(new Date());
-        const p = { ...profileData, sex: o.sex, age: o.age, height: o.height, weight: o.weight, activity: o.activity, deficit: o.deficit, mode: 'auto', onboardedAt: today, lastKbjuAt: today };
+        const usualSteps = getUsualSteps(o.usualSteps);
+        const p = {
+          ...profileData,
+          sex: o.sex,
+          age: o.age,
+          height: o.height,
+          weight: o.weight,
+          activity: o.activity,
+          usualSteps,
+          deficit: o.deficit,
+          mode: 'auto',
+          onboardedAt: today,
+          lastKbjuAt: today,
+        };
         const kbju = computeKbju(p);
-        const baseSteps = Math.max(0, Math.round(Number(o.minSteps) || 6000));
-        const newGoals = { ...goals, baseSteps, ...(kbju ? { calories: kbju.calories, protein: kbju.protein, fats: kbju.fats, carbs: kbju.carbs, maintenance: kbju.maintenance, deficit: Number(o.deficit) || 0 } : {}) };
+        const autoGoals = kbju
+          ? {
+              calories: kbju.calories,
+              protein: kbju.protein,
+              fats: kbju.fats,
+              carbs: kbju.carbs,
+              maintenance: kbju.maintenance,
+              deficit: Number(o.deficit) || 0,
+            }
+          : {};
+        const newGoals = { ...goals, baseSteps: usualSteps, ...autoGoals };
         setProfileData(p); setGoals(newGoals); setDraftGoals(newGoals);
         if (profileDoc) profileDoc.set({ profileData: p, goals: newGoals }, { merge: true }).catch(() => {});
         setShowOnboarding(false);
@@ -1124,7 +1217,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         const rows = [headers.join(sep)];
         allExportDates.forEach(date => {
           const g = getEffectiveGoals(date);
-          const bSteps = g.baseSteps || 6000, bMaint = g.maintenance || 2300;
+          const bSteps = getUsualSteps(g.baseSteps), bMaint = g.maintenance || 2300;
           const logs = dailyLogs[date] || [];
           const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
           const pro = Math.round(logs.reduce((s, l) => s + (l.totalProtein || 0), 0));
@@ -1132,7 +1225,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
           const carb = Math.round(logs.reduce((s, l) => s + (l.totalCarbs || 0), 0));
           const stepsRaw = dailySteps[date] !== undefined ? dailySteps[date] : '';
           const stepsCalc = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
-          const burned = bMaint + Math.round((stepsCalc - bSteps) * 0.04);
+          const burned = bMaint + calculateStepCalorieAdjustment(stepsCalc, bSteps);
           const deficit = burned - cals;
           const m = dailyMetrics[date] || {};
           const workout = dailyWorkouts[date] ? 'да' : '';
@@ -1167,12 +1260,16 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       };
 
       const activeGoals = getEffectiveGoals(currentDate);
-      const baseStepsGoal = activeGoals.baseSteps || 6000;
+      const baseStepsGoal = getUsualSteps(activeGoals.baseSteps);
       const baseMaintenance = activeGoals.maintenance || 2300;
       
       const todaySteps = dailySteps[currentDate] !== undefined ? dailySteps[currentDate] : baseStepsGoal;
-      const extraCalories = Math.round((todaySteps - baseStepsGoal) * 0.04);
+      const extraCalories = calculateStepCalorieAdjustment(todaySteps, baseStepsGoal);
       const targetCalories = (Number(activeGoals.calories) || 0) + extraCalories;
+      const dailyCarbGoal = Math.max(
+        0,
+        (Number(activeGoals.carbs) || 0) + Math.round(extraCalories / 4),
+      );
 
       const currentDayLogs = dailyLogs[currentDate] || [];
       const totalCals = currentDayLogs.reduce((sum, log) => sum + (log.totalCalories || 0), 0);
@@ -1216,13 +1313,13 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         for (let i = 0; i < 7; i++) {
           const d = new Date(t); d.setDate(d.getDate() - i);
           const date = getLocalDateString(d);
-          const g = getEffectiveGoals(date); const bS = g.baseSteps || 6000, bM = g.maintenance || 2300;
+          const g = getEffectiveGoals(date); const bS = getUsualSteps(g.baseSteps), bM = g.maintenance || 2300;
           if (dailySteps[date] !== undefined) { stepSum += Number(dailySteps[date]) || 0; stepCnt++; }
           const logs = dailyLogs[date] || [];
           if (logs.length) {
             const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
             const steps = dailySteps[date] !== undefined ? dailySteps[date] : bS;
-            defSum += (bM + Math.round((steps - bS) * 0.04)) - cals; defCnt++;
+            defSum += (bM + calculateStepCalorieAdjustment(steps, bS)) - cals; defCnt++;
           }
         }
         // Серия: день засчитывается, если ФАКТИЧЕСКИЙ дефицит (с учётом шагов) достиг
@@ -1233,9 +1330,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
           const date = getLocalDateString(d); const logs = dailyLogs[date] || [];
           if (!logs.length) break;
           const g = getEffectiveGoals(date);
-          const bS2 = g.baseSteps || 6000, bM2 = g.maintenance || 2300;
+          const bS2 = getUsualSteps(g.baseSteps), bM2 = g.maintenance || 2300;
           const steps2 = dailySteps[date] !== undefined ? dailySteps[date] : bS2;
-          const burned2 = bM2 + Math.round((steps2 - bS2) * 0.04);
+          const burned2 = bM2 + calculateStepCalorieAdjustment(steps2, bS2);
           const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
           const targetDeficit = Number(g.deficit) || 0;
           if ((burned2 - cals) >= targetDeficit) streak++; else break;
@@ -1601,12 +1698,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
       filteredDatesForPdf.forEach(date => {
           const dayActiveGoals = getEffectiveGoals(date);
-          const bSteps = dayActiveGoals.baseSteps || 6000;
+          const bSteps = getUsualSteps(dayActiveGoals.baseSteps);
           const bMaint = dayActiveGoals.maintenance || 2300;
           const dayLogs = dailyLogs[date] || [];
           const dayCals = dayLogs.reduce((s, l) => s + (l.totalCalories || 0), 0);
           const daySteps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
-          const extraCals = Math.round((daySteps - bSteps) * 0.04);
+          const extraCals = calculateStepCalorieAdjustment(daySteps, bSteps);
           const dayBurned = bMaint + extraCals;
 
           totalPeriodCals += dayCals;
@@ -1631,7 +1728,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const stepsChartDates = allExportDates;
       const allSteps = stepsChartDates.map(date => {
         const g = getEffectiveGoals(date);
-        return dailySteps[date] !== undefined ? dailySteps[date] : (g.baseSteps || 6000);
+        return dailySteps[date] !== undefined ? dailySteps[date] : getUsualSteps(g.baseSteps);
       });
       const stepChartLabels = stepsChartDates.map(d => d.slice(5));
       const bodyEntriesForPdf = bodyEntries
@@ -1738,12 +1835,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         const wk = weekKey(date);
         if (!weeksMap[wk]) weeksMap[wk] = { cals: 0, deficit: 0, logged: 0, weights: [] };
         const g = getEffectiveGoals(date);
-        const bSteps = g.baseSteps || 6000, bMaint = g.maintenance || 2300;
+        const bSteps = getUsualSteps(g.baseSteps), bMaint = g.maintenance || 2300;
         const logs = dailyLogs[date] || [];
         if (logs.length) {
           const c = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
           const steps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
-          const burned = bMaint + Math.round((steps - bSteps) * 0.04);
+          const burned = bMaint + calculateStepCalorieAdjustment(steps, bSteps);
           weeksMap[wk].cals += c; weeksMap[wk].deficit += (burned - c); weeksMap[wk].logged += 1;
         }
         const w = dailyMetrics[date]?.weight;
@@ -1761,12 +1858,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       // --- Инсайты для PDF: лучшие дни, шаги, тренировки, недельный тренд ---
       const dayStats = filteredDatesForPdf.map(date => {
         const g = getEffectiveGoals(date);
-        const bSteps = g.baseSteps || 6000;
+        const bSteps = getUsualSteps(g.baseSteps);
         const bMaint = g.maintenance || 2300;
         const logs = dailyLogs[date] || [];
         const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
         const steps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
-        const burned = bMaint + Math.round((steps - bSteps) * 0.04);
+        const burned = bMaint + calculateStepCalorieAdjustment(steps, bSteps);
         return { date, cals, steps, burned, deficit: burned - cals, workout: !!dailyWorkouts[date] };
       });
       const bestDeficitDays = [...dayStats].sort((a, b) => b.deficit - a.deficit).slice(0, 3);
@@ -2092,7 +2189,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
               const dayPro = dayLogs.reduce((s, l) => s + (l.totalProtein || 0), 0);
               const dayFat = dayLogs.reduce((s, l) => s + (l.totalFats || 0), 0);
               const dayCarb = dayLogs.reduce((s, l) => s + (l.totalCarbs || 0), 0);
-              const dayBurned = (dayActiveGoals.maintenance || 2300) + Math.round(((dailySteps[date] || dayActiveGoals.baseSteps || 6000) - (dayActiveGoals.baseSteps || 6000)) * 0.04);
+              const dayBaseSteps = getUsualSteps(dayActiveGoals.baseSteps);
+              const daySteps = dailySteps[date] !== undefined ? dailySteps[date] : dayBaseSteps;
+              const dayBurned = (dayActiveGoals.maintenance || 2300) + calculateStepCalorieAdjustment(daySteps, dayBaseSteps);
               const m = dailyMetrics[date] || {};
               const mText = [ m.weight ? `Вес: ${m.weight} кг` : '', m.fatPercent ? `Жир: ${m.fatPercent}%` : '', m.leanMass ? `БЖМ: ${m.leanMass} кг` : '', m.fatMass ? `Жир: ${m.fatMass} кг` : '' ].filter(Boolean).join(' | ');
 
@@ -2266,7 +2365,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     <div className="macro-stack flex flex-col gap-3 mt-4 border-t border-zinc-800/50 pt-4">
                       {blocks.protein && <MacroBar label="Белок" current={totalPro} goal={activeGoals.protein} colorClass="text-indigo-400" bgClass="bg-indigo-500" />}
                       {blocks.fats && <MacroBar label="Жиры" current={totalFats} goal={activeGoals.fats} colorClass="text-amber-400" bgClass="bg-amber-500" />}
-                      {blocks.carbs && <MacroBar label="Углеводы" current={totalCarbs} goal={activeGoals.carbs} colorClass="text-blue-400" bgClass="bg-blue-500" />}
+                      {blocks.carbs && <MacroBar label="Углеводы" current={totalCarbs} goal={dailyCarbGoal} colorClass="text-blue-400" bgClass="bg-blue-500" />}
                       {blocks.protein && proteinPerKg !== null && (
                         <div className="flex items-center justify-between pt-1">
                           <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Белок на кг веса</span>
@@ -2748,6 +2847,20 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                         ))}
                       </div>
                     </div>
+                    <div>
+                      <label htmlFor="usual-steps" className="text-[9px] text-zinc-500 font-bold block mb-1">ОБЫЧНО ШАГОВ В ДЕНЬ</label>
+                      <input
+                        id="usual-steps"
+                        type="number"
+                        inputMode="numeric"
+                        min="0"
+                        className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors"
+                        value={profileData.usualSteps ?? DEFAULT_USUAL_STEPS}
+                        onChange={(e) => handleUsualStepsChange(e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                      />
+                      <p className="text-[10px] text-zinc-600 leading-relaxed mt-1.5">2&nbsp;000 — база формулы. Большее или меньшее привычное число шагов меняет норму; в дневнике дополнительно учитывается отклонение от привычного уровня.</p>
+                    </div>
                   </div>
 
                   {/* Расчёт КБЖУ */}
@@ -2769,6 +2882,10 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                           <div className="bg-[#27272a] rounded-2xl p-4 border border-zinc-700/30">
                             <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mb-3">Расчёт по формуле Миффлина</p>
                             <div className="grid grid-cols-2 gap-y-2 text-sm">
+                              <span className="text-zinc-400">Базовый обмен (BMR)</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.bmr} ккал</span>
+                              <span className="text-zinc-400">Активность</span><span className="text-right font-bold text-zinc-200">× {kbjuPreview.activityFactor}</span>
+                              <span className="text-zinc-400">Обычные шаги</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.usualSteps}</span>
+                              <span className="text-zinc-400">Шаги в норме</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.stepCalories > 0 ? `+${kbjuPreview.stepCalories}` : kbjuPreview.stepCalories} ккал</span>
                               <span className="text-zinc-400">Норма (TDEE)</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.maintenance} ккал</span>
                               <span className="text-zinc-400">Цель калорий</span><span className="text-right font-bold text-emerald-400">{kbjuPreview.calories} ккал</span>
                               <span className="text-zinc-400">Белок</span><span className="text-right font-bold text-indigo-400">{kbjuPreview.protein} г</span>
@@ -3268,7 +3385,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <label className="text-[9px] text-zinc-500 font-bold">Дефицит, ккал/день<input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 mt-1" value={onboardDraft.deficit} onChange={(e) => setOnboardDraft({ ...onboardDraft, deficit: e.target.value })} /></label>
-                      <label className="text-[9px] text-zinc-500 font-bold">Минимум шагов/день<input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 mt-1" value={onboardDraft.minSteps} onChange={(e) => setOnboardDraft({ ...onboardDraft, minSteps: e.target.value })} /></label>
+                      <label className="text-[9px] text-zinc-500 font-bold">Обычно шагов/день<input type="number" inputMode="numeric" min="0" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 mt-1" value={onboardDraft.usualSteps} onChange={(e) => setOnboardDraft({ ...onboardDraft, usualSteps: e.target.value })} /></label>
                     </div>
                     {(() => { const k = computeKbju({ ...onboardDraft }); return k ? <p className="text-[11px] text-emerald-400 font-bold text-center">Ваша норма ≈ {k.calories} ккал/день</p> : <p className="text-[10px] text-zinc-600 text-center">Заполните возраст, рост и вес — покажем норму.</p>; })()}
                     <button type="button" onClick={finishOnboarding} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all">Готово</button>
