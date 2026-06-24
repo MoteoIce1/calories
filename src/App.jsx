@@ -1539,9 +1539,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         ...favoriteFoods,
         ...foods.filter(f => !f.isFavorite).sort((a, b) => a.name.localeCompare(b.name, 'ru')),
       ];
-      // Нижний горизонтальный список — только НЕ избранные продукты, фильтруется по мере ввода в поиск.
-      const nonFavoriteFoods = foods.filter(f => !f.isFavorite).sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-      const mealListFoods = foodSearch.trim() ? searchFoodsByName(nonFavoriteFoods, foodSearch, 200) : nonFavoriteFoods;
+      // Поиск работает сразу в двух строках: среди избранного и по всей базе.
+      const favoriteMealFoods = foodSearch.trim() ? searchFoodsByName(favoriteFoods, foodSearch, 200) : favoriteFoods;
+      const allMealFoods = foodSearch.trim() ? searchFoodsByName(sortedFoods, foodSearch, 200) : sortedFoods;
       const selectedFood = selectedFoodId ? foods.find(f => f.id === selectedFoodId) : null;
       const sortedBodyEntries = [...bodyEntries].sort((a, b) => b.date.localeCompare(a.date));
       const bodyEntryOptions = [...bodyEntries].sort((a, b) => a.date.localeCompare(b.date));
@@ -2277,12 +2277,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     <div className="section-card card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
                       <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Показатели тела</h2>
                       <div className="metric-date-nav flex items-center w-full min-h-14 bg-zinc-900 rounded-2xl border border-zinc-800/70 p-1">
-                        <button type="button" onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() - 1); setCurrentDate(getLocalDateString(d)); }} className="btn-active h-12 w-14 shrink-0 rounded-xl text-zinc-400 flex items-center justify-center" aria-label="Предыдущий день"><IconChevronLeft className="w-5 h-5" /></button>
+                        <button type="button" onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() - 1); setCurrentDate(getLocalDateString(d)); }} className="btn-active h-24 w-28 shrink-0 rounded-xl text-zinc-400 flex items-center justify-center" aria-label="Предыдущий день"><IconChevronLeft className="w-7 h-7" /></button>
                         <div className="relative flex-1 self-stretch flex items-center justify-center">
                           <span className="text-sm font-bold text-zinc-200">{displayDate(currentDate)}</span>
                           <input type="date" aria-label="Дата показателей тела" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" value={currentDate} max={getLocalDateString(new Date())} onChange={(e) => { if(e.target.value) setCurrentDate(e.target.value); }} />
                         </div>
-                        <button type="button" onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() + 1); setCurrentDate(getLocalDateString(d)); }} disabled={currentDate === getLocalDateString(new Date())} className="btn-active h-12 w-14 shrink-0 rounded-xl text-zinc-400 flex items-center justify-center disabled:opacity-20" aria-label="Следующий день"><IconChevronRight className="w-5 h-5" /></button>
+                        <button type="button" onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() + 1); setCurrentDate(getLocalDateString(d)); }} disabled={currentDate === getLocalDateString(new Date())} className="btn-active h-24 w-28 shrink-0 rounded-xl text-zinc-400 flex items-center justify-center disabled:opacity-20" aria-label="Следующий день"><IconChevronRight className="w-7 h-7" /></button>
                       </div>
                       <div className="grid grid-cols-4 gap-2">
                         {DAILY_BODY_METRICS.map((metric) => (
@@ -2339,20 +2339,8 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
                   <form ref={mealFormRef} onSubmit={handleAddLog} className="meal-composer section-card card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-3">
                     <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</h2>
-                    <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
-                      <button type="button" onClick={() => { setShowMealAiModal(true); setMealAiText(''); setMealAiError(''); setMealAiItems(null); }} className="btn-active shrink-0 flex items-center gap-1 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all"><IconSparkles className="w-3.5 h-3.5" /> Рецепт ИИ</button>
-                    </div>
 
-                    {/* Избранное — отдельная строка сверху */}
-                    {favoriteFoods.length > 0 && (
-                      <div ref={favScrollRef} className="hscroll-fade flex gap-2 overflow-x-auto py-2 -my-2 px-1 -mx-1" onClick={(e) => e.stopPropagation()}>
-                        {favoriteFoods.map(f => (
-                          <motion.button whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 22 }} type="button" key={f.id} onClick={() => selectedFoodId === f.id ? clearFoodSelection() : selectFood(f.id)} className={`shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-colors ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</motion.button>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Поиск */}
+                    {/* Поиск — первая точка выбора продукта. */}
                     <div className="relative" onClick={(e) => e.stopPropagation()}>
                       <label htmlFor="food-search" className="sr-only">Поиск продукта</label>
                       <IconSearch aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500" />
@@ -2376,16 +2364,26 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                       )}
                     </div>
 
-                    {/* «Не выбрано» — вне прокрутки (за ней ничего не видно); справа прокручиваемый список не‑избранных продуктов */}
-                    <div className="flex items-center gap-1.5 -mx-1 px-1" onClick={(e) => e.stopPropagation()}>
-                      <button type="button" onClick={clearFoodSelection} title="Сбросить выбор" aria-label="Сбросить выбор продукта" className={`btn-active shrink-0 flex items-center justify-center w-8 h-8 rounded-xl border transition-all ${!selectedFoodId ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-emerald-300 border-emerald-700/40'}`}><IconClose className="w-4 h-4" /></button>
-                      <div ref={mealListScrollRef} className="hscroll-fade flex gap-2 overflow-x-auto py-2 -my-2 pl-1 -ml-1 min-w-0">
-                        {mealListFoods.map(f => (
-                          <motion.button whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 22 }} type="button" key={f.id} onClick={() => selectFood(f.id)} className={`shrink-0 text-[11px] font-bold px-3 py-2 rounded-xl border transition-colors ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</motion.button>
+                    <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+                      <p className="px-1 text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Избранные</p>
+                      <div ref={favScrollRef} className="hscroll-fade flex gap-2 overflow-x-auto py-2 -my-2 px-1 -mx-1">
+                        {favoriteMealFoods.map(f => (
+                          <motion.button whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 22 }} type="button" key={f.id} onClick={() => selectedFoodId === f.id ? clearFoodSelection() : selectFood(f.id)} className={`shrink-0 text-xs font-bold px-3.5 py-2.5 rounded-xl border transition-colors ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</motion.button>
                         ))}
-                        {mealListFoods.length === 0 && (
-                          <span className="self-center text-xs text-zinc-500 px-1 py-2 whitespace-nowrap">{foodSearch.trim() ? 'Ничего не найдено' : 'Нет продуктов'}</span>
-                        )}
+                        {favoriteMealFoods.length === 0 && <span className="self-center text-xs text-zinc-500 px-1 py-2 whitespace-nowrap">{foodSearch.trim() ? 'Нет совпадений' : 'Нет избранных'}</span>}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+                      <p className="px-1 text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Все</p>
+                      <div className="flex items-center gap-2 -mx-1 px-1">
+                        <button type="button" onClick={clearFoodSelection} title="Сбросить выбор" aria-label="Сбросить выбор продукта" className={`btn-active shrink-0 flex items-center justify-center w-10 h-10 rounded-xl border transition-all ${!selectedFoodId ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-emerald-300 border-emerald-700/40'}`}><IconClose className="w-4 h-4" /></button>
+                        <div ref={mealListScrollRef} className="hscroll-fade flex gap-2 overflow-x-auto py-2 -my-2 pl-1 -ml-1 min-w-0">
+                          {allMealFoods.map(f => (
+                            <motion.button whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 22 }} type="button" key={f.id} onClick={() => selectFood(f.id)} className={`shrink-0 text-xs font-bold px-3.5 py-2.5 rounded-xl border transition-colors ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</motion.button>
+                          ))}
+                          {allMealFoods.length === 0 && <span className="self-center text-xs text-zinc-500 px-1 py-2 whitespace-nowrap">{foodSearch.trim() ? 'Ничего не найдено' : 'Нет продуктов'}</span>}
+                        </div>
                       </div>
                     </div>
 
@@ -2394,6 +2392,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                       <label htmlFor="grams-input" className="sr-only">Вес продукта в граммах</label>
                       <input ref={gramsInputRef} id="grams-input" type="number" step="0.1" inputMode="decimal" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-base border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => e.target.select()} required />
                       <button type="submit" disabled={!selectedFoodId || !gramsInput} className="btn-active w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-35 disabled:shadow-none" aria-label="Добавить продукт"><IconPlus className="w-6 h-6 text-white" /></button>
+                    </div>
+                    <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+                      <button type="button" onClick={() => { setShowMealAiModal(true); setMealAiText(''); setMealAiError(''); setMealAiItems(null); }} className="btn-active shrink-0 flex items-center gap-1 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all"><IconSparkles className="w-3.5 h-3.5" /> Рецепт ИИ</button>
                     </div>
                   </form>
 
