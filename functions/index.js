@@ -10,6 +10,17 @@ const db = admin.firestore();
 // Установить: firebase functions:secrets:set ANTHROPIC_API_KEY
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
+// Временно выключено: облачный AI-аккаунт недоступен. Чтобы вернуть функции,
+// переключите флаг в true вместе с AI_ENABLED в src/App.jsx.
+const AI_ENABLED = false;
+const AI_UNAVAILABLE_MESSAGE = 'AI temporarily unavailable';
+const AI_FUNCTION_OPTIONS = {
+  // Пока AI выключен, функции не запрашивают и не получают API-ключ.
+  secrets: AI_ENABLED ? [ANTHROPIC_API_KEY] : [],
+  region: 'us-central1',
+  enforceAppCheck: true,
+};
+
 // Модель для расчёта рецептов. Haiku 4.5 — быстрая и дешёвая, задачи извлечения
 // КБЖУ ей более чем по силам. Поменяйте на 'claude-sonnet-4-6' / 'claude-opus-4-8'
 // для большей точности (дороже).
@@ -49,7 +60,8 @@ async function putCachedResult(key, result) {
   catch (e) { /* кеш не критичен — игнорируем ошибки записи */ }
 }
 
-exports.calcRecipe = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1', enforceAppCheck: true }, async (request) => {
+exports.calcRecipe = onCall(AI_FUNCTION_OPTIONS, async (request) => {
+  if (!AI_ENABLED) throw new HttpsError('unavailable', AI_UNAVAILABLE_MESSAGE);
   if (!request.auth) throw new HttpsError('unauthenticated', 'Войдите в аккаунт.');
   const text = String((request.data && request.data.text) || '').trim();
   if (!text) throw new HttpsError('invalid-argument', 'Опишите ингредиенты блюда.');
@@ -141,7 +153,8 @@ exports.calcRecipe = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1
 // Разбор произвольного текста рецепта на ОТДЕЛЬНЫЕ продукты с КБЖУ на 100 г каждого.
 // Используется в дневнике: пользователь описывает блюдо, ИИ возвращает список
 // ингредиентов, новые из которых (после подтверждения) добавляются в базу продуктов.
-exports.parseIngredients = onCall({ secrets: [ANTHROPIC_API_KEY], region: 'us-central1', enforceAppCheck: true }, async (request) => {
+exports.parseIngredients = onCall(AI_FUNCTION_OPTIONS, async (request) => {
+  if (!AI_ENABLED) throw new HttpsError('unavailable', AI_UNAVAILABLE_MESSAGE);
   if (!request.auth) throw new HttpsError('unauthenticated', 'Войдите в аккаунт.');
   const text = String((request.data && request.data.text) || '').trim();
   if (!text) throw new HttpsError('invalid-argument', 'Опишите ингредиенты блюда.');

@@ -9,6 +9,11 @@ import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './c
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
 import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconCopy, IconFlame, IconSparkles } from './components/Icons.jsx';
 
+    // Временно выключено: облачный AI-аккаунт недоступен. Чтобы вернуть функции,
+    // переключите флаг в true вместе с AI_ENABLED в functions/index.js.
+    const AI_ENABLED = false;
+    const AI_UNAVAILABLE_MESSAGE = 'AI temporarily unavailable';
+
     // Типы споров (вызовов). dir: 'down' — цель достичь значения не выше target; 'up' — не ниже target.
     const CHALLENGE_TYPES = [
       { key: 'weight', label: 'Сбросить вес', short: 'Вес', unit: 'кг', metric: 'weight', dir: 'down', help: 'Кто первым дойдёт до целевого веса' },
@@ -1416,6 +1421,10 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const calcRecipe = async () => {
         const text = recipeText.trim();
         if (!text) return;
+        if (!AI_ENABLED) {
+          setRecipeError(AI_UNAVAILABLE_MESSAGE);
+          return;
+        }
         setRecipeBusy(true); setRecipeError(''); setRecipeResult(null);
         try {
           const callable = functions.httpsCallable('calcRecipe');
@@ -1467,6 +1476,10 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const runMealAi = async () => {
         const text = mealAiText.trim();
         if (!text) return;
+        if (!AI_ENABLED) {
+          setMealAiError(AI_UNAVAILABLE_MESSAGE);
+          return;
+        }
         setMealAiBusy(true); setMealAiError(''); setMealAiItems(null);
         try {
           const callable = functions.httpsCallable('parseIngredients');
