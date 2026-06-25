@@ -1,63 +1,54 @@
 export const INVALID_ACTIVITY_MODEL_ERROR = 'INVALID_ACTIVITY_MODEL';
-
-export const ACTIVITY_MULTIPLIERS = Object.freeze({
-  sedentary: 1.2,
-  light: 1.375,
-  moderate: 1.55,
-  high: 1.725,
-  very_high: 1.9,
-});
+export const KCAL_PER_STEP = 0.04;
 
 export const ACTIVITY_LEVELS = Object.freeze([
   {
     key: 'sedentary',
     label: 'Минимальная',
-    hint: 'сидячая работа, без тренировок, бытовая активность/NEAT низкая; шаги отдельно',
-    multiplier: ACTIVITY_MULTIPLIERS.sedentary,
+    hint: 'Сидячая работа, нет тренировок, низкая бытовая активность, минимум движения кроме указанных шагов.',
+    activityCalories: 100,
   },
   {
     key: 'light',
     label: 'Лёгкая',
-    hint: 'без силовых тренировок, но много дел по дому или по работе; шаги отдельно',
-    multiplier: ACTIVITY_MULTIPLIERS.light,
+    hint: 'Без регулярных силовых тренировок, но много дел по дому или по работе. Есть бытовая активность, перемещения, домашние дела, работа на ногах. Шаги считаются отдельно.',
+    activityCalories: 250,
   },
   {
     key: 'moderate',
     label: 'Средняя',
-    hint: '1–3 силовые тренировки в неделю или умеренная регулярная нагрузка; шаги отдельно',
-    multiplier: ACTIVITY_MULTIPLIERS.moderate,
+    hint: '1–3 силовые тренировки в неделю или умеренная регулярная физическая нагрузка: дом, зал, турник, пресс, умеренный спорт. Шаги считаются отдельно.',
+    activityCalories: 400,
   },
   {
     key: 'high',
     label: 'Высокая',
-    hint: '3–5 силовых тренировок в неделю, спорт или физически активная работа; шаги отдельно',
-    multiplier: ACTIVITY_MULTIPLIERS.high,
+    hint: '3–5 тяжёлых тренировок в неделю, активная работа или сочетание регулярного спорта и высокой бытовой активности. Шаги считаются отдельно.',
+    activityCalories: 600,
   },
   {
     key: 'very_high',
     label: 'Очень высокая',
-    hint: '6+ тяжёлых тренировок в неделю, две тренировки в день или тяжёлая физическая работа; шаги отдельно',
-    multiplier: ACTIVITY_MULTIPLIERS.very_high,
+    hint: '6+ тяжёлых тренировок в неделю, две тренировки в день, тяжёлая физическая работа или почти профессиональный уровень активности. Шаги считаются отдельно.',
+    activityCalories: 800,
   },
 ]);
 
 export const DEFAULT_ACTIVITY_KEY = 'sedentary';
 
-const LEGACY_ACTIVITY_KEY_MAP = Object.freeze({
-  '1.2': 'sedentary',
-  '1.375': 'light',
-  '1.55': 'moderate',
-  '1.725': 'high',
-  '1.9': 'very_high',
-});
-
 export function normalizeActivityKey(activityKey) {
-  return LEGACY_ACTIVITY_KEY_MAP[String(activityKey)] || activityKey || DEFAULT_ACTIVITY_KEY;
+  const key = String(activityKey || '');
+  return ACTIVITY_LEVELS.some((level) => level.key === key) ? key : DEFAULT_ACTIVITY_KEY;
 }
 
 export function getActivityLevel(activityKey) {
   const normalizedKey = normalizeActivityKey(activityKey);
   return ACTIVITY_LEVELS.find((level) => level.key === normalizedKey) || ACTIVITY_LEVELS[0];
+}
+
+export function normalizeSteps(steps) {
+  const parsedSteps = Number(steps);
+  return Number.isFinite(parsedSteps) ? Math.max(0, Math.round(parsedSteps)) : 0;
 }
 
 export function calculateBmr({ sex, weight, height, age }) {
@@ -75,15 +66,21 @@ export function calculateBmr({ sex, weight, height, age }) {
   );
 }
 
-export function validateActivityModel(bmr = 1) {
-  const positiveBmr = Number(bmr);
-  const tdee = (key) => positiveBmr * ACTIVITY_MULTIPLIERS[key];
+export function calculateStepsCalories(steps, kcalPerStep = KCAL_PER_STEP) {
+  return Math.round(normalizeSteps(steps) * kcalPerStep);
+}
 
-  const isValid = positiveBmr > 0
-    && tdee('sedentary') < tdee('light')
-    && tdee('light') < tdee('moderate')
-    && tdee('moderate') < tdee('high')
-    && tdee('high') < tdee('very_high');
+export function calculateStepCalorieAdjustment(currentSteps, baseSteps, kcalPerStep = KCAL_PER_STEP) {
+  return calculateStepsCalories(currentSteps, kcalPerStep) - calculateStepsCalories(baseSteps, kcalPerStep);
+}
+
+export function validateActivityModel() {
+  const activityCalories = ACTIVITY_LEVELS.map((level) => level.activityCalories);
+  const isValid = activityCalories.every((value, index) => (
+    Number.isFinite(value)
+    && value >= 0
+    && (index === 0 || activityCalories[index - 1] < value)
+  ));
 
   if (!isValid) {
     throw new Error(INVALID_ACTIVITY_MODEL_ERROR);
@@ -96,22 +93,31 @@ export function computeKbju(profile) {
   const bmr = calculateBmr(profile);
   if (!bmr) return null;
 
-  validateActivityModel(bmr);
+  validateActivityModel();
 
   const activityLevel = getActivityLevel(profile.activity);
-  const maintenance = Math.round(bmr * activityLevel.multiplier);
+  const steps = normalizeSteps(profile.dailySteps ?? profile.steps ?? profile.usualSteps);
+  const stepsCalories = calculateStepsCalories(steps);
+  const activityCalories = activityLevel.activityCalories;
+  const maintenance = Math.round(bmr + stepsCalories + activityCalories);
   const deficit = Number(profile.deficit) || 0;
   const calories = Math.max(0, maintenance - deficit);
   const weight = parseFloat(profile.weight);
   const protein = Math.round(weight * 2);
-  const fats = Math.round(weight * 1);
+  const fats = Math.round(weight * 0.9);
   const carbs = Math.max(0, Math.round((calories - protein * 4 - fats * 9) / 4));
 
   return {
     bmr: Math.round(bmr),
+    rawBmr: bmr,
+    steps,
+    kcalPerStep: KCAL_PER_STEP,
+    stepsCalories,
     activityKey: activityLevel.key,
-    activityMultiplier: activityLevel.multiplier,
+    activityLabel: activityLevel.label,
+    activityCalories,
     maintenance,
+    deficit,
     calories,
     protein,
     fats,

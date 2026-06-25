@@ -4,7 +4,7 @@ import { motion, AnimatePresence, animate } from 'framer-motion';
 import { evaluateMath } from './utils/math.js';
 import { searchFoodsByName, getFoodNameWords } from './utils/food.js';
 import { AI_UNAVAILABLE_MESSAGE, formatParsedFoodAmount, MAX_FOOD_TEXT_LENGTH, parseFoodText } from './services/foodAi.js';
-import { ACTIVITY_LEVELS, DEFAULT_ACTIVITY_KEY, computeKbju, normalizeActivityKey } from './utils/kbju.js';
+import { ACTIVITY_LEVELS, DEFAULT_ACTIVITY_KEY, calculateStepCalorieAdjustment, calculateStepsCalories, computeKbju, normalizeActivityKey } from './utils/kbju.js';
 import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
@@ -28,7 +28,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       { key: 'protein', label: 'Белок', hint: 'прогресс-бар белка' },
       { key: 'fats', label: 'Жиры', hint: 'прогресс-бар жиров' },
       { key: 'carbs', label: 'Углеводы', hint: 'прогресс-бар углеводов' },
-      { key: 'steps', label: 'Шаги', hint: 'учёт шагов без пересчёта TDEE' },
+      { key: 'steps', label: 'Шаги', hint: 'шаги и калории от ходьбы считаются отдельной строкой' },
       { key: 'workout', label: 'Силовая тренировка', hint: 'отметка тренировки' },
       { key: 'water', label: 'Вода', hint: 'учёт выпитой воды' },
       { key: 'bodyMetrics', label: 'Показатели тела', hint: 'вес, жир, БЖМ и масса жира' },
@@ -581,7 +581,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       // Дефицит ↔ цель калорий ↔ норма связаны: цель = норма − дефицит.
       // Каждое поле — обычный редактируемый ввод (можно очищать), при числе пересчитывается связанное.
       const goalNum = (v) => (v === '' || v === null || v === undefined || isNaN(parseFloat(v))) ? null : parseFloat(v);
-      // Шаги больше не меняют TDEE и цель калорий: это отдельная метрика дневника.
+      // База шагов хранит обычный дневной уровень. Сами калории за шаги считаются отдельно.
       const applyBaseStepsToGoals = (currentGoals, baseSteps) => {
         const nextBaseSteps = getUsualSteps(baseSteps);
         return {
@@ -1125,7 +1125,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         setShowGoalModal(true);
       };
 
-      // Завершение онбординга: сохраняем профиль и считаем КБЖУ по чистой модели BMR × activityMultiplier.
+      // Завершение онбординга: сохраняем профиль и считаем КБЖУ по модели BMR + шаги + активность.
       const finishOnboarding = () => {
         const o = onboardDraft;
         if (!o.age || !o.height || !o.weight) { alert('Заполните возраст, рост и вес — по ним считается КБЖУ.'); return; }
@@ -1205,14 +1205,15 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         const rows = [headers.join(sep)];
         allExportDates.forEach(date => {
           const g = getEffectiveGoals(date);
-          const bMaint = g.maintenance || 2300;
+          const bSteps = getUsualSteps(g.baseSteps), bMaint = g.maintenance || 2300;
           const logs = dailyLogs[date] || [];
           const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
           const pro = Math.round(logs.reduce((s, l) => s + (l.totalProtein || 0), 0));
           const fat = Math.round(logs.reduce((s, l) => s + (l.totalFats || 0), 0));
           const carb = Math.round(logs.reduce((s, l) => s + (l.totalCarbs || 0), 0));
           const stepsRaw = dailySteps[date] !== undefined ? dailySteps[date] : '';
-          const burned = bMaint;
+          const stepsCalc = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
+          const burned = bMaint + calculateStepCalorieAdjustment(stepsCalc, bSteps);
           const deficit = burned - cals;
           const m = dailyMetrics[date] || {};
           const workout = dailyWorkouts[date] ? 'да' : '';
@@ -1248,12 +1249,17 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
       const activeGoals = getEffectiveGoals(currentDate);
       const modelMaintenance = activeGoals.maintenance || 2300;
-      
+      const baseStepsGoal = getUsualSteps(activeGoals.baseSteps);
       const todaySteps = dailySteps[currentDate] !== undefined
         ? dailySteps[currentDate]
-        : getUsualSteps(profileData.usualSteps ?? activeGoals.baseSteps);
-      const targetCalories = Number(activeGoals.calories) || 0;
-      const dailyCarbGoal = Number(activeGoals.carbs) || 0;
+        : baseStepsGoal;
+      const stepCaloriesDelta = calculateStepCalorieAdjustment(todaySteps, baseStepsGoal);
+      const todayStepCalories = calculateStepsCalories(todaySteps);
+      const targetCalories = (Number(activeGoals.calories) || 0) + stepCaloriesDelta;
+      const dailyCarbGoal = Math.max(
+        0,
+        (Number(activeGoals.carbs) || 0) + Math.round(stepCaloriesDelta / 4),
+      );
 
       const currentDayLogs = dailyLogs[currentDate] || [];
       const totalCals = currentDayLogs.reduce((sum, log) => sum + (log.totalCalories || 0), 0);
@@ -1349,23 +1355,26 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         for (let i = 0; i < 7; i++) {
           const d = new Date(t); d.setDate(d.getDate() - i);
           const date = getLocalDateString(d);
-          const g = getEffectiveGoals(date); const bM = g.maintenance || 2300;
+          const g = getEffectiveGoals(date); const bS = getUsualSteps(g.baseSteps), bM = g.maintenance || 2300;
           if (dailySteps[date] !== undefined) { stepSum += Number(dailySteps[date]) || 0; stepCnt++; }
           const logs = dailyLogs[date] || [];
           if (logs.length) {
             const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
-            defSum += bM - cals; defCnt++;
+            const steps = dailySteps[date] !== undefined ? dailySteps[date] : bS;
+            defSum += (bM + calculateStepCalorieAdjustment(steps, bS)) - cals; defCnt++;
           }
         }
-        // Серия: день засчитывается, если дефицит по чистому TDEE достиг целевого.
-        // То есть TDEE − съедено ≥ целевой дефицит, без скрытых бонусов за шаги/тренировки.
+        // Серия: день засчитывается, если дефицит по TDEE с отдельной строкой шагов достиг целевого.
+        // То есть (BMR + активность + шаги) − съедено ≥ целевой дефицит.
         let streak = 0;
         for (let i = 0; i < 400; i++) {
           const d = new Date(t); d.setDate(d.getDate() - i);
           const date = getLocalDateString(d); const logs = dailyLogs[date] || [];
           if (!logs.length) break;
           const g = getEffectiveGoals(date);
-          const burned2 = g.maintenance || 2300;
+          const bS2 = getUsualSteps(g.baseSteps), bM2 = g.maintenance || 2300;
+          const steps2 = dailySteps[date] !== undefined ? dailySteps[date] : bS2;
+          const burned2 = bM2 + calculateStepCalorieAdjustment(steps2, bS2);
           const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
           const targetDeficit = Number(g.deficit) || 0;
           if ((burned2 - cals) >= targetDeficit) streak++; else break;
@@ -1679,13 +1688,14 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
 
       filteredDatesForPdf.forEach(date => {
           const dayActiveGoals = getEffectiveGoals(date);
+          const bSteps = getUsualSteps(dayActiveGoals.baseSteps);
           const bMaint = dayActiveGoals.maintenance || 2300;
           const dayLogs = dailyLogs[date] || [];
           const dayCals = dayLogs.reduce((s, l) => s + (l.totalCalories || 0), 0);
           const daySteps = dailySteps[date] !== undefined
             ? dailySteps[date]
-            : getUsualSteps(dayActiveGoals.baseSteps);
-          const dayBurned = bMaint;
+            : bSteps;
+          const dayBurned = bMaint + calculateStepCalorieAdjustment(daySteps, bSteps);
 
           totalPeriodCals += dayCals;
           totalPeriodBurned += dayBurned;
@@ -1815,11 +1825,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         const wk = weekKey(date);
         if (!weeksMap[wk]) weeksMap[wk] = { cals: 0, deficit: 0, logged: 0, weights: [] };
         const g = getEffectiveGoals(date);
-        const bMaint = g.maintenance || 2300;
+        const bSteps = getUsualSteps(g.baseSteps), bMaint = g.maintenance || 2300;
         const logs = dailyLogs[date] || [];
         if (logs.length) {
           const c = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
-          const burned = bMaint;
+          const steps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
+          const burned = bMaint + calculateStepCalorieAdjustment(steps, bSteps);
           weeksMap[wk].cals += c; weeksMap[wk].deficit += (burned - c); weeksMap[wk].logged += 1;
         }
         const w = dailyMetrics[date]?.weight;
@@ -1837,11 +1848,12 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       // --- Инсайты для PDF: лучшие дни, шаги, тренировки, недельный тренд ---
       const dayStats = filteredDatesForPdf.map(date => {
         const g = getEffectiveGoals(date);
+        const bSteps = getUsualSteps(g.baseSteps);
         const bMaint = g.maintenance || 2300;
         const logs = dailyLogs[date] || [];
         const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
-        const steps = dailySteps[date] !== undefined ? dailySteps[date] : getUsualSteps(g.baseSteps);
-        const burned = bMaint;
+        const steps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
+        const burned = bMaint + calculateStepCalorieAdjustment(steps, bSteps);
         return { date, cals, steps, burned, deficit: burned - cals, workout: !!dailyWorkouts[date] };
       });
       const bestDeficitDays = [...dayStats].sort((a, b) => b.deficit - a.deficit).slice(0, 3);
@@ -1997,7 +2009,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
             <div style={{ backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 8px 0', color: '#334155' }}>Что помогало:</h2>
               <p><strong>Шаги и баланс:</strong> дни выше среднего по шагам давали в среднем {highStepAvgDeficit !== null ? `${highStepAvgDeficit > 0 ? '+' : ''}${highStepAvgDeficit}` : '—'} ккал баланса, ниже среднего — {lowStepAvgDeficit !== null ? `${lowStepAvgDeficit > 0 ? '+' : ''}${lowStepAvgDeficit}` : '—'} ккал.</p>
-              {stepDeficitDelta !== null && <p style={{ color: stepDeficitDelta > 0 ? '#166534' : '#991b1b' }}><em>Разница между более и менее активными днями: {stepDeficitDelta > 0 ? '+' : ''}{stepDeficitDelta} ккал/день. Шаги не добавляются к модельному TDEE.</em></p>}
+              {stepDeficitDelta !== null && <p style={{ color: stepDeficitDelta > 0 ? '#166534' : '#991b1b' }}><em>Разница между более и менее активными днями: {stepDeficitDelta > 0 ? '+' : ''}{stepDeficitDelta} ккал/день. Шаги добавляются к расходу отдельной строкой.</em></p>}
               {(workoutDays.length > 0 || restDays.length > 0) && (
                 <table style={{ borderCollapse: 'collapse', textAlign: 'center', width: '100%', fontSize: '12px', marginTop: '8px' }}>
                   <thead>
@@ -2170,7 +2182,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
               const dayPro = dayLogs.reduce((s, l) => s + (l.totalProtein || 0), 0);
               const dayFat = dayLogs.reduce((s, l) => s + (l.totalFats || 0), 0);
               const dayCarb = dayLogs.reduce((s, l) => s + (l.totalCarbs || 0), 0);
-              const dayBurned = dayActiveGoals.maintenance || 2300;
+              const dayBaseSteps = getUsualSteps(dayActiveGoals.baseSteps);
+              const daySteps = dailySteps[date] !== undefined ? dailySteps[date] : dayBaseSteps;
+              const dayBurned = (dayActiveGoals.maintenance || 2300) + calculateStepCalorieAdjustment(daySteps, dayBaseSteps);
               const m = dailyMetrics[date] || {};
               const mText = [ m.weight ? `Вес: ${m.weight} кг` : '', m.fatPercent ? `Жир: ${m.fatPercent}%` : '', m.leanMass ? `БЖМ: ${m.leanMass} кг` : '', m.fatMass ? `Жир: ${m.fatMass} кг` : '' ].filter(Boolean).join(' | ');
 
@@ -2319,7 +2333,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                         <IconSteps className="w-5 h-5 text-amber-400" />
                         <div className="flex flex-col">
                           <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">Шаги</span>
-                          <span className="text-[9px] text-zinc-500 font-bold mt-0.5">не меняют TDEE</span>
+                          <span className="text-[9px] text-zinc-500 font-bold mt-0.5">
+                            {todaySteps} × 0.04 = {todayStepCalories} ккал{stepCaloriesDelta !== 0 ? ` · ${stepCaloriesDelta > 0 ? '+' : ''}${stepCaloriesDelta} к цели` : ''}
+                          </span>
                         </div>
                       </div>
                       <div className="step-controls flex shrink-0 items-center gap-2">
@@ -2818,13 +2834,13 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-2">УРОВЕНЬ АКТИВНОСТИ</span>
                       <p className="text-[10px] text-zinc-600 leading-relaxed mb-2">
-                        Коэффициент описывает бытовую активность/NEAT, работу и тренировки. Шаги не входят в коэффициент и ведутся отдельно.
+                        Уровень активности — это фиксированная надбавка за NEAT, работу и тренировки. Шаги считаются отдельной строкой.
                       </p>
                       <div className="flex flex-col gap-2">
                         {ACTIVITY_LEVELS.map(l => (
                           <button key={l.key} type="button" onClick={() => handleProfileChange('activity', l.key)} className={`btn-active text-left rounded-xl p-3 border transition-all ${selectedActivityKey === l.key ? 'bg-emerald-600/15 border-emerald-600/40' : 'bg-[#27272a] border-zinc-700/30'}`}>
                             <span className={`text-sm font-bold ${selectedActivityKey === l.key ? 'text-emerald-300' : 'text-zinc-200'}`}>{l.label}</span>
-                            <span className="block text-[10px] text-zinc-500 mt-0.5">{l.hint} · × {l.multiplier.toFixed(3)}</span>
+                            <span className="block text-[10px] text-zinc-500 mt-0.5">{l.hint} · +{l.activityCalories} ккал</span>
                           </button>
                         ))}
                       </div>
@@ -2841,7 +2857,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                         onChange={(e) => handleUsualStepsChange(e.target.value)}
                         onFocus={(e) => e.target.select()}
                       />
-                      <p className="text-[10px] text-zinc-600 leading-relaxed mt-1.5">Шаги сохраняются как метрика дневника и не меняют TDEE, цель калорий или дефицит.</p>
+                      <p className="text-[10px] text-zinc-600 leading-relaxed mt-1.5">Шаги добавляются к расходу отдельно: шаги × 0.04 ккал. В активности они не спрятаны.</p>
                     </div>
                   </div>
 
@@ -2865,8 +2881,8 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                             <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mb-3">Расчёт по формуле Миффлина</p>
                             <div className="grid grid-cols-2 gap-y-2 text-sm">
                               <span className="text-zinc-400">Базовый обмен (BMR)</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.bmr} ккал</span>
-                              <span className="text-zinc-400">Активность</span><span className="text-right font-bold text-zinc-200">× {kbjuPreview.activityMultiplier.toFixed(3)}</span>
-                              <span className="text-zinc-400">Шаги</span><span className="text-right font-bold text-zinc-200">отдельно, не в TDEE</span>
+                              <span className="text-zinc-400">Шаги</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.steps} × {kbjuPreview.kcalPerStep.toFixed(2)} = {kbjuPreview.stepsCalories} ккал</span>
+                              <span className="text-zinc-400">Активность</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.activityLabel}, +{kbjuPreview.activityCalories} ккал</span>
                               <span className="text-zinc-400">Норма (TDEE)</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.maintenance} ккал</span>
                               <span className="text-zinc-400">Цель калорий</span><span className="text-right font-bold text-emerald-400">{kbjuPreview.calories} ккал</span>
                               <span className="text-zinc-400">Белок</span><span className="text-right font-bold text-indigo-400">{kbjuPreview.protein} г</span>
@@ -3353,13 +3369,13 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">АКТИВНОСТЬ</span>
                       <p className="text-[10px] text-zinc-600 leading-relaxed mb-2">
-                        Уровень учитывает NEAT/работу/тренировки. Шаги — отдельная метрика и не прибавляются к TDEE.
+                        Уровень добавляет фиксированные калории за NEAT/работу/тренировки. Шаги считаются отдельно: шаги × 0.04 ккал.
                       </p>
                       <div className="grid grid-cols-2 gap-2">
                         {ACTIVITY_LEVELS.map(l => (
                           <button key={l.key} type="button" onClick={() => setOnboardDraft({ ...onboardDraft, activity: l.key })} className={`btn-active text-left rounded-xl p-2.5 border transition-all ${normalizeActivityKey(onboardDraft.activity) === l.key ? 'bg-emerald-600/15 border-emerald-600/40' : 'bg-[#27272a] border-zinc-700/30'}`}>
                             <span className={`text-xs font-bold block ${normalizeActivityKey(onboardDraft.activity) === l.key ? 'text-emerald-300' : 'text-zinc-200'}`}>{l.label}</span>
-                            <span className="text-[9px] text-zinc-500">{l.hint} · × {l.multiplier.toFixed(3)}</span>
+                            <span className="text-[9px] text-zinc-500">{l.hint} · +{l.activityCalories} ккал</span>
                           </button>
                         ))}
                       </div>
