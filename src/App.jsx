@@ -78,6 +78,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       { key: 'turquoise', label: 'Тёмная · бирюзовая', bg: '#081111', dot: '#00D4C7' },
       { key: 'light-green', label: 'Светлая · зелёная', bg: '#f3faf5', dot: '#34C759' },
       { key: 'gold', label: 'Тёмная · золотая', bg: '#0e0d09', dot: '#D4AF37' },
+      { key: 'rain', label: 'Тёмная · неоновый дождь', bg: '#05070d', dot: '#00E5FF' },
     ];
     const THEME_META_COLOR = {
       lime: '#0a0a0b',
@@ -89,8 +90,9 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       turquoise: '#081111',
       'light-green': '#f3faf5',
       gold: '#0e0d09',
+      rain: '#05070d',
     };
-    const APP_VERSION = '2026.06.25.1';
+    const APP_VERSION = '2026.06.25.2';
     const VERSION_FILE_URL = '/version.json';
     const TAB_TITLES = {
       diary: 'Дневник',
