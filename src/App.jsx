@@ -9,7 +9,7 @@ import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
-import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconCopy, IconFlame, IconSparkles } from './components/Icons.jsx';
+import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconCopy, IconFlame, IconSparkles, IconInfo, IconHelpCircle, IconLogOut } from './components/Icons.jsx';
 
     // Типы споров (вызовов). dir: 'down' — цель достичь значения не выше target; 'up' — не ниже target.
     const CHALLENGE_TYPES = [
@@ -73,8 +73,35 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       { key: 'sky', label: 'Тёмная · голубая', bg: '#0a0a0b', dot: '#38bdf8' },
       { key: 'violet', label: 'Тёмная · фиолетовая', bg: '#0a0a0b', dot: '#a78bfa' },
       { key: 'light', label: 'Светлая · голубая', bg: '#eef3f8', dot: '#0ea5e9' },
+      { key: 'orange', label: 'Тёмная · оранжевая', bg: '#101010', dot: '#FF8A00' },
+      { key: 'red', label: 'Тёмная · красная', bg: '#0d0b0b', dot: '#FF3B30' },
+      { key: 'turquoise', label: 'Тёмная · бирюзовая', bg: '#081111', dot: '#00D4C7' },
+      { key: 'light-green', label: 'Светлая · зелёная', bg: '#f3faf5', dot: '#34C759' },
+      { key: 'gold', label: 'Тёмная · золотая', bg: '#0e0d09', dot: '#D4AF37' },
     ];
-    const THEME_META_COLOR = { lime: '#0a0a0b', sky: '#0a0a0b', violet: '#0a0a0b', light: '#eef3f8' };
+    const THEME_META_COLOR = {
+      lime: '#0a0a0b',
+      sky: '#0a0a0b',
+      violet: '#0a0a0b',
+      light: '#eef3f8',
+      orange: '#101010',
+      red: '#0d0b0b',
+      turquoise: '#081111',
+      'light-green': '#f3faf5',
+      gold: '#0e0d09',
+    };
+    const APP_VERSION = '2026.06.25.1';
+    const VERSION_FILE_URL = '/version.json';
+    const TAB_TITLES = {
+      diary: 'Дневник',
+      progress: 'Прогресс',
+      directory: 'База',
+      profile: 'Профиль',
+      social: 'Друзья и споры',
+      settings: 'Настройки',
+      about: 'О приложении',
+      support: 'Поддержка',
+    };
 
     function getUsualSteps(value) {
       const steps = Number(value);
@@ -182,6 +209,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       
       const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
       const [activeTab, setActiveTab] = useState('diary');
+      const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+      const [appUpdate, setAppUpdate] = useState(null);
+      const [isApplyingUpdate, setIsApplyingUpdate] = useState(false);
       
       const [selectedFoodId, setSelectedFoodId] = useState('');
       const [gramsInput, setGramsInput] = useState('');
@@ -233,6 +263,46 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         return () => {
           window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
           window.removeEventListener('appinstalled', handleAppInstalled);
+        };
+      }, []);
+
+      // Централизованная проверка версии: при старте и при возврате во вкладку.
+      useEffect(() => {
+        let cancelled = false;
+        const checkAppVersion = async () => {
+          try {
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistration().then((registration) => registration?.update?.()).catch(() => {});
+            }
+            const response = await fetch(`${VERSION_FILE_URL}?t=${Date.now()}`, { cache: 'no-store' });
+            if (!response.ok) return;
+            const remote = await response.json();
+            if (cancelled || !remote?.version) return;
+            if (remote.version !== APP_VERSION) {
+              setAppUpdate({
+                version: remote.version,
+                mandatory: !!remote.mandatory,
+                message: remote.message || 'Доступно обновление',
+              });
+            } else {
+              setAppUpdate(null);
+            }
+          } catch {
+            // Проверка обновлений не должна ломать вход в приложение.
+          }
+        };
+
+        const handleVisibilityChange = () => {
+          if (document.visibilityState === 'visible') checkAppVersion();
+        };
+
+        checkAppVersion();
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('focus', checkAppVersion);
+        return () => {
+          cancelled = true;
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+          window.removeEventListener('focus', checkAppVersion);
         };
       }, []);
 
@@ -1038,7 +1108,33 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         reorderFavorite(draggingFavoriteId, target?.dataset.favoriteId);
       };
 
-      const forceRefreshApp = () => window.location.href = window.location.pathname + '?v=' + Date.now();
+      const applyAppUpdate = async () => {
+        setIsApplyingUpdate(true);
+        try {
+          if ('serviceWorker' in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map((registration) => registration.update().catch(() => {})));
+          }
+        } finally {
+          const nextUrl = new URL(window.location.href);
+          nextUrl.searchParams.set('v', String(Date.now()));
+          window.location.replace(nextUrl.toString());
+        }
+      };
+
+      const closeDrawer = () => setIsDrawerOpen(false);
+      const goToTabFromDrawer = (tab) => {
+        setActiveTab(tab);
+        setIsDrawerOpen(false);
+      };
+      const openExportFromDrawer = () => {
+        setShowExportModal(true);
+        setIsDrawerOpen(false);
+      };
+      const signOutFromDrawer = () => {
+        setIsDrawerOpen(false);
+        if (confirm('Выйти из аккаунта?')) auth.signOut();
+      };
 
       const installApp = async () => {
         if (!installPrompt) return;
@@ -1902,6 +1998,36 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
       const proteinGoalPerKg = latestWeight ? Math.round(((activeGoals.protein || 0) / latestWeight) * 10) / 10 : null;
 
       // --- Избранные продукты для быстрого добавления ---
+      const activeTabTitle = TAB_TITLES[activeTab] || 'Дневник';
+      const drawerItems = [
+        { key: 'profile', label: 'Профиль', icon: IconUser, onClick: () => goToTabFromDrawer('profile'), active: activeTab === 'profile' },
+        { key: 'social', label: 'Друзья', icon: IconUsers, onClick: () => goToTabFromDrawer('social'), active: activeTab === 'social', badge: incomingRequests.length },
+        { key: 'export', label: 'Экспорт в PDF', icon: IconDownload, onClick: openExportFromDrawer, active: false },
+        { key: 'settings', label: 'Настройки', icon: IconSliders, onClick: () => goToTabFromDrawer('settings'), active: activeTab === 'settings' },
+        { key: 'about', label: 'О приложении', icon: IconInfo, onClick: () => goToTabFromDrawer('about'), active: activeTab === 'about' },
+        { key: 'support', label: 'Поддержка', icon: IconHelpCircle, onClick: () => goToTabFromDrawer('support'), active: activeTab === 'support' },
+      ];
+      const UpdateCallout = ({ blocking = false }) => (
+        <div className={`${blocking ? 'min-h-[100dvh] w-full px-6 flex items-center justify-center' : 'card-enter mb-4'} bg-[#09090b]`}>
+          <div className={`w-full ${blocking ? 'max-w-sm' : ''} bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4`}>
+            <div className="w-12 h-12 rounded-2xl bg-emerald-600/15 border border-emerald-600/30 flex items-center justify-center"><IconSparkles className="w-6 h-6 text-emerald-400" /></div>
+            <div>
+              <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{appUpdate?.message || 'Доступно обновление'}</h2>
+              <p className="text-sm text-zinc-400 leading-relaxed mt-2">
+                {blocking ? 'Эта версия больше не поддерживается. Обновите приложение, чтобы продолжить.' : 'Можно обновить сейчас — приложение перезагрузится и подтянет свежую версию.'}
+              </p>
+              {appUpdate?.version && <p className="text-[11px] text-zinc-600 mt-2">Новая версия: {appUpdate.version}</p>}
+            </div>
+            <button type="button" onClick={applyAppUpdate} disabled={isApplyingUpdate} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-60">
+              <IconDownload className="w-5 h-5" /> {isApplyingUpdate ? 'Обновляем…' : 'Обновить приложение'}
+            </button>
+          </div>
+        </div>
+      );
+
+      if (appUpdate?.mandatory) {
+        return <UpdateCallout blocking />;
+      }
 
       if (!authReady) {
         return (
@@ -2261,26 +2387,18 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
         >
             <header className="app-header shrink-0 pt-8 px-4 pb-4 bg-[#09090b] flex justify-between items-center z-10">
               <div>
-                <h1 key={activeTab} className="text-2xl font-bold">{activeTab === 'diary' ? 'Дневник' : activeTab === 'progress' ? 'Прогресс' : activeTab === 'profile' ? 'Профиль' : activeTab === 'social' ? 'Друзья и споры' : 'База'}</h1>
+                <h1 key={activeTab} className="text-2xl font-bold">{activeTabTitle}</h1>
               </div>
               <div className="flex items-center gap-2">
-                {activeTab === 'directory' && (
-                  <>
-                    <button onClick={() => setActiveTab('social')} className="relative btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50" aria-label="Друзья и споры"><IconUsers className="w-5 h-5" />{incomingRequests.length > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-[#09090b]">+{incomingRequests.length}</span>}</button>
-                    <button onClick={() => setActiveTab('profile')} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50" aria-label="Профиль"><IconUser className="w-5 h-5" /></button>
-                    <button onClick={forceRefreshApp} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50" aria-label="Обновить"><IconRefresh className="w-5 h-5" /></button>
-                  </>
-                )}
-                {(activeTab === 'profile' || activeTab === 'social') && (
-                  <button onClick={() => setActiveTab('directory')} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50" aria-label="Назад в базу"><IconArrowLeft className="w-5 h-5" /></button>
-                )}
-                {activeTab === 'diary' && (
-                  <button onClick={() => setShowExportModal(true)} className="btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50" aria-label="Выгрузка"><IconDownload className="w-5 h-5" /></button>
-                )}
+                <button onClick={() => setIsDrawerOpen(true)} className="relative btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50 cursor-pointer" aria-label="Открыть меню" aria-expanded={isDrawerOpen}>
+                  <IconMenu className="w-5 h-5" />
+                  {incomingRequests.length > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-[#09090b]">+{incomingRequests.length}</span>}
+                </button>
               </div>
             </header>
 
             <main ref={scrollContainerRef} onClick={() => { if (selectedFoodId) setSelectedFoodId(''); }} className="app-main flex-1 overflow-y-auto overflow-x-hidden px-3 pt-2 pb-8">
+              {appUpdate && !appUpdate.mandatory && <UpdateCallout />}
               <AnimatePresence mode="wait">
               <motion.div key={activeTab} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}>
               {activeTab === 'diary' && (
@@ -2907,12 +3025,17 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     {hasUnsavedGoals && <button type="button" onClick={() => setShowGoalModal(true)} className="btn-active w-full bg-indigo-600 text-white p-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2"><IconSave className="w-5 h-5" /> Сохранить цели</button>}
                   </div>
 
-                  {/* Тема оформления */}
+                </div>
+              )}
+
+              {activeTab === 'settings' && (
+                <div className="space-y-5">
                   <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconSliders className="w-4 h-4" /> Тема оформления</h2>
+                    <p className="text-[11px] text-zinc-500 leading-relaxed">Темы применяются сразу, сохраняются в профиле и меняют главный цвет интерфейса глобально.</p>
                     <div className="grid grid-cols-2 gap-2">
                       {THEMES.map(t => (
-                        <button key={t.key} type="button" onClick={() => setTheme(t.key)} className={`btn-active flex items-center gap-2.5 rounded-xl p-3 border transition-all ${(settings.theme || 'lime') === t.key ? 'border-emerald-500 bg-emerald-600/15' : 'bg-[#27272a] border-zinc-700/30'}`}>
+                        <button key={t.key} type="button" onClick={() => setTheme(t.key)} className={`btn-active flex items-center gap-2.5 rounded-xl p-3 border transition-all cursor-pointer ${(settings.theme || 'lime') === t.key ? 'border-emerald-500 bg-emerald-600/15' : 'bg-[#27272a] border-zinc-700/30'}`}>
                           <span className="shrink-0 w-7 h-7 rounded-lg border border-white/10 flex items-center justify-center" style={{ background: t.bg }}><span className="w-3 h-3 rounded-full" style={{ background: t.dot }} /></span>
                           <span className={`text-xs font-bold text-left leading-tight ${(settings.theme || 'lime') === t.key ? 'text-emerald-300' : 'text-zinc-300'}`}>{t.label}</span>
                         </button>
@@ -2920,23 +3043,21 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     </div>
                   </div>
 
-                  {/* Настройки приложения */}
                   <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconSliders className="w-4 h-4" /> Размер шрифта</h2>
                     <div className="grid grid-cols-2 gap-2">
                       {[['normal', 'Стандартный'], ['large', 'Увеличенный']].map(([sc, label]) => (
-                        <button key={sc} type="button" onClick={() => setFontScale(sc)} className={`btn-active rounded-xl p-3 text-sm font-bold border transition-all ${settings.fontScale === sc ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-[#27272a] text-zinc-300 border-zinc-700/30'}`}>{label}</button>
+                        <button key={sc} type="button" onClick={() => setFontScale(sc)} className={`btn-active rounded-xl p-3 text-sm font-bold border transition-all cursor-pointer ${settings.fontScale === sc ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-[#27272a] text-zinc-300 border-zinc-700/30'}`}>{label}</button>
                       ))}
                     </div>
                   </div>
 
-                  {/* Блоки дневника */}
                   <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Блоки в дневнике</h2>
                     <p className="text-[11px] text-zinc-500 leading-relaxed">По умолчанию включены все блоки. Отключите лишние — они исчезнут из дневника, но данные сохранятся.</p>
                     <div className="space-y-2">
                       {TOGGLEABLE_BLOCKS.map(b => (
-                        <button key={b.key} type="button" role="switch" aria-checked={!!blocks[b.key]} onClick={() => toggleBlock(b.key)} className="btn-active w-full flex items-center justify-between gap-3 bg-[#27272a] rounded-xl p-3 border border-zinc-700/30 text-left transition-all">
+                        <button key={b.key} type="button" role="switch" aria-checked={!!blocks[b.key]} onClick={() => toggleBlock(b.key)} className="btn-active w-full flex items-center justify-between gap-3 bg-[#27272a] rounded-xl p-3 border border-zinc-700/30 text-left transition-all cursor-pointer">
                           <div className="min-w-0">
                             <span className="text-sm font-bold text-zinc-200">{b.label}</span>
                             <span className="block text-[10px] text-zinc-500 mt-0.5">{b.hint}</span>
@@ -2949,12 +3070,54 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     </div>
                   </div>
 
-                  {/* Аккаунт */}
                   <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
                     <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Аккаунт</h2>
                     <p className="text-xs text-zinc-500 break-all">{auth.currentUser ? auth.currentUser.email : ''}</p>
                     {installPrompt && <button type="button" onClick={installApp} className="btn-active w-full bg-indigo-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2"><IconDownload className="w-5 h-5" />Установить приложение</button>}
-                    <button type="button" onClick={() => { if (confirm('Выйти из аккаунта?')) auth.signOut(); }} className="btn-active w-full bg-zinc-800 text-red-400 rounded-xl p-4 font-bold transition-all">Выйти</button>
+                    <button type="button" onClick={deleteAccountNow} disabled={deleteBusy} className="btn-active w-full bg-red-950/40 text-red-400 border border-red-900/50 rounded-xl p-3 font-bold transition-all disabled:opacity-50">{deleteBusy ? 'Удаление…' : 'Удалить аккаунт'}</button>
+                    <p className="text-[10px] text-zinc-600 leading-relaxed">Удаление аккаунта стирает все данные безвозвратно. Расчёты КБЖУ и ИИ-оценки — ориентировочные, не медицинская рекомендация.</p>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'about' && (
+                <div className="space-y-5">
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
+                    <div className="w-14 h-14 rounded-2xl bg-emerald-600/15 border border-emerald-600/30 flex items-center justify-center"><IconBowl className="w-7 h-7 text-emerald-400" /></div>
+                    <div>
+                      <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconInfo className="w-4 h-4" /> О приложении</h2>
+                      <p className="text-2xl font-black text-zinc-100 mt-2">MoteoTracker</p>
+                      <p className="text-xs text-zinc-500 leading-relaxed mt-2">Дневник питания, активности, прогресса тела и личной базы продуктов. Расчёты КБЖУ и ИИ-подсказки — ориентировочные, не медицинская рекомендация.</p>
+                    </div>
+                    <div className="bg-[#27272a] rounded-2xl p-4 border border-zinc-700/30 space-y-2">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-zinc-500">Текущая версия</span>
+                        <span className="font-bold text-zinc-200">{APP_VERSION}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-zinc-500">Обновления</span>
+                        <span className={`font-bold ${appUpdate ? 'text-amber-400' : 'text-emerald-400'}`}>{appUpdate ? `доступна ${appUpdate.version}` : 'актуально'}</span>
+                      </div>
+                    </div>
+                    {appUpdate ? (
+                      <button type="button" onClick={applyAppUpdate} disabled={isApplyingUpdate} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-60"><IconDownload className="w-5 h-5" />{isApplyingUpdate ? 'Обновляем…' : 'Обновить приложение'}</button>
+                    ) : (
+                      <p className="text-[11px] text-zinc-500 leading-relaxed">Приложение само проверяет обновления при запуске и при возврате во вкладку.</p>
+                    )}
+                    {installPrompt && <button type="button" onClick={installApp} className="btn-active w-full bg-indigo-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2"><IconDownload className="w-5 h-5" />Установить приложение</button>}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'support' && (
+                <div className="space-y-5">
+                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
+                    <div className="w-14 h-14 rounded-2xl bg-emerald-600/15 border border-emerald-600/30 flex items-center justify-center"><IconHelpCircle className="w-7 h-7 text-emerald-400" /></div>
+                    <div>
+                      <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconHelpCircle className="w-4 h-4" /> Поддержка</h2>
+                      <p className="text-sm text-zinc-400 leading-relaxed mt-2">Если что-то сломалось, не считается или хочется предложить улучшение — напишите владельцу приложения.</p>
+                    </div>
+                    <a href={`mailto:${OWNER_EMAIL}?subject=MoteoTracker%20support`} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2 text-center">{OWNER_EMAIL}</a>
                   </div>
                 </div>
               )}
@@ -3204,19 +3367,78 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     </button>
                   )}
 
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Аккаунт</h2>
-                    <p className="text-xs text-zinc-500 break-all">{auth.currentUser ? auth.currentUser.email : ''}</p>
-                    {installPrompt && <button type="button" onClick={installApp} className="btn-active w-full bg-indigo-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2"><IconDownload className="w-5 h-5" />Установить приложение</button>}
-                    <button onClick={() => { if (confirm('Выйти из аккаунта?')) auth.signOut(); }} className="btn-active w-full bg-zinc-800 text-red-400 rounded-xl p-4 font-bold transition-all">Выйти</button>
-                    <button type="button" onClick={deleteAccountNow} disabled={deleteBusy} className="btn-active w-full bg-red-950/40 text-red-400 border border-red-900/50 rounded-xl p-3 font-bold transition-all disabled:opacity-50">{deleteBusy ? 'Удаление…' : 'Удалить аккаунт'}</button>
-                    <p className="text-[10px] text-zinc-600 leading-relaxed">Удаление аккаунта стирает все данные безвозвратно. Расчёты КБЖУ и ИИ-оценки — ориентировочные, не медицинская рекомендация.</p>
-                  </div>
                 </div>
               )}
               </motion.div>
               </AnimatePresence>
             </main>
+
+            <AnimatePresence>
+              {isDrawerOpen && (
+                <motion.div
+                  key="drawer-overlay"
+                  className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex justify-end"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                  onClick={closeDrawer}
+                >
+                  <motion.aside
+                    className="drawer-panel h-full w-[84%] max-w-[360px] bg-[#18181b] border-l border-zinc-800/50 shadow-2xl p-4 flex flex-col"
+                    initial={{ x: '100%' }}
+                    animate={{ x: 0 }}
+                    exit={{ x: '100%' }}
+                    transition={{ type: 'spring', stiffness: 360, damping: 34 }}
+                    drag="x"
+                    dragConstraints={{ left: 0, right: 0 }}
+                    dragElastic={{ left: 0, right: 0.18 }}
+                    onDragEnd={(_, info) => {
+                      if (info.offset.x > 80 || info.velocity.x > 500) closeDrawer();
+                    }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-5 pt-[max(0px,env(safe-area-inset-top))]">
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">MoteoTracker</p>
+                        <p className="text-sm font-bold text-zinc-200 truncate">{auth.currentUser?.email || userEmail || 'Профиль'}</p>
+                      </div>
+                      <button type="button" onClick={closeDrawer} className="btn-active shrink-0 w-10 h-10 bg-zinc-800 rounded-xl text-zinc-300 border border-zinc-800/50 flex items-center justify-center cursor-pointer" aria-label="Закрыть меню"><IconClose className="w-5 h-5" /></button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {drawerItems.map(({ key, label, icon: DrawerIcon, onClick, active, badge }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={onClick}
+                          className={`drawer-item btn-active w-full flex items-center justify-between gap-3 rounded-2xl p-3 border text-left transition-all cursor-pointer ${active ? 'drawer-item-active bg-emerald-600/15 border-emerald-600/30 text-emerald-300' : 'bg-[#27272a] border-zinc-700/30 text-zinc-300'}`}
+                        >
+                          <span className="flex items-center gap-3 min-w-0">
+                            <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${active ? 'bg-emerald-600/20' : 'bg-zinc-900/50'}`}><DrawerIcon className="w-5 h-5" /></span>
+                            <span className="text-sm font-bold truncate">{label}</span>
+                          </span>
+                          {badge > 0 && <span className="shrink-0 min-w-[22px] h-[22px] px-1.5 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center">+{badge}</span>}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="mt-auto pt-4 space-y-3">
+                      {appUpdate && (
+                        <button type="button" onClick={applyAppUpdate} disabled={isApplyingUpdate} className="btn-active w-full bg-emerald-600 text-white rounded-2xl p-3 font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-60">
+                          <IconDownload className="w-5 h-5" /> {isApplyingUpdate ? 'Обновляем…' : 'Обновить приложение'}
+                        </button>
+                      )}
+                      <button type="button" onClick={signOutFromDrawer} className="drawer-item btn-active w-full flex items-center gap-3 rounded-2xl p-3 border bg-[#27272a] border-zinc-700/30 text-red-400 text-left transition-all cursor-pointer">
+                        <span className="w-10 h-10 rounded-xl bg-zinc-900/50 flex items-center justify-center shrink-0"><IconLogOut className="w-5 h-5" /></span>
+                        <span className="text-sm font-bold">Выход</span>
+                      </button>
+                      <p className="text-[10px] text-zinc-600 text-center">v{APP_VERSION}</p>
+                    </div>
+                  </motion.aside>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <nav className="bottom-nav shrink-0 bg-[#09090b] flex justify-around gap-1 px-1 pb-2 pt-2 safe-pb relative z-40 border-t border-zinc-900">
               <button onClick={() => setActiveTab('diary')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'diary' ? 'text-emerald-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
@@ -3225,8 +3447,8 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
               <button onClick={() => setActiveTab('progress')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'progress' ? 'text-violet-300 bg-zinc-900/50' : 'text-zinc-600'}`}>
                 <IconCamera className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase tracking-widest">Прогресс</span>
               </button>
-              <button onClick={() => setActiveTab('directory')} className={`relative btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'directory' || activeTab === 'profile' || activeTab === 'social' ? 'text-indigo-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
-                <IconBook className="w-6 h-6" />{incomingRequests.length > 0 && <span className="absolute top-1 right-1/2 mr-2 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center">+{incomingRequests.length}</span>}<span className="text-[9px] font-bold mt-1 uppercase tracking-widest">База</span>
+              <button onClick={() => setActiveTab('directory')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'directory' ? 'text-indigo-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
+                <IconBook className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase tracking-widest">База</span>
               </button>
             </nav>
 
@@ -3253,7 +3475,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     </div>
                   </div>
                   <div className="space-y-3">
-                    <button onClick={() => { setShowExportModal(false); downloadCSV(); }} className="btn-active w-full p-4 rounded-xl bg-blue-600 font-bold text-white transition-all">📊 Скачать CSV (для Excel / анализа)</button>
+                    <button onClick={() => { setShowExportModal(false); downloadCSV(); }} className="btn-active w-full p-4 rounded-xl bg-blue-600 font-bold text-white transition-all flex items-center justify-center gap-2"><IconDownload className="w-5 h-5" /> Скачать CSV (для Excel / анализа)</button>
                     <div className="flex gap-3">
                       <button onClick={() => setShowExportModal(false)} className="btn-active flex-1 p-4 rounded-xl bg-zinc-800 font-bold text-zinc-300 transition-all">Отмена</button>
                       <button onClick={startExport} className="btn-active flex-1 p-4 rounded-xl bg-emerald-600 font-bold text-white transition-all">PDF-отчёт</button>
