@@ -78,7 +78,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       { key: 'turquoise', label: 'Тёмная · бирюзовая', bg: '#081111', dot: '#00D4C7' },
       { key: 'light-green', label: 'Светлая · зелёная', bg: '#f3faf5', dot: '#34C759' },
       { key: 'gold', label: 'Тёмная · золотая', bg: '#0e0d09', dot: '#D4AF37' },
-      { key: 'rain', label: 'Тёмная · неоновый дождь', bg: '#05070d', dot: '#00E5FF' },
+      { key: 'dark-neon-rain', label: 'Тёмная · неоновый дождь', bg: '#05070d', dot: '#00E5FF' },
     ];
     const THEME_META_COLOR = {
       lime: '#0a0a0b',
@@ -90,9 +90,13 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       turquoise: '#081111',
       'light-green': '#f3faf5',
       gold: '#0e0d09',
-      rain: '#05070d',
+      'dark-neon-rain': '#05070d',
     };
-    const APP_VERSION = '2026.06.25.2';
+    const normalizeThemeKey = (theme) => {
+      const key = theme === 'rain' ? 'dark-neon-rain' : theme;
+      return THEMES.some((t) => t.key === key) ? key : 'lime';
+    };
+    const APP_VERSION = '2026.06.25.3';
     const VERSION_FILE_URL = '/version.json';
     const TAB_TITLES = {
       diary: 'Дневник',
@@ -316,7 +320,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
 
       // Тема оформления: переключаем data-theme и цвет статус-бара PWA.
       useEffect(() => {
-        const theme = settings.theme || 'lime';
+        const theme = normalizeThemeKey(settings.theme);
         document.documentElement.dataset.theme = theme;
         const meta = document.querySelector('meta[name="theme-color"]');
         if (meta) meta.setAttribute('content', THEME_META_COLOR[theme] || '#0a0a0b');
@@ -2000,6 +2004,8 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const proteinGoalPerKg = latestWeight ? Math.round(((activeGoals.protein || 0) / latestWeight) * 10) / 10 : null;
 
       // --- Избранные продукты для быстрого добавления ---
+      const activeTheme = normalizeThemeKey(settings.theme);
+      const isNeonRainTheme = activeTheme === 'dark-neon-rain';
       const activeTabTitle = TAB_TITLES[activeTab] || 'Дневник';
       const drawerItems = [
         { key: 'profile', label: 'Профиль', icon: IconUser, onClick: () => goToTabFromDrawer('profile'), active: activeTab === 'profile' },
@@ -2387,6 +2393,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           className="app-shell flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900 relative overflow-hidden"
           onFocusCapture={handleEditableFieldFocus}
         >
+            {isNeonRainTheme && <div className="rain-atmosphere" aria-hidden="true" />}
             <header className="app-header shrink-0 pt-8 px-4 pb-4 bg-[#09090b] flex justify-between items-center z-10">
               <div>
                 <h1 key={activeTab} className="text-2xl font-bold">{activeTabTitle}</h1>
@@ -2401,8 +2408,8 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
 
             <main ref={scrollContainerRef} onClick={() => { if (selectedFoodId) setSelectedFoodId(''); }} className="app-main flex-1 overflow-y-auto overflow-x-hidden px-3 pt-2 pb-8">
               {appUpdate && !appUpdate.mandatory && <UpdateCallout />}
-              <AnimatePresence mode="wait">
-              <motion.div key={activeTab} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}>
+              <AnimatePresence initial={false}>
+              <motion.div key={activeTab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -2 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} style={{ willChange: 'opacity, transform' }}>
               {activeTab === 'diary' && (
                 <div className="space-y-4">
                   {showKbjuRecalc && (
@@ -3037,9 +3044,9 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                     <p className="text-[11px] text-zinc-500 leading-relaxed">Темы применяются сразу, сохраняются в профиле и меняют главный цвет интерфейса глобально.</p>
                     <div className="grid grid-cols-2 gap-2">
                       {THEMES.map(t => (
-                        <button key={t.key} type="button" onClick={() => setTheme(t.key)} className={`btn-active flex items-center gap-2.5 rounded-xl p-3 border transition-all cursor-pointer ${(settings.theme || 'lime') === t.key ? 'border-emerald-500 bg-emerald-600/15' : 'bg-[#27272a] border-zinc-700/30'}`}>
+                        <button key={t.key} type="button" onClick={() => setTheme(t.key)} className={`btn-active flex items-center gap-2.5 rounded-xl p-3 border transition-all cursor-pointer ${activeTheme === t.key ? 'border-emerald-500 bg-emerald-600/15' : 'bg-[#27272a] border-zinc-700/30'}`}>
                           <span className="shrink-0 w-7 h-7 rounded-lg border border-white/10 flex items-center justify-center" style={{ background: t.bg }}><span className="w-3 h-3 rounded-full" style={{ background: t.dot }} /></span>
-                          <span className={`text-xs font-bold text-left leading-tight ${(settings.theme || 'lime') === t.key ? 'text-emerald-300' : 'text-zinc-300'}`}>{t.label}</span>
+                          <span className={`text-xs font-bold text-left leading-tight ${activeTheme === t.key ? 'text-emerald-300' : 'text-zinc-300'}`}>{t.label}</span>
                         </button>
                       ))}
                     </div>

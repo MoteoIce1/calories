@@ -229,7 +229,7 @@
 }
 
 /* ── Theme: неоновый дождь (тёмная) ── */
-[data-theme="rain"] {
+[data-theme="dark-neon-rain"] {
   --bg-deep: #05070d;
   --bg-ink: #02030a;
   --surface: #0d121d;
@@ -292,38 +292,18 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Neon rain atmosphere: soft moving aurora + glass droplets, no heavy images */
+/* Subtle static glow at the top — calm for all regular themes */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background:
-    radial-gradient(80% 55% at 10% 12%, var(--rain-cyan) 0%, transparent 58%),
-    radial-gradient(70% 50% at 92% 18%, var(--rain-magenta) 0%, transparent 62%),
-    radial-gradient(80% 65% at 50% 108%, var(--rain-blue) 0%, transparent 65%),
-    radial-gradient(120% 60% at 50% -10%, var(--glow) 0%, transparent 60%);
-  background-size: 130% 130%, 120% 120%, 140% 140%, 100% 100%;
-  animation: rainGradientShift 18s var(--ease-out) infinite alternate;
+  background: radial-gradient(120% 60% at 50% -10%, var(--glow) 0%, transparent 60%);
 }
 
 body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: var(--rain-opacity);
-  background-image:
-    radial-gradient(circle at 18% 14%, var(--rain-drop) 0 1px, transparent 2.4px),
-    radial-gradient(ellipse at 68% 24%, var(--rain-drop) 0 1.4px, transparent 3.4px),
-    linear-gradient(102deg, transparent 0 46%, var(--rain-streak) 47%, transparent 49%),
-    linear-gradient(96deg, transparent 0 68%, var(--rain-streak) 69%, transparent 70%);
-  background-size: 96px 148px, 156px 220px, 180px 320px, 240px 460px;
-  filter: blur(0.1px);
-  transform: translateZ(0);
-  animation: rainDrift 22s linear infinite;
+  display: none;
 }
 
 #root {
@@ -360,25 +340,41 @@ body::after {
 }
 
 .app-shell::before,
-.app-shell::after {
+.app-shell::after { display: none; }
+
+.app-shell > * { position: relative; z-index: 1; }
+
+.rain-atmosphere {
+  position: absolute !important;
+  inset: 0;
+  z-index: 0 !important;
+  pointer-events: none;
+  overflow: hidden;
+  contain: paint;
+  isolation: isolate;
+}
+
+.rain-atmosphere::before,
+.rain-atmosphere::after {
   content: "";
   position: absolute;
-  inset: 0;
-  z-index: 0;
+  inset: -12%;
   pointer-events: none;
+  will-change: background-position, transform, opacity;
 }
 
-.app-shell::before {
+.rain-atmosphere::before {
+  opacity: 0.92;
   background:
-    radial-gradient(48% 34% at 22% 10%, var(--rain-cyan) 0%, transparent 70%),
-    radial-gradient(54% 40% at 88% 16%, var(--rain-magenta) 0%, transparent 68%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.035), transparent 38%, rgba(255, 255, 255, 0.02));
-  opacity: 0.8;
-  mix-blend-mode: screen;
-  animation: rainGradientShift 16s var(--ease-out) infinite alternate;
+    radial-gradient(72% 52% at 12% 12%, var(--rain-cyan) 0%, transparent 58%),
+    radial-gradient(64% 48% at 92% 16%, var(--rain-magenta) 0%, transparent 62%),
+    radial-gradient(72% 56% at 52% 108%, var(--rain-blue) 0%, transparent 66%),
+    radial-gradient(42% 32% at 78% 84%, rgba(163, 230, 53, 0.10) 0%, transparent 70%);
+  background-size: 128% 128%, 118% 118%, 140% 140%, 112% 112%;
+  animation: rainGradientShift 18s var(--ease-out) infinite alternate;
 }
 
-.app-shell::after {
+.rain-atmosphere::after {
   opacity: var(--rain-opacity);
   background-image:
     radial-gradient(circle at 16% 12%, var(--rain-drop) 0 1px, transparent 2.6px),
@@ -389,10 +385,8 @@ body::after {
   background-size: 76px 116px, 132px 186px, 104px 172px, 170px 310px, 260px 430px;
   mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 88%, transparent 100%);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%, black 88%, transparent 100%);
-  animation: rainDrift 18s linear infinite;
+  animation: rainDrift 20s linear infinite;
 }
-
-.app-shell > * { position: relative; z-index: 1; }
 
 .app-header,
 .bottom-nav {
@@ -411,6 +405,21 @@ body::after {
   height: env(safe-area-inset-bottom);
   background: var(--nav-solid);
   pointer-events: none;
+}
+
+.bottom-nav .btn-active {
+  min-height: 58px;
+  justify-content: center;
+  transition: background-color 200ms var(--ease-out), color 200ms var(--ease-out), opacity 200ms var(--ease-out), border-color 200ms var(--ease-out);
+}
+
+.bottom-nav .btn-active svg {
+  flex-shrink: 0;
+}
+
+.bottom-nav .btn-active span {
+  line-height: 1;
+  min-height: 9px;
 }
 
 .app-header {
@@ -620,18 +629,28 @@ body::after {
 
 .bg-\[\#09090b\] { background: transparent !important; }
 .bg-\[\#18181b\] {
-  background:
-    linear-gradient(145deg, var(--surface-glass), var(--surface)) !important;
-  backdrop-filter: blur(18px) saturate(1.08);
-  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  background: var(--surface) !important;
   box-shadow: var(--card-shadow);
 }
 .bg-\[\#27272a\],
 .bg-zinc-800,
 .bg-zinc-900 {
+  background-color: var(--surface-strong) !important;
+}
+
+[data-theme="dark-neon-rain"] .bg-\[\#18181b\] {
+  background:
+    linear-gradient(145deg, var(--surface-glass), var(--surface)) !important;
+  backdrop-filter: blur(16px) saturate(1.08);
+  -webkit-backdrop-filter: blur(16px) saturate(1.08);
+}
+
+[data-theme="dark-neon-rain"] .bg-\[\#27272a\],
+[data-theme="dark-neon-rain"] .bg-zinc-800,
+[data-theme="dark-neon-rain"] .bg-zinc-900 {
   background-color: var(--surface-glass-strong) !important;
-  backdrop-filter: blur(14px) saturate(1.06);
-  -webkit-backdrop-filter: blur(14px) saturate(1.06);
+  backdrop-filter: blur(12px) saturate(1.06);
+  -webkit-backdrop-filter: blur(12px) saturate(1.06);
 }
 .bg-zinc-950 { background-color: var(--bg-ink) !important; }
 .bg-zinc-900\/40 { background-color: var(--surface-3) !important; }
@@ -718,6 +737,13 @@ body::after {
   border-color: var(--line) !important;
   box-shadow: -18px 0 48px rgba(0, 0, 0, 0.38);
   touch-action: pan-y;
+  will-change: transform;
+  contain: paint;
+}
+
+.drawer-item {
+  min-height: 64px;
+  transition: background-color 200ms var(--ease-out), border-color 200ms var(--ease-out), color 200ms var(--ease-out), opacity 200ms var(--ease-out);
 }
 
 .drawer-item-active {
@@ -726,10 +752,7 @@ body::after {
   box-shadow: inset 0 0 0 1px var(--accent-soft);
 }
 
-.card-enter { animation: floatIn 420ms var(--ease-out) both; }
-.card-enter:nth-child(2) { animation-delay: 35ms; }
-.card-enter:nth-child(3) { animation-delay: 70ms; }
-.card-enter:nth-child(4) { animation-delay: 105ms; }
+.card-enter { animation: floatIn 220ms var(--ease-out) both; }
 .hscroll-fade { transition: -webkit-mask-image 140ms linear, mask-image 140ms linear; }
 
 /* Progress — flat track, solid accent fill */
@@ -859,7 +882,8 @@ input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; marg
   body::before,
   body::after,
   .app-shell::before,
-  .app-shell::after { display: none !important; }
+  .app-shell::after,
+  .rain-atmosphere { display: none !important; }
   .print-hide { display: none !important; }
   .report-view { height: auto !important; overflow: visible !important; padding: 0 !important; background: white !important; }
   .report-modern { max-width: none !important; padding: 0 !important; background: white !important; color: black !important; }
