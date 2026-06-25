@@ -1,0 +1,19 @@
+{
+  "tools": [
+    {
+      "name": "claude-code",
+      "config": "CLAUDE.md",
+      "format": "xml-block"
+    },
+    {
+      "name": "gemini-cli",
+      "config": "GEMINI.md",
+      "format": "xml-block"
+    },
+    {
+      "name": "antigravity",
+      "config": "/Users/isabulgucev/.gemini/antigravity/skills",
+      "format": "file-copy"
+    }
+  ]
+}
