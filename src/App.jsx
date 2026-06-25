@@ -3458,6 +3458,11 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                             </div>
                             {it.matchedFoodId ? <span className="shrink-0 text-[9px] text-emerald-300 font-bold uppercase tracking-wider">в базе</span> : <span className="shrink-0 text-[9px] text-zinc-500 font-bold uppercase tracking-wider">нет в базе</span>}
                           </div>
+                          {it.matchedFoodId && (
+                            <p className="text-[10px] text-emerald-300 leading-relaxed">
+                              Этот продукт уже у вас в базе есть. Сколько граммов вы съели этого продукта?
+                            </p>
+                          )}
                           <label className="block text-[10px] text-zinc-500 font-bold">
                             Вес для КБЖУ, г
                             <input type="number" min="0" step="0.1" inputMode="decimal" placeholder="Уточните вес" className={`w-full bg-zinc-900 rounded-lg p-2 text-sm text-zinc-100 outline-none border mt-1 ${it.needsWeight ? 'border-amber-400' : 'border-zinc-700/30'} focus:border-emerald-500`} value={it.grams} onChange={(e) => updateMealAiItem(i, { grams: e.target.value, needsWeight: false })} />
