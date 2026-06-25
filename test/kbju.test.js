@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  ACTIVITY_LEVELS,
   ACTIVITY_MULTIPLIERS,
   computeKbju,
   normalizeActivityKey,
@@ -71,4 +72,18 @@ test('steps do not change the computed TDEE', () => {
 
   assert.equal(lowSteps.maintenance, highSteps.maintenance);
   assert.equal(lowSteps.calories, highSteps.calories);
+});
+
+test('activity level descriptions explain NEAT/training meaning while keeping steps separate', () => {
+  const byKey = Object.fromEntries(ACTIVITY_LEVELS.map((level) => [level.key, level]));
+
+  assert.match(byKey.sedentary.hint, /NEAT|бытовая активность/i);
+  assert.match(byKey.light.hint, /дому|работе/i);
+  assert.match(byKey.moderate.hint, /1–3 силовые тренировки/i);
+  assert.match(byKey.high.hint, /3–5 силовых тренировок/i);
+  assert.match(byKey.very_high.hint, /6\+ тяжёлых тренировок/i);
+
+  for (const level of ACTIVITY_LEVELS) {
+    assert.match(level.hint, /шаги отдельно/i);
+  }
 });

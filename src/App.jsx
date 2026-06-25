@@ -2817,6 +2817,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     {measuredWeight != null && <p className="text-[10px] text-zinc-600 leading-relaxed">Вес берётся из последних показателей в «Дневнике» ({measuredWeight} кг). Он обновляется автоматически.</p>}
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-2">УРОВЕНЬ АКТИВНОСТИ</span>
+                      <p className="text-[10px] text-zinc-600 leading-relaxed mb-2">
+                        Коэффициент описывает бытовую активность/NEAT, работу и тренировки. Шаги не входят в коэффициент и ведутся отдельно.
+                      </p>
                       <div className="flex flex-col gap-2">
                         {ACTIVITY_LEVELS.map(l => (
                           <button key={l.key} type="button" onClick={() => handleProfileChange('activity', l.key)} className={`btn-active text-left rounded-xl p-3 border transition-all ${selectedActivityKey === l.key ? 'bg-emerald-600/15 border-emerald-600/40' : 'bg-[#27272a] border-zinc-700/30'}`}>
@@ -2863,6 +2866,7 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                             <div className="grid grid-cols-2 gap-y-2 text-sm">
                               <span className="text-zinc-400">Базовый обмен (BMR)</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.bmr} ккал</span>
                               <span className="text-zinc-400">Активность</span><span className="text-right font-bold text-zinc-200">× {kbjuPreview.activityMultiplier.toFixed(3)}</span>
+                              <span className="text-zinc-400">Шаги</span><span className="text-right font-bold text-zinc-200">отдельно, не в TDEE</span>
                               <span className="text-zinc-400">Норма (TDEE)</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.maintenance} ккал</span>
                               <span className="text-zinc-400">Цель калорий</span><span className="text-right font-bold text-emerald-400">{kbjuPreview.calories} ккал</span>
                               <span className="text-zinc-400">Белок</span><span className="text-right font-bold text-indigo-400">{kbjuPreview.protein} г</span>
@@ -3348,6 +3352,9 @@ import { IconStar, IconPlus, IconClose, IconSearch, IconBook, IconCalendar, Icon
                     </div>
                     <div>
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">АКТИВНОСТЬ</span>
+                      <p className="text-[10px] text-zinc-600 leading-relaxed mb-2">
+                        Уровень учитывает NEAT/работу/тренировки. Шаги — отдельная метрика и не прибавляются к TDEE.
+                      </p>
                       <div className="grid grid-cols-2 gap-2">
                         {ACTIVITY_LEVELS.map(l => (
                           <button key={l.key} type="button" onClick={() => setOnboardDraft({ ...onboardDraft, activity: l.key })} className={`btn-active text-left rounded-xl p-2.5 border transition-all ${normalizeActivityKey(onboardDraft.activity) === l.key ? 'bg-emerald-600/15 border-emerald-600/40' : 'bg-[#27272a] border-zinc-700/30'}`}>

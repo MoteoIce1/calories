@@ -12,31 +12,31 @@ export const ACTIVITY_LEVELS = Object.freeze([
   {
     key: 'sedentary',
     label: 'Минимальная',
-    hint: 'сидячий образ жизни, минимум активности',
+    hint: 'сидячая работа, без тренировок, бытовая активность/NEAT низкая; шаги отдельно',
     multiplier: ACTIVITY_MULTIPLIERS.sedentary,
   },
   {
     key: 'light',
     label: 'Лёгкая',
-    hint: 'лёгкая активность',
+    hint: 'без силовых тренировок, но много дел по дому или по работе; шаги отдельно',
     multiplier: ACTIVITY_MULTIPLIERS.light,
   },
   {
     key: 'moderate',
     label: 'Средняя',
-    hint: 'умеренная активность',
+    hint: '1–3 силовые тренировки в неделю или умеренная регулярная нагрузка; шаги отдельно',
     multiplier: ACTIVITY_MULTIPLIERS.moderate,
   },
   {
     key: 'high',
     label: 'Высокая',
-    hint: 'высокая активность',
+    hint: '3–5 силовых тренировок в неделю, спорт или физически активная работа; шаги отдельно',
     multiplier: ACTIVITY_MULTIPLIERS.high,
   },
   {
     key: 'very_high',
     label: 'Очень высокая',
-    hint: 'очень высокая активность',
+    hint: '6+ тяжёлых тренировок в неделю, две тренировки в день или тяжёлая физическая работа; шаги отдельно',
     multiplier: ACTIVITY_MULTIPLIERS.very_high,
   },
 ]);
