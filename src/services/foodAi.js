@@ -94,7 +94,7 @@ export async function parseFoodText(text, { fetchImpl = fetch, env = import.meta
 
   const items = Array.isArray(data?.items) ? data.items.map(normalizeItem).filter(Boolean) : [];
   if (!items.length) {
-    throw new FoodAiInputError('Не удалось распознать продукты. Уточните текст или добавьте продукт вручную.');
+    throw new FoodAiInputError('Уточните продукт или блюдо, например: курица с рисом, омлет, пицца Маргарита.');
   }
 
   return { items, provider: typeof data.provider === 'string' ? data.provider : 'unknown' };

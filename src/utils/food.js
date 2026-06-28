@@ -9,12 +9,28 @@
       breast: 'грудка',
       rice: 'рис',
       banana: 'банан',
+      apple: 'яблоко',
       egg: 'яйцо',
       eggs: 'яйца',
+      fried: 'жареное',
+      boiled: 'вареное',
+      cooked: 'вареный',
       kefir: 'кефир',
       buckwheat: 'гречка',
       cottage: 'творог',
       cheese: 'сыр',
+      yogurt: 'йогурт',
+      yoghurt: 'йогурт',
+      soup: 'суп',
+      omelet: 'омлет',
+      omelette: 'омлет',
+      potato: 'картофель',
+      mashed: 'пюре',
+      pasta: 'макароны',
+      burger: 'бургер',
+      salad: 'салат',
+      meat: 'мясо',
+      fish: 'рыба',
     };
 
     const normalizeFoodName = (name) => String(name || '')
@@ -126,19 +142,113 @@
       };
     };
 
+    const makeNutritionEstimate = (name, nutrition, aliases = []) => ({
+      normalizedName: normalizeFoodName(name),
+      aliases,
+      estimate: { name, ...nutrition },
+    });
+
     const FOOD_NUTRITION_ESTIMATES = [
-      {
-        normalizedName: 'пицца маргарита',
-        aliases: ['pizza margherita', 'margherita pizza', 'маргарита пицца', 'маргарита'],
-        estimate: {
-          name: 'Пицца Маргарита',
-          calories: 250,
-          protein: 10,
-          fats: 9,
-          carbs: 32,
-          confidence: 0.75,
-        },
-      },
+      makeNutritionEstimate(
+        'Яйцо жареное',
+        { calories: 205, protein: 13, fats: 16, carbs: 1, confidence: 0.8 },
+        ['жареное яйцо', 'яичница', 'fried egg', 'egg fried'],
+      ),
+      makeNutritionEstimate(
+        'Яйцо вареное',
+        { calories: 155, protein: 13, fats: 11, carbs: 1, confidence: 0.82 },
+        ['вареное яйцо', 'яйцо вкрутую', 'boiled egg', 'egg boiled'],
+      ),
+      makeNutritionEstimate(
+        'Пицца Маргарита',
+        { calories: 250, protein: 10, fats: 9, carbs: 32, confidence: 0.75 },
+        ['pizza margherita', 'margherita pizza', 'маргарита пицца', 'маргарита'],
+      ),
+      makeNutritionEstimate(
+        'Рис вареный',
+        { calories: 130, protein: 2.7, fats: 0.3, carbs: 28, confidence: 0.82 },
+        ['вареный рис', 'рис отварной', 'cooked rice', 'boiled rice'],
+      ),
+      makeNutritionEstimate(
+        'Гречка вареная',
+        { calories: 110, protein: 3.6, fats: 1.1, carbs: 20, confidence: 0.8 },
+        ['гречка', 'гречневая каша', 'вареная гречка', 'buckwheat'],
+      ),
+      makeNutritionEstimate(
+        'Куриная грудка',
+        { calories: 165, protein: 31, fats: 3.6, carbs: 0, confidence: 0.82 },
+        ['грудка куриная', 'куриная грудь', 'курица грудка', 'chicken breast'],
+      ),
+      makeNutritionEstimate(
+        'Банан',
+        { calories: 89, protein: 1.1, fats: 0.3, carbs: 23, confidence: 0.85 },
+        ['banana'],
+      ),
+      makeNutritionEstimate(
+        'Яблоко',
+        { calories: 52, protein: 0.3, fats: 0.2, carbs: 14, confidence: 0.85 },
+        ['apple'],
+      ),
+      makeNutritionEstimate(
+        'Творог 5%',
+        { calories: 121, protein: 17, fats: 5, carbs: 3, confidence: 0.75 },
+        ['творог', 'творог 5 процент', 'cottage cheese'],
+      ),
+      makeNutritionEstimate(
+        'Йогурт',
+        { calories: 60, protein: 4, fats: 3, carbs: 5, confidence: 0.7 },
+        ['yogurt', 'yoghurt'],
+      ),
+      makeNutritionEstimate(
+        'Суп',
+        { calories: 50, protein: 3, fats: 2, carbs: 6, confidence: 0.62 },
+        ['куриный суп', 'овощной суп', 'soup'],
+      ),
+      makeNutritionEstimate(
+        'Омлет',
+        { calories: 150, protein: 10, fats: 11, carbs: 2, confidence: 0.75 },
+        ['omelet', 'omelette'],
+      ),
+      makeNutritionEstimate(
+        'Картофельное пюре',
+        { calories: 90, protein: 2, fats: 3, carbs: 14, confidence: 0.72 },
+        ['пюре картофельное', 'картошка пюре', 'mashed potato'],
+      ),
+      makeNutritionEstimate(
+        'Макароны вареные',
+        { calories: 150, protein: 5, fats: 1, carbs: 30, confidence: 0.78 },
+        ['макароны', 'паста', 'вареные макароны', 'pasta'],
+      ),
+      makeNutritionEstimate(
+        'Сырники',
+        { calories: 230, protein: 14, fats: 10, carbs: 22, confidence: 0.68 },
+        ['сырник', 'творожники'],
+      ),
+      makeNutritionEstimate(
+        'Шаурма',
+        { calories: 220, protein: 11, fats: 11, carbs: 20, confidence: 0.62 },
+        ['шаверма'],
+      ),
+      makeNutritionEstimate(
+        'Бургер',
+        { calories: 260, protein: 13, fats: 12, carbs: 27, confidence: 0.62 },
+        ['burger', 'гамбургер'],
+      ),
+      makeNutritionEstimate(
+        'Салат',
+        { calories: 80, protein: 2, fats: 5, carbs: 8, confidence: 0.6 },
+        ['овощной салат', 'salad'],
+      ),
+      makeNutritionEstimate(
+        'Мясо',
+        { calories: 220, protein: 25, fats: 13, carbs: 0, confidence: 0.62 },
+        ['meat', 'говядина', 'свинина', 'запеченное мясо', 'жареное мясо'],
+      ),
+      makeNutritionEstimate(
+        'Рыба',
+        { calories: 140, protein: 22, fats: 5, carbs: 0, confidence: 0.65 },
+        ['fish', 'запеченная рыба', 'жареная рыба'],
+      ),
     ];
 
     const findEstimatedNutrition = (query) => {
@@ -155,10 +265,11 @@
 
       const best = ranked[0];
       if (!best || best.score < 900) return null;
+      if ((best.item.estimate.confidence ?? 0) < 0.6) return null;
       return {
         ...best.item.estimate,
         normalizedName: best.item.normalizedName,
-        aliases: best.item.aliases.map(normalizeFoodName).filter(Boolean),
+        aliases: best.item.aliases.map(alias => String(alias || '').trim()).filter(Boolean),
         source: 'AI estimate',
         isAiGenerated: true,
       };

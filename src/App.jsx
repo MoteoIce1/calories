@@ -96,7 +96,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const key = theme === 'rain' ? 'dark-neon-rain' : theme;
       return THEMES.some((t) => t.key === key) ? key : 'lime';
     };
-    const APP_VERSION = '2026.06.28.1';
+    const APP_VERSION = '2026.06.28.2';
     const VERSION_FILE_URL = '/version.json';
     const TAB_TITLES = {
       diary: 'Дневник',
@@ -1695,10 +1695,30 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           score: best.score,
         };
       };
-      const saveAiGeneratedFoods = (createdFoods) => {
-        if (!createdFoods.length) return;
-        if (isOwner) saveSharedFoods([...createdFoods, ...sharedFoods]);
-        else savePersonalFoods([...createdFoods, ...personalFoods]);
+      const makeNutritionDraft = (food) => ({
+        calories: String(food?.calories ?? ''),
+        protein: String(food?.protein ?? ''),
+        fats: String(food?.fats ?? ''),
+        carbs: String(food?.carbs ?? ''),
+      });
+      const parseNutritionDraft = (draft) => {
+        const read = (key) => Number.parseFloat(String(draft?.[key] ?? '').replace(',', '.'));
+        const values = {
+          calories: read('calories'),
+          protein: read('protein'),
+          fats: read('fats'),
+          carbs: read('carbs'),
+        };
+        const valid = Number.isFinite(values.calories) && values.calories > 0
+          && Number.isFinite(values.protein) && values.protein >= 0
+          && Number.isFinite(values.fats) && values.fats >= 0
+          && Number.isFinite(values.carbs) && values.carbs >= 0;
+        return valid ? values : null;
+      };
+      const saveAiGeneratedFood = (food) => {
+        if (!food) return;
+        if (isOwner) saveSharedFoods([food, ...sharedFoods]);
+        else savePersonalFoods([food, ...personalFoods]);
       };
       const makeMealAiCard = (item, index, sourceFoods) => {
         const found = findFoodForAi(item.name, sourceFoods);
@@ -1729,16 +1749,16 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         }
         const estimated = createEstimatedFood(item.name, `ai-${Date.now()}-${index}`);
         if (estimated) {
-          sourceFoods.unshift(estimated);
           return {
             ...item,
             name: estimated.name,
             grams: initialGrams,
-            matchedFoodId: estimated.id,
+            matchedFoodId: null,
             food: estimated,
-            status: 'created',
-            statusText: 'Продукта не было в базе. Я добавил его с примерным КБЖУ.',
+            status: 'estimated',
+            statusText: 'Продукта нет в базе. Я рассчитал примерное КБЖУ на 100 г.',
             createdFood: estimated,
+            nutritionDraft: makeNutritionDraft(estimated),
             added: false,
           };
         }
@@ -1748,7 +1768,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           matchedFoodId: null,
           food: null,
           status: 'manual',
-          statusText: 'Продукта нет в базе',
+          statusText: 'Уточните продукт или блюдо, чтобы я рассчитал КБЖУ точнее.',
           added: false,
         };
       };
@@ -1760,15 +1780,17 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           const result = await parseFoodText(text);
           const workingFoods = [...foods];
           const list = result.items.map((item, index) => makeMealAiCard(item, index, workingFoods));
-          saveAiGeneratedFoods(list.map(item => item.createdFood).filter(Boolean));
-          if (!list.length) setMealAiError('Не удалось распознать продукты. Уточните текст.');
+          if (!list.length) setMealAiError('Уточните продукт или блюдо, например: курица с рисом, омлет, пицца Маргарита.');
           setMealAiItems(list);
         } catch (e) {
           setMealAiError(e.message || AI_UNAVAILABLE_MESSAGE);
         }
         setMealAiBusy(false);
       };
-      const updateMealAiItem = (index, patch) => setMealAiItems(arr => arr.map((x, j) => j === index ? { ...x, ...patch } : x));
+      const updateMealAiItem = (index, patch) => setMealAiItems(arr => (arr || []).map((x, j) => {
+        if (j !== index) return x;
+        return { ...x, ...(typeof patch === 'function' ? patch(x) : patch) };
+      }));
       const selectMealAiSuggestion = (index, food) => {
         updateMealAiItem(index, {
           name: food.name,
@@ -1778,6 +1800,87 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           statusText: 'Продукт найден в базе',
           suggestions: [],
           needsChoice: false,
+        });
+      };
+      const updateMealAiNutritionDraft = (index, field, value) => {
+        updateMealAiItem(index, item => ({
+          nutritionDraft: { ...(item.nutritionDraft || makeNutritionDraft(item.createdFood || item.food)), [field]: value },
+          nutritionError: '',
+        }));
+      };
+      const editMealAiEstimatedFood = (index) => {
+        updateMealAiItem(index, item => ({
+          isEditingNutrition: true,
+          nutritionDraft: item.nutritionDraft || makeNutritionDraft(item.createdFood || item.food),
+          nutritionError: '',
+        }));
+      };
+      const saveMealAiNutritionDraft = (index) => {
+        const item = mealAiItems?.[index];
+        const values = parseNutritionDraft(item?.nutritionDraft);
+        if (!item || !values) {
+          updateMealAiItem(index, { nutritionError: 'Введите корректные КБЖУ на 100 г' });
+          return;
+        }
+        const updatedFood = {
+          ...(item.createdFood || item.food),
+          calories: values.calories,
+          protein: values.protein,
+          fats: values.fats,
+          carbs: values.carbs,
+          caloriesPer100g: values.calories,
+          proteinPer100g: values.protein,
+          fatPer100g: values.fats,
+          carbsPer100g: values.carbs,
+          updatedAt: new Date().toISOString(),
+        };
+        updateMealAiItem(index, {
+          food: updatedFood,
+          createdFood: updatedFood,
+          nutritionDraft: makeNutritionDraft(updatedFood),
+          isEditingNutrition: false,
+          nutritionError: '',
+        });
+      };
+      const cancelMealAiItem = (index) => {
+        setMealAiItems(arr => (arr || []).filter((_, j) => j !== index));
+      };
+      const addMealAiEstimatedFoodToBase = (index) => {
+        const item = mealAiItems?.[index];
+        if (!item?.createdFood) return;
+        const existing = findFoodForAi(item.createdFood.name).match;
+        if (existing) {
+          updateMealAiItem(index, {
+            name: existing.name,
+            matchedFoodId: existing.id,
+            food: existing,
+            createdFood: null,
+            status: 'found',
+            statusText: 'Продукт найден в базе',
+            addedToBase: true,
+            isEditingNutrition: false,
+            needsBaseConfirm: false,
+          });
+          return;
+        }
+        const now = new Date().toISOString();
+        const foodToSave = {
+          ...item.createdFood,
+          normalizedName: normalizeFoodName(item.createdFood.name),
+          updatedAt: now,
+          createdAt: item.createdFood.createdAt || now,
+        };
+        saveAiGeneratedFood(foodToSave);
+        updateMealAiItem(index, {
+          name: foodToSave.name,
+          matchedFoodId: foodToSave.id,
+          food: foodToSave,
+          createdFood: foodToSave,
+          status: 'created',
+          statusText: 'Продукт добавлен в базу. Сколько грамм вы съели?',
+          addedToBase: true,
+          isEditingNutrition: false,
+          needsBaseConfirm: false,
         });
       };
       const moveMealAiItemToManualEntry = (item) => {
@@ -1797,6 +1900,10 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         const grams = evaluateMath(String(item.grams || ''));
         if (item.status === 'suggestions') {
           updateMealAiItem(index, { needsChoice: true });
+          return;
+        }
+        if (item.status === 'estimated' && !item.addedToBase) {
+          updateMealAiItem(index, { needsBaseConfirm: true });
           return;
         }
         if (!food) {
@@ -3734,9 +3841,12 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                     <div className="mt-4 space-y-2">
                       <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Распознано · сначала КБЖУ на 100 г, затем вес порции</p>
                       {mealAiItems.map((it, i) => {
-                        const food = it.matchedFoodId ? (foods.find(f => f.id === it.matchedFoodId) || it.food) : null;
+                        const food = it.matchedFoodId ? (foods.find(f => f.id === it.matchedFoodId) || it.food) : (it.status === 'estimated' ? it.food : null);
+                        const canAskWeight = Boolean(food && it.status !== 'estimated');
                         const grams = evaluateMath(String(it.grams || ''));
-                        const portion = food && Number.isFinite(grams) && grams > 0 ? calculateFoodPortion(food, grams) : null;
+                        const portion = canAskWeight && Number.isFinite(grams) && grams > 0 ? calculateFoodPortion(food, grams) : null;
+                        const statusLabel = it.status === 'estimated' ? 'Нет в базе · AI-оценка' : it.status === 'created' ? 'в базе' : it.status === 'found' ? 'в базе' : 'проверка';
+                        const statusClass = it.status === 'estimated' ? 'text-amber-300' : (it.status === 'created' || it.status === 'found') ? 'text-emerald-300' : 'text-zinc-500';
                         return (
                         <div key={`${it.name}-${i}`} className="rounded-xl p-3 border bg-[#27272a] border-zinc-700/30 space-y-3">
                           <div className="flex items-start justify-between gap-3">
@@ -3744,10 +3854,10 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                               <p className="font-bold text-sm text-zinc-100 truncate">{it.name}</p>
                               <p className="text-xs text-zinc-400 mt-0.5">Распознано: {formatParsedFoodAmount(it)}</p>
                             </div>
-                            <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider ${it.status === 'created' ? 'text-amber-300' : it.status === 'found' ? 'text-emerald-300' : 'text-zinc-500'}`}>{it.status === 'created' ? 'AI estimate' : it.status === 'found' ? 'в базе' : 'проверка'}</span>
+                            <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider ${statusClass}`}>{statusLabel}</span>
                           </div>
 
-                          <p className={`text-[10px] leading-relaxed ${it.status === 'created' ? 'text-amber-300' : it.status === 'found' ? 'text-emerald-300' : 'text-zinc-400'}`}>
+                          <p className={`text-[10px] leading-relaxed ${it.status === 'estimated' ? 'text-amber-300' : (it.status === 'created' || it.status === 'found') ? 'text-emerald-300' : 'text-zinc-400'}`}>
                             {it.statusText}
                           </p>
 
@@ -3783,30 +3893,57 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                                 </div>
                               </div>
 
-                              <label className="block text-[10px] text-zinc-500 font-bold">
-                                Сколько грамм вы съели?
-                                <div className="mt-1 flex items-center gap-2">
-                                  <input type="number" min="0" step="0.1" inputMode="decimal" placeholder="Например, 150" className={`flex-1 min-w-0 bg-zinc-900 rounded-lg p-2 text-sm text-zinc-100 outline-none border ${it.needsWeight ? 'border-amber-400' : 'border-zinc-700/30'} focus:border-emerald-500`} value={it.grams} onChange={(e) => updateMealAiItem(i, { grams: e.target.value, needsWeight: false, portionError: '' })} />
-                                  <span className="shrink-0 text-xs font-bold text-zinc-500">г</span>
+                              {it.status === 'estimated' ? (
+                                <div className="space-y-2">
+                                  <p className="text-[10px] text-zinc-400 leading-relaxed">Я рассчитал примерное КБЖУ на 100 г. Проверьте значения и добавьте продукт в базу.</p>
+                                  {it.isEditingNutrition && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <input type="number" step="0.1" inputMode="decimal" placeholder="Ккал" className="bg-zinc-900 rounded-lg p-2 text-sm text-zinc-100 outline-none border border-zinc-700/30 focus:border-emerald-500" value={it.nutritionDraft?.calories ?? ''} onChange={(e) => updateMealAiNutritionDraft(i, 'calories', e.target.value)} />
+                                      <input type="number" step="0.1" inputMode="decimal" placeholder="Белки" className="bg-zinc-900 rounded-lg p-2 text-sm text-zinc-100 outline-none border border-zinc-700/30 focus:border-emerald-500" value={it.nutritionDraft?.protein ?? ''} onChange={(e) => updateMealAiNutritionDraft(i, 'protein', e.target.value)} />
+                                      <input type="number" step="0.1" inputMode="decimal" placeholder="Жиры" className="bg-zinc-900 rounded-lg p-2 text-sm text-zinc-100 outline-none border border-zinc-700/30 focus:border-emerald-500" value={it.nutritionDraft?.fats ?? ''} onChange={(e) => updateMealAiNutritionDraft(i, 'fats', e.target.value)} />
+                                      <input type="number" step="0.1" inputMode="decimal" placeholder="Углеводы" className="bg-zinc-900 rounded-lg p-2 text-sm text-zinc-100 outline-none border border-zinc-700/30 focus:border-emerald-500" value={it.nutritionDraft?.carbs ?? ''} onChange={(e) => updateMealAiNutritionDraft(i, 'carbs', e.target.value)} />
+                                    </div>
+                                  )}
+                                  {it.nutritionError && <p className="text-[10px] text-amber-300" role="alert">{it.nutritionError}</p>}
+                                  {it.needsBaseConfirm && <p className="text-[10px] text-amber-300" role="alert">Сначала добавьте продукт в базу.</p>}
+                                  <div className="grid grid-cols-1 gap-2">
+                                    {it.isEditingNutrition ? (
+                                      <button type="button" onClick={() => saveMealAiNutritionDraft(i)} className="btn-active w-full bg-emerald-600 text-white rounded-lg p-2.5 text-xs font-bold transition-all">Сохранить КБЖУ</button>
+                                    ) : (
+                                      <button type="button" onClick={() => addMealAiEstimatedFoodToBase(i)} className="btn-active w-full bg-emerald-600 text-white rounded-lg p-2.5 text-xs font-bold transition-all">Добавить в базу</button>
+                                    )}
+                                    <button type="button" onClick={() => editMealAiEstimatedFood(i)} className="btn-active w-full bg-zinc-900 text-zinc-200 border border-zinc-700/30 rounded-lg p-2.5 text-xs font-bold transition-all">Изменить КБЖУ</button>
+                                    <button type="button" onClick={() => cancelMealAiItem(i)} className="btn-active w-full text-zinc-500 border border-zinc-700/30 rounded-lg p-2.5 text-xs font-bold transition-all">Отмена</button>
+                                  </div>
                                 </div>
-                              </label>
+                              ) : (
+                                <>
+                                  <label className="block text-[10px] text-zinc-500 font-bold">
+                                    Сколько грамм вы съели?
+                                    <div className="mt-1 flex items-center gap-2">
+                                      <input type="number" min="0" step="0.1" inputMode="decimal" placeholder="Например, 150" className={`flex-1 min-w-0 bg-zinc-900 rounded-lg p-2 text-sm text-zinc-100 outline-none border ${it.needsWeight ? 'border-amber-400' : 'border-zinc-700/30'} focus:border-emerald-500`} value={it.grams} onChange={(e) => updateMealAiItem(i, { grams: e.target.value, needsWeight: false, portionError: '' })} />
+                                      <span className="shrink-0 text-xs font-bold text-zinc-500">г</span>
+                                    </div>
+                                  </label>
 
-                              {it.amount_g === null && <p className="text-[10px] text-amber-300 leading-relaxed">{it.unit === 'pcs' ? 'Количество штук не переводим в граммы автоматически.' : it.unit === 'ml' || it.unit === 'l' ? 'Объём не переводим в граммы без отдельной логики плотности.' : 'Укажите граммовку перед расчётом КБЖУ.'}</p>}
-                              {it.portionError && <p className="text-[10px] text-amber-300" role="alert">{it.portionError}</p>}
-                              {portion && (
-                                <p className="text-[10px] text-zinc-400 leading-relaxed">
-                                  Итого за {grams} г: <span className="font-bold text-zinc-200">{portion.calories} ккал</span> · Б {portion.protein} · Ж {portion.fats} · У {portion.carbs}
-                                </p>
-                              )}
-                              {it.added ? <p className="text-xs font-bold text-emerald-300 flex items-center gap-1"><IconCheck className="w-4 h-4" /> {it.addedMessage || 'Добавлено в дневник'}</p> : (
-                                <button type="button" onClick={() => addMealAiItemToDiary(i)} className="btn-active w-full bg-emerald-600 text-white rounded-lg p-2.5 text-xs font-bold transition-all">
-                                  Добавить в дневник
-                                </button>
+                                  {it.amount_g === null && <p className="text-[10px] text-amber-300 leading-relaxed">{it.unit === 'pcs' ? 'Количество штук не переводим в граммы автоматически.' : it.unit === 'ml' || it.unit === 'l' ? 'Объём не переводим в граммы без отдельной логики плотности.' : 'Укажите граммовку перед расчётом КБЖУ.'}</p>}
+                                  {it.portionError && <p className="text-[10px] text-amber-300" role="alert">{it.portionError}</p>}
+                                  {portion && (
+                                    <p className="text-[10px] text-zinc-400 leading-relaxed">
+                                      Итого за {grams} г: <span className="font-bold text-zinc-200">{portion.calories} ккал</span> · Б {portion.protein} · Ж {portion.fats} · У {portion.carbs}
+                                    </p>
+                                  )}
+                                  {it.added ? <p className="text-xs font-bold text-emerald-300 flex items-center gap-1"><IconCheck className="w-4 h-4" /> {it.addedMessage || 'Добавлено в дневник'}</p> : (
+                                    <button type="button" onClick={() => addMealAiItemToDiary(i)} className="btn-active w-full bg-emerald-600 text-white rounded-lg p-2.5 text-xs font-bold transition-all">
+                                      Добавить в дневник
+                                    </button>
+                                  )}
+                                </>
                               )}
                             </>
                           ) : it.status !== 'suggestions' && (
                             <>
-                              <p className="text-[10px] text-zinc-400 leading-relaxed">Я не нашёл продукт в базе и не могу безопасно оценить КБЖУ на 100 г. Добавьте КБЖУ вручную — после этого продукт можно будет быстро добавить в дневник.</p>
+                              <p className="text-[10px] text-zinc-400 leading-relaxed">Уточните продукт или блюдо, например: курица с рисом, омлет, пицца Маргарита. Ручное добавление остаётся запасным вариантом.</p>
                               <button type="button" onClick={() => moveMealAiItemToManualEntry(it)} className="btn-active w-full bg-zinc-900 text-zinc-200 border border-zinc-700/30 rounded-lg p-2.5 text-xs font-bold transition-all">
                                 Добавить продукт вручную
                               </button>
