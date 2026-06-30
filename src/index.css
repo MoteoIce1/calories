@@ -346,7 +346,15 @@ body::after {
 .app-shell::before,
 .app-shell::after { display: none; }
 
-.app-shell > * { position: relative; z-index: 1; }
+.app-header,
+.app-main,
+.bottom-nav {
+  position: relative;
+}
+
+.app-main {
+  z-index: 1;
+}
 
 .rain-atmosphere {
   position: absolute !important;

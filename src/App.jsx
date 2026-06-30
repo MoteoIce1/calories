@@ -98,7 +98,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const key = theme === 'rain' ? 'dark-neon-rain' : theme;
       return THEMES.some((t) => t.key === key) ? key : 'lime';
     };
-    const APP_VERSION = '2026.06.30.2';
+    const APP_VERSION = '2026.06.30.3';
     const VERSION_FILE_URL = '/version.json';
     const logDev = (...args) => { if (import.meta.env.DEV) console.warn(...args); };
     const TAB_TITLES = {
