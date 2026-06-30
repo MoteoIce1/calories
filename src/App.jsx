@@ -99,7 +99,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const key = theme === 'rain' ? 'dark-neon-rain' : theme;
       return THEMES.some((t) => t.key === key) ? key : 'lime';
     };
-    const APP_VERSION = '2026.06.30.5';
+    const APP_VERSION = '2026.06.30.6';
     const VERSION_FILE_URL = '/version.json';
     const logDev = (...args) => { if (import.meta.env.DEV) console.warn(...args); };
     const TAB_TITLES = {
@@ -2277,7 +2277,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         if (logs.length) {
           const c = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
           const steps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
-          const burned = bMaint + calculateStepCalorieAdjustment(steps, bSteps) + sumExtraActivityCalories(dailyExtraActivities[d] || []);
+          const burned = bMaint + calculateStepCalorieAdjustment(steps, bSteps) + sumExtraActivityCalories(dailyExtraActivities[date] || []);
           weeksMap[wk].cals += c; weeksMap[wk].deficit += (burned - c); weeksMap[wk].logged += 1;
         }
         const w = dailyMetrics[date]?.weight;
