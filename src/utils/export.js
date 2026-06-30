@@ -1,4 +1,5 @@
 import { calculateStepCalorieAdjustment } from './kbju.js';
+import { sumExtraActivityCalories } from './activity.js';
 
 const CSV_SEPARATOR = ';';
 const CSV_HEADERS = [
@@ -8,6 +9,7 @@ const CSV_HEADERS = [
   'Жиры',
   'Углеводы',
   'Шаги',
+  'Доп. активность',
   'Расход',
   'Дефицит',
   'Тренировка',
@@ -37,6 +39,7 @@ function buildDietCsv({
   dailyMetrics = {},
   dailyWorkouts = {},
   dailyWater = {},
+  dailyExtraActivities = {},
 }) {
   const rows = [CSV_HEADERS.join(CSV_SEPARATOR)];
 
@@ -51,7 +54,8 @@ function buildDietCsv({
     const carbs = Math.round(logs.reduce((sum, log) => sum + (log.totalCarbs || 0), 0));
     const rawSteps = dailySteps[date] !== undefined ? dailySteps[date] : '';
     const stepsForBurn = dailySteps[date] !== undefined ? dailySteps[date] : baseSteps;
-    const burned = baseMaintenance + calculateStepCalorieAdjustment(stepsForBurn, baseSteps);
+    const extraActivityCalories = sumExtraActivityCalories(dailyExtraActivities[date] || []);
+    const burned = baseMaintenance + calculateStepCalorieAdjustment(stepsForBurn, baseSteps) + extraActivityCalories;
     const metrics = dailyMetrics[date] || {};
 
     const values = [
@@ -61,6 +65,7 @@ function buildDietCsv({
       fats,
       carbs,
       rawSteps,
+      extraActivityCalories || '',
       burned,
       burned - calories,
       dailyWorkouts[date] ? 'да' : '',

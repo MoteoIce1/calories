@@ -19,10 +19,13 @@ test('builds diet CSV with workout, water, metrics, and step-adjusted burn', () 
     },
     dailyWorkouts: { '2026-06-29': true },
     dailyWater: { '2026-06-29': 1800 },
+    dailyExtraActivities: {
+      '2026-06-29': [{ id: 'act-1', type: 'football', name: 'Футбол', calories: 400 }],
+    },
   });
 
   const lines = csv.replace(/^\uFEFF/, '').split('\n');
 
-  assert.equal(lines[0], 'Дата;Ккал;Белок;Жиры;Углеводы;Шаги;Расход;Дефицит;Тренировка;Вода (мл);Вес;Жир %;БЖМ;Масса жира');
-  assert.equal(lines[1], '2026-06-29;750;41;18;82;7000;2500;1750;да;1800;80,5;18,2;65,8;14,7');
+  assert.equal(lines[0], 'Дата;Ккал;Белок;Жиры;Углеводы;Шаги;Доп. активность;Расход;Дефицит;Тренировка;Вода (мл);Вес;Жир %;БЖМ;Масса жира');
+  assert.equal(lines[1], '2026-06-29;750;41;18;82;7000;400;2900;2150;да;1800;80,5;18,2;65,8;14,7');
 });

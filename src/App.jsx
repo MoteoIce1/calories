@@ -9,6 +9,7 @@ import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
 import { buildDietCsv } from './utils/export.js';
 import { compareWeightLoss, filterDatesByProgressPeriod, getProgressPeriod, normalizeWeightHistory, progressPeriods, summarizeWeightProgress } from './utils/progress.js';
+import { EXTRA_ACTIVITY_TYPES, calculateDailyAvailableCalories, getExtraActivityType, normalizeExtraActivities, sumExtraActivityCalories, validateExtraActivityCalories } from './utils/activity.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
 import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconCopy, IconFlame, IconSparkles, IconInfo, IconHelpCircle, IconLogOut } from './components/Icons.jsx';
@@ -98,7 +99,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const key = theme === 'rain' ? 'dark-neon-rain' : theme;
       return THEMES.some((t) => t.key === key) ? key : 'lime';
     };
-    const APP_VERSION = '2026.06.30.4';
+    const APP_VERSION = '2026.06.30.5';
     const VERSION_FILE_URL = '/version.json';
     const logDev = (...args) => { if (import.meta.env.DEV) console.warn(...args); };
     const TAB_TITLES = {
@@ -197,9 +198,14 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const [dailyMetrics, setDailyMetrics] = useState({});
       const [dailyWorkouts, setDailyWorkouts] = useState({});
       const [dailyWater, setDailyWater] = useState({});
+      const [dailyExtraActivities, setDailyExtraActivities] = useState({});
       const [profileData, setProfileData] = useState(DEFAULT_PROFILE);
       const [settings, setSettings] = useState(DEFAULT_SETTINGS);
       const [customWater, setCustomWater] = useState('');
+      const [showExtraActivityModal, setShowExtraActivityModal] = useState(false);
+      const [editingExtraActivityId, setEditingExtraActivityId] = useState(null);
+      const [extraActivityDraft, setExtraActivityDraft] = useState({ type: 'football', calories: '400' });
+      const [extraActivityError, setExtraActivityError] = useState('');
 
       // Соревновательная часть.
       const [connections, setConnections] = useState([]);
@@ -411,6 +417,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           ...Object.keys(data.dailyMetrics || {}),
           ...Object.keys(data.dailyWorkouts || {}),
           ...Object.keys(data.dailyWater || {}),
+          ...Object.keys(data.dailyExtraActivities || {}),
         ]);
         const all = Array.from(dates);
         for (let i = 0; i < all.length; i += 400) {
@@ -422,11 +429,13 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
             const mt = (data.dailyMetrics || {})[date];
             const wk = (data.dailyWorkouts || {})[date];
             const wt = (data.dailyWater || {})[date];
+            const ea = (data.dailyExtraActivities || {})[date];
             if (lg) payload.logs = lg;
             if (st !== undefined && st !== '') payload.steps = st;
             if (mt) payload.metrics = mt;
             payload.workout = !!wk;
             if (wt !== undefined && wt !== '') payload.water = wt;
+            if (Array.isArray(ea)) payload.extraActivities = normalizeExtraActivities(ea);
             batch.set(dayRef(uid, date), payload, { merge: true });
           });
           await batch.commit();
@@ -484,7 +493,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       useEffect(() => {
         if (!uid) return;
         const unsubscribe = daysCol(uid).onSnapshot((snap) => {
-          const logs = {}, steps = {}, metrics = {}, workouts = {}, water = {};
+          const logs = {}, steps = {}, metrics = {}, workouts = {}, water = {}, extraActivities = {};
           snap.forEach((doc) => {
             const d = doc.data();
             if (d.logs && d.logs.length) logs[doc.id] = d.logs;
@@ -492,8 +501,9 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
             if (d.metrics && Object.keys(d.metrics).length) metrics[doc.id] = d.metrics;
             if (d.workout) workouts[doc.id] = true;
             if (d.water !== undefined && d.water !== '' && d.water !== null) water[doc.id] = d.water;
+            if (Array.isArray(d.extraActivities) && d.extraActivities.length) extraActivities[doc.id] = normalizeExtraActivities(d.extraActivities);
           });
-          setDailyLogs(logs); setDailySteps(steps); setDailyMetrics(metrics); setDailyWorkouts(workouts); setDailyWater(water);
+          setDailyLogs(logs); setDailySteps(steps); setDailyMetrics(metrics); setDailyWorkouts(workouts); setDailyWater(water); setDailyExtraActivities(extraActivities);
         }, (e) => logDev("days listener error", e));
         return () => unsubscribe();
       }, [uid]);
@@ -1183,6 +1193,67 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         writeDay(currentDate, { workout: !!updated[currentDate] });
       };
 
+      const saveExtraActivitiesForDate = (date, activities) => {
+        const normalized = normalizeExtraActivities(activities);
+        const updated = { ...dailyExtraActivities };
+        if (normalized.length) updated[date] = normalized;
+        else delete updated[date];
+        setDailyExtraActivities(updated);
+        writeDay(date, { extraActivities: normalized });
+      };
+      const openExtraActivityModal = (activity = null) => {
+        if (activity) {
+          setEditingExtraActivityId(activity.id);
+          setExtraActivityDraft({ type: activity.type, calories: String(activity.calories) });
+        } else {
+          setEditingExtraActivityId(null);
+          setExtraActivityDraft({ type: 'football', calories: '400' });
+        }
+        setExtraActivityError('');
+        setShowExtraActivityModal(true);
+      };
+      const closeExtraActivityModal = () => {
+        setShowExtraActivityModal(false);
+        setEditingExtraActivityId(null);
+        setExtraActivityError('');
+      };
+      const setExtraActivityType = (typeKey) => {
+        const type = getExtraActivityType(typeKey);
+        setExtraActivityDraft({
+          type: type.key,
+          calories: type.defaultCalories === '' ? '' : String(type.defaultCalories),
+        });
+        setExtraActivityError('');
+      };
+      const saveExtraActivity = () => {
+        const validation = validateExtraActivityCalories(extraActivityDraft.calories);
+        if (!validation.ok) {
+          setExtraActivityError(validation.error);
+          return;
+        }
+        setExtraActivityError('');
+        const type = getExtraActivityType(extraActivityDraft.type);
+        const existing = dailyExtraActivities[currentDate] || [];
+        const now = new Date().toISOString();
+        const nextActivity = {
+          id: editingExtraActivityId || `extra-${Date.now()}`,
+          type: type.key,
+          name: type.label,
+          calories: validation.value,
+          createdAt: existing.find((activity) => activity.id === editingExtraActivityId)?.createdAt || now,
+          updatedAt: now,
+        };
+        const next = editingExtraActivityId
+          ? existing.map((activity) => activity.id === editingExtraActivityId ? nextActivity : activity)
+          : [...existing, nextActivity];
+        saveExtraActivitiesForDate(currentDate, next);
+        closeExtraActivityModal();
+      };
+      const removeExtraActivity = (activityId) => {
+        const existing = dailyExtraActivities[currentDate] || [];
+        saveExtraActivitiesForDate(currentDate, existing.filter((activity) => activity.id !== activityId));
+      };
+
       // Вода: добавляем/убавляем мл к текущему дню (не уходим в минус).
       const addWater = (amount) => {
         const next = Math.max(0, (Number(dailyWater[currentDate]) || 0) + amount);
@@ -1337,12 +1408,13 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           dailyMetrics,
           dailyWorkouts,
           dailyWater,
+          dailyExtraActivities,
         });
         triggerDownload(csv, `diet_${exportStart}_${exportEnd}.csv`, 'text/csv;charset=utf-8;');
       };
 
       const downloadBackup = () => {
-        const data = { goals, dailyGoals, foods, bodyEntries, dailyLogs, dailySteps, dailyMetrics, dailyWorkouts, dailyWater, _exportedAt: new Date().toISOString() };
+        const data = { goals, dailyGoals, foods, bodyEntries, dailyLogs, dailySteps, dailyMetrics, dailyWorkouts, dailyWater, dailyExtraActivities, _exportedAt: new Date().toISOString() };
         triggerDownload(JSON.stringify(data, null, 2), `backup_${getLocalDateString(new Date())}.json`, 'application/json');
       };
 
@@ -1372,7 +1444,11 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         : baseStepsGoal;
       const stepCaloriesDelta = calculateStepCalorieAdjustment(todaySteps, baseStepsGoal);
       const todayStepCalories = calculateStepsCalories(todaySteps);
-      const targetCalories = (Number(activeGoals.calories) || 0) + stepCaloriesDelta;
+      const baseTargetCalories = Number(activeGoals.calories) || 0;
+      const targetCalories = baseTargetCalories + stepCaloriesDelta;
+      const todayExtraActivities = normalizeExtraActivities(dailyExtraActivities[currentDate] || []);
+      const extraActivityCalories = sumExtraActivityCalories(todayExtraActivities);
+      const dailyAvailableCalories = calculateDailyAvailableCalories(targetCalories, todayExtraActivities);
       const dailyCarbGoal = Math.max(
         0,
         (Number(activeGoals.carbs) || 0) + Math.round(stepCaloriesDelta / 4),
@@ -1384,12 +1460,12 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const totalFats = currentDayLogs.reduce((sum, log) => sum + (log.totalFats || 0), 0);
       const totalCarbs = currentDayLogs.reduce((sum, log) => sum + (log.totalCarbs || 0), 0);
       
-      const isOver = totalCals > targetCalories;
-      const displayCals = isOver ? (totalCals - targetCalories) : (targetCalories - totalCals);
+      const isOver = totalCals > dailyAvailableCalories;
+      const displayCals = isOver ? (totalCals - dailyAvailableCalories) : (dailyAvailableCalories - totalCals);
       const calsColorClass = isOver ? "text-red-500" : "text-emerald-400";
       const calsLabel = isOver ? "перебор" : "осталось";
       
-      const progressCals = Math.min(100, (totalCals / (targetCalories || 1)) * 100);
+      const progressCals = Math.min(100, (totalCals / (dailyAvailableCalories || 1)) * 100);
 
       const todayWater = Number(dailyWater[currentDate]) || 0;
       const waterGoal = Number(activeGoals.waterGoal) || 2500;
@@ -1478,7 +1554,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           if (logs.length) {
             const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
             const steps = dailySteps[date] !== undefined ? dailySteps[date] : bS;
-            defSum += (bM + calculateStepCalorieAdjustment(steps, bS)) - cals; defCnt++;
+            defSum += (bM + calculateStepCalorieAdjustment(steps, bS) + sumExtraActivityCalories(dailyExtraActivities[date] || [])) - cals; defCnt++;
           }
         }
         // Серия: день засчитывается, если дефицит по TDEE с отдельной строкой шагов достиг целевого.
@@ -1491,7 +1567,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           const g = getEffectiveGoals(date);
           const bS2 = getUsualSteps(g.baseSteps), bM2 = g.maintenance || 2300;
           const steps2 = dailySteps[date] !== undefined ? dailySteps[date] : bS2;
-          const burned2 = bM2 + calculateStepCalorieAdjustment(steps2, bS2);
+          const burned2 = bM2 + calculateStepCalorieAdjustment(steps2, bS2) + sumExtraActivityCalories(dailyExtraActivities[date] || []);
           const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
           const targetDeficit = Number(g.deficit) || 0;
           if ((burned2 - cals) >= targetDeficit) streak++; else break;
@@ -1652,7 +1728,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           if (cur && cur.value === value && JSON.stringify(cur.history || []) === JSON.stringify(history)) return;
           challengeRef(c.id).set({ live: { [uid]: { value, history, updatedAt: Date.now() } } }, { merge: true }).catch(() => {});
         });
-      }, [uid, challenges, dailyLogs, dailySteps, dailyMetrics, measuredWeight, bodyEntries]);
+      }, [uid, challenges, dailyLogs, dailySteps, dailyMetrics, dailyExtraActivities, measuredWeight, bodyEntries]);
 
       // ── Действия с друзьями и спорами ──
       const sendFriendRequest = async () => {
@@ -2041,7 +2117,8 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
          ...Object.keys(dailyLogs).filter(d => d >= exportStart && d <= exportEnd),
          ...Object.keys(dailyMetrics).filter(d => d >= exportStart && d <= exportEnd),
          ...Object.keys(dailySteps).filter(d => d >= exportStart && d <= exportEnd),
-         ...Object.keys(dailyWater).filter(d => d >= exportStart && d <= exportEnd)
+         ...Object.keys(dailyWater).filter(d => d >= exportStart && d <= exportEnd),
+         ...Object.keys(dailyExtraActivities).filter(d => d >= exportStart && d <= exportEnd)
       ]);
       const allExportDates = Array.from(allDatesSet).sort((a, b) => new Date(a) - new Date(b));
 
@@ -2052,6 +2129,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       let totalPeriodCals = 0;
       let totalPeriodBurned = 0;
       let totalPeriodSteps = 0;
+      let totalPeriodExtraActivityCalories = 0;
 
       filteredDatesForPdf.forEach(date => {
           const dayActiveGoals = getEffectiveGoals(date);
@@ -2062,18 +2140,20 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           const daySteps = dailySteps[date] !== undefined
             ? dailySteps[date]
             : bSteps;
-          const dayBurned = bMaint + calculateStepCalorieAdjustment(daySteps, bSteps);
+          const dayExtraActivityCalories = sumExtraActivityCalories(dailyExtraActivities[date] || []);
+          const dayBurned = bMaint + calculateStepCalorieAdjustment(daySteps, bSteps) + dayExtraActivityCalories;
 
           totalPeriodCals += dayCals;
           totalPeriodBurned += dayBurned;
           totalPeriodSteps += daySteps;
+          totalPeriodExtraActivityCalories += dayExtraActivityCalories;
       });
 
       const periodDeficit = totalPeriodBurned - totalPeriodCals;
       const avgDeficit = filteredDatesForPdf.length ? Math.round(periodDeficit / filteredDatesForPdf.length) : 0;
       const periodDefText = periodDeficit > 0 ? `Дефицит: +${periodDeficit} ккал 🔥` : `Профицит: ${Math.abs(periodDeficit)} ккал 📈`;
 
-      const allDatesInRange = new Set([ ...filteredDatesForPdf, ...Object.keys(dailyMetrics).filter(d => d >= exportStart && d <= exportEnd) ]);
+      const allDatesInRange = new Set([ ...filteredDatesForPdf, ...Object.keys(dailyMetrics).filter(d => d >= exportStart && d <= exportEnd), ...Object.keys(dailyExtraActivities).filter(d => d >= exportStart && d <= exportEnd) ]);
       const datesWithMetrics = Array.from(allDatesInRange).sort().filter(date => {
          const m = dailyMetrics[date]; return m && (m.weight || m.fatPercent || m.leanMass || m.fatMass);
       });
@@ -2197,7 +2277,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         if (logs.length) {
           const c = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
           const steps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
-          const burned = bMaint + calculateStepCalorieAdjustment(steps, bSteps);
+          const burned = bMaint + calculateStepCalorieAdjustment(steps, bSteps) + sumExtraActivityCalories(dailyExtraActivities[d] || []);
           weeksMap[wk].cals += c; weeksMap[wk].deficit += (burned - c); weeksMap[wk].logged += 1;
         }
         const w = dailyMetrics[date]?.weight;
@@ -2220,8 +2300,9 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         const logs = dailyLogs[date] || [];
         const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
         const steps = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
-        const burned = bMaint + calculateStepCalorieAdjustment(steps, bSteps);
-        return { date, cals, steps, burned, deficit: burned - cals, workout: !!dailyWorkouts[date] };
+        const extraActivityCaloriesForDay = sumExtraActivityCalories(dailyExtraActivities[date] || []);
+        const burned = bMaint + calculateStepCalorieAdjustment(steps, bSteps) + extraActivityCaloriesForDay;
+        return { date, cals, steps, burned, extraActivityCalories: extraActivityCaloriesForDay, deficit: burned - cals, workout: !!dailyWorkouts[date] };
       });
       const bestDeficitDays = [...dayStats].sort((a, b) => b.deficit - a.deficit).slice(0, 3);
       const worstBalanceDays = [...dayStats].sort((a, b) => a.deficit - b.deficit).slice(0, 3);
@@ -2280,6 +2361,9 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         { key: 'about', label: 'О приложении', icon: IconInfo, onClick: () => goToTabFromDrawer('about'), active: activeTab === 'about' },
         { key: 'support', label: 'Поддержка', icon: IconHelpCircle, onClick: () => goToTabFromDrawer('support'), active: activeTab === 'support' },
       ];
+      const extraActivitySelectedType = getExtraActivityType(extraActivityDraft.type);
+      const extraActivityDraftValidation = validateExtraActivityCalories(extraActivityDraft.calories);
+      const extraActivityWarning = extraActivityDraftValidation.ok ? extraActivityDraftValidation.warning : '';
       const UpdateCallout = ({ blocking = false }) => (
         <div className={`${blocking ? 'min-h-[100dvh] w-full px-6 flex items-center justify-center' : 'card-enter mb-4'} bg-[#09090b]`}>
           <div className={`w-full ${blocking ? 'max-w-sm' : ''} bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4`}>
@@ -2358,6 +2442,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                  <div style={{ minWidth: '200px' }}>
                     <p><strong>Суммарно съедено:</strong> {totalPeriodCals} ккал</p>
                     <p><strong>Суммарно потрачено:</strong> {totalPeriodBurned} ккал</p>
+                    {totalPeriodExtraActivityCalories > 0 && <p><strong>Доп. активность:</strong> +{totalPeriodExtraActivityCalories} ккал</p>}
                     <p><strong>Пройдено шагов:</strong> {totalPeriodSteps}</p>
                     {avgPeriodSteps > 0 && <p><strong>Средние шаги:</strong> {avgPeriodSteps} / день</p>}
                  </div>
@@ -2575,7 +2660,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           {allExportDates.map(date => {
               const dayActiveGoals = getEffectiveGoals(date);
               const dayLogs = dailyLogs[date] || [];
-              if (dayLogs.length === 0 && !dailyMetrics[date] && dailySteps[date] === undefined && dailyWater[date] === undefined) return null;
+              if (dayLogs.length === 0 && !dailyMetrics[date] && dailySteps[date] === undefined && dailyWater[date] === undefined && !(dailyExtraActivities[date] || []).length) return null;
 
               const dayCals = dayLogs.reduce((s, l) => s + (l.totalCalories || 0), 0);
               const dayPro = dayLogs.reduce((s, l) => s + (l.totalProtein || 0), 0);
@@ -2583,7 +2668,8 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
               const dayCarb = dayLogs.reduce((s, l) => s + (l.totalCarbs || 0), 0);
               const dayBaseSteps = getUsualSteps(dayActiveGoals.baseSteps);
               const daySteps = dailySteps[date] !== undefined ? dailySteps[date] : dayBaseSteps;
-              const dayBurned = (dayActiveGoals.maintenance || 2300) + calculateStepCalorieAdjustment(daySteps, dayBaseSteps);
+              const dayExtraActivityCalories = sumExtraActivityCalories(dailyExtraActivities[date] || []);
+              const dayBurned = (dayActiveGoals.maintenance || 2300) + calculateStepCalorieAdjustment(daySteps, dayBaseSteps) + dayExtraActivityCalories;
               const m = dailyMetrics[date] || {};
               const mText = [ m.weight ? `Вес: ${m.weight} кг` : '', m.fatPercent ? `Жир: ${m.fatPercent}%` : '', m.leanMass ? `БЖМ: ${m.leanMass} кг` : '', m.fatMass ? `Жир: ${m.fatMass} кг` : '' ].filter(Boolean).join(' | ');
 
@@ -2591,7 +2677,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                 <div key={date} style={{ marginBottom: '15px', borderTop: '1px solid #eee', paddingTop: '8px' }}>
                   <h2 style={{ fontSize: '14px', fontWeight: 'bold', color: '#10b981', margin: '0 0 4px 0' }}>{date}</h2>
                   <p style={{ fontSize: '11px', marginBottom: '5px' }}>
-                    Шаги: {dailySteps[date] || '—'} | <strong>Дефицит: {dayBurned - dayCals} ккал</strong>{dailyWorkouts[date] ? ' | Силовая тренировка' : ''}{dailyWater[date] !== undefined ? ` | Вода: ${dailyWater[date]} мл` : ''}<br/>
+                    Шаги: {dailySteps[date] || '—'} | Доп. активность: {dayExtraActivityCalories || '—'} ккал | <strong>Дефицит: {dayBurned - dayCals} ккал</strong>{dailyWorkouts[date] ? ' | Силовая тренировка' : ''}{dailyWater[date] !== undefined ? ` | Вода: ${dailyWater[date]} мл` : ''}<br/>
                     {dayLogs.length > 0 && <span>Б: {Math.round(dayPro)}г | Ж: {Math.round(dayFat)}г | У: {Math.round(dayCarb)}г</span>}
                     {mText && <span><br/><span style={{ color: '#005f73' }}>Тело: {mText}</span></span>}
                   </p>
@@ -2706,7 +2792,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                         <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-widest">Калории</p>
                         <div className="flex items-baseline gap-1">
                           <AnimatedNumber value={totalCals} className="text-4xl font-black" />
-                          <span className="text-zinc-600 text-sm">/ {targetCalories}</span>
+                          <span className="text-zinc-600 text-sm">/ {dailyAvailableCalories}</span>
                         </div>
                       </div>
                       <div className={`text-right ${calsColorClass}`}>
@@ -2716,6 +2802,20 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                     </div>
                     <div className="progress-track h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-5">
                       <motion.div className={`h-full ${isOver ? 'bg-red-500' : 'bg-emerald-500'}`} initial={false} animate={{ width: `${progressCals}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }}></motion.div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      <div className="rounded-xl bg-zinc-900/50 border border-zinc-800/50 p-2">
+                        <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Цель</p>
+                        <p className="text-sm font-black text-zinc-200 mt-0.5">{baseTargetCalories}</p>
+                      </div>
+                      <div className="rounded-xl bg-zinc-900/50 border border-zinc-800/50 p-2">
+                        <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Доп. активность</p>
+                        <p className="text-sm font-black text-emerald-400 mt-0.5">+{extraActivityCalories}</p>
+                      </div>
+                      <div className="rounded-xl bg-zinc-900/50 border border-zinc-800/50 p-2">
+                        <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Доступно</p>
+                        <p className="text-sm font-black text-zinc-100 mt-0.5">{dailyAvailableCalories}</p>
+                      </div>
                     </div>
                     </>)}
 
@@ -2740,15 +2840,45 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                     )}
 
                     {blocks.workout && (
-                    <button onClick={toggleWorkout} className={`workout-toggle btn-active w-full mb-4 flex items-center justify-between p-3 rounded-2xl border transition-all ${dailyWorkouts[currentDate] ? 'bg-emerald-900/30 border-emerald-700/50' : 'bg-zinc-900/40 border-zinc-800/40'}`}>
-                      <div className="flex items-center gap-3">
-                        <IconDumbbell className="w-5 h-5 text-amber-400" />
-                        <span className={`text-[10px] uppercase font-bold tracking-widest ${dailyWorkouts[currentDate] ? 'text-emerald-400' : 'text-zinc-400'}`}>Силовая тренировка</span>
+                    <div className="activity-panel mb-4 space-y-3">
+                      <button onClick={toggleWorkout} className={`workout-toggle btn-active w-full flex items-center justify-between p-3 rounded-2xl border transition-all ${dailyWorkouts[currentDate] ? 'bg-emerald-900/30 border-emerald-700/50' : 'bg-zinc-900/40 border-zinc-800/40'}`}>
+                        <div className="flex items-center gap-3">
+                          <IconDumbbell className="w-5 h-5 text-amber-400" />
+                          <span className={`text-[10px] uppercase font-bold tracking-widest ${dailyWorkouts[currentDate] ? 'text-emerald-400' : 'text-zinc-400'}`}>Силовая тренировка</span>
+                        </div>
+                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${dailyWorkouts[currentDate] ? 'bg-emerald-500' : 'bg-zinc-700'}`}>
+                          {dailyWorkouts[currentDate] && <IconCheck className="w-4 h-4 text-white" />}
+                        </div>
+                      </button>
+
+                      <div className="rounded-2xl border border-zinc-800/40 bg-zinc-900/40 p-3 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[10px] uppercase font-bold tracking-widest text-zinc-400">Дополнительная активность</p>
+                            <p className={`text-xs font-bold mt-1 ${extraActivityCalories > 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                              {extraActivityCalories > 0 ? `+${extraActivityCalories} ккал` : 'не добавлена'}
+                            </p>
+                          </div>
+                          <button type="button" onClick={() => openExtraActivityModal()} className="btn-active shrink-0 cursor-pointer rounded-xl bg-emerald-600/15 border border-emerald-600/30 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-300 transition-all">
+                            + Добавить
+                          </button>
+                        </div>
+
+                        {todayExtraActivities.length > 0 && (
+                          <div className="flex flex-col gap-2">
+                            {todayExtraActivities.map((activity) => (
+                              <div key={activity.id} className="flex items-center justify-between gap-2 rounded-xl bg-[#27272a] border border-zinc-700/30 px-3 py-2">
+                                <span className="min-w-0 text-xs font-bold text-zinc-200 truncate">{activity.name} <span className="text-emerald-400">+{activity.calories} ккал</span></span>
+                                <div className="flex shrink-0 items-center gap-1">
+                                  <button type="button" onClick={() => openExtraActivityModal(activity)} className="btn-active rounded-lg px-2 py-1 text-[10px] font-bold text-zinc-400 border border-zinc-700/30">Изменить</button>
+                                  <button type="button" onClick={() => removeExtraActivity(activity.id)} className="btn-active rounded-lg px-2 py-1 text-[10px] font-bold text-zinc-500 active:text-red-400" aria-label={`Удалить ${activity.name}`}>Удалить</button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${dailyWorkouts[currentDate] ? 'bg-emerald-500' : 'bg-zinc-700'}`}>
-                        {dailyWorkouts[currentDate] && <IconCheck className="w-4 h-4 text-white" />}
-                      </div>
-                    </button>
+                    </div>
                     )}
 
                     {(blocks.protein || blocks.fats || blocks.carbs) && (
@@ -3868,6 +3998,67 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
             </nav>
 
             {/* Модалки */}
+            <AnimatePresence>
+            {showExtraActivityModal && (
+              <motion.div key="extra-activity" className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+                <motion.div className="bg-[#18181b] p-5 rounded-3xl border border-zinc-800 w-full max-w-sm max-h-[90vh] overflow-y-auto" initial={{ opacity: 0, scale: 0.9, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }}>
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <div>
+                      <h3 className="text-lg font-bold">Дополнительная активность</h3>
+                      <p className="text-xs text-zinc-500 mt-1 leading-relaxed">Добавит калории только к выбранному дню, без изменения профиля и шагов.</p>
+                    </div>
+                    <button type="button" onClick={closeExtraActivityModal} className="btn-active shrink-0 w-10 h-10 bg-zinc-800 rounded-xl text-zinc-300 border border-zinc-800/50 flex items-center justify-center cursor-pointer" aria-label="Закрыть"><IconClose className="w-5 h-5" /></button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-[10px] text-zinc-500 uppercase font-bold block mb-2 tracking-widest">Тип активности</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {EXTRA_ACTIVITY_TYPES.map((activity) => {
+                          const active = extraActivityDraft.type === activity.key;
+                          return (
+                            <button
+                              key={activity.key}
+                              type="button"
+                              onClick={() => setExtraActivityType(activity.key)}
+                              aria-pressed={active}
+                              className={`btn-active cursor-pointer rounded-xl p-2.5 text-left border transition-all ${active ? 'bg-emerald-600/15 border-emerald-600/40 text-emerald-300' : 'bg-[#27272a] border-zinc-700/30 text-zinc-300'}`}
+                            >
+                              <span className="text-xs font-bold block">{activity.label}</span>
+                              <span className="text-[9px] text-zinc-500 leading-tight mt-1 block">{activity.hint}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <label className="block">
+                      <span className="text-[10px] text-zinc-500 uppercase font-bold block mb-1 tracking-widest">Калории</span>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min="0"
+                        step="1"
+                        className={`w-full bg-[#27272a] rounded-xl p-4 text-zinc-100 font-black text-lg outline-none border transition-colors ${extraActivityError ? 'border-red-500' : 'border-zinc-700/30 focus:border-emerald-500'}`}
+                        value={extraActivityDraft.calories}
+                        onChange={(e) => { setExtraActivityDraft({ ...extraActivityDraft, calories: e.target.value }); setExtraActivityError(''); }}
+                        onFocus={(e) => e.target.select()}
+                      />
+                    </label>
+                    <p className="text-[11px] text-zinc-500 leading-relaxed">{extraActivitySelectedType.hint}. Значение можно изменить вручную.</p>
+                    {extraActivityError && <p className="text-xs text-red-400 font-bold" role="alert">{extraActivityError}</p>}
+                    {extraActivityWarning && <p className="text-xs text-amber-300 font-bold leading-relaxed" role="status">{extraActivityWarning}</p>}
+
+                    <div className="flex gap-3 pt-1">
+                      <button type="button" onClick={closeExtraActivityModal} className="btn-active flex-1 p-4 rounded-xl bg-zinc-800 font-bold text-zinc-300 transition-all">Не добавлять</button>
+                      <button type="button" onClick={saveExtraActivity} className="btn-active flex-1 p-4 rounded-xl bg-emerald-600 font-bold text-white transition-all">{editingExtraActivityId ? 'Сохранить' : 'Добавить калории'}</button>
+                    </div>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+            </AnimatePresence>
+
             <AnimatePresence>
             {showExportModal && (
               <motion.div key="export" className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
