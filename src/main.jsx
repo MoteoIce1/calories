@@ -6,7 +6,9 @@ import App from './App.jsx';
 // Service worker для офлайн-работы (network-first; файл лежит в public/).
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW:', e));
+    navigator.serviceWorker.register('sw.js').catch((e) => {
+      if (import.meta.env.DEV) console.warn('SW:', e);
+    });
   });
 }
 

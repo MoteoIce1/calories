@@ -4,6 +4,8 @@ import 'firebase/compat/auth';
 import 'firebase/compat/functions';
 import 'firebase/compat/app-check';
 
+    const IS_DEV = import.meta.env.DEV;
+
     // App Check защищает Cloud Functions от вызовов НЕ из вашего приложения (боты, абуз —
     // чтобы чужой скрипт не жёг ваш бюджет и лимиты ИИ). Чтобы включить:
     //   1) Firebase Console → App Check → зарегистрируйте веб-приложение, провайдер
@@ -33,16 +35,15 @@ import 'firebase/compat/app-check';
           // Для локальной отладки можно временно включить debug-токен:
           // if (location.hostname === 'localhost') self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
           firebase.appCheck().activate(new firebase.appCheck.ReCaptchaV3Provider(APPCHECK_SITE_KEY), true);
-          // Диагностика: подтверждаем, что клиент реально получает App Check токен.
-          // В консоли браузера: __appCheckToken() — покажет токен или ошибку конфигурации.
-          if (typeof window !== 'undefined') {
+          // Диагностика доступна только локально, чтобы не раскрывать debug-хелперы в production.
+          if (IS_DEV && typeof window !== 'undefined') {
             window.__appCheckToken = () => firebase.appCheck().getToken().then(t => { console.log('AppCheck OK, token len:', (t.token || '').length); return t; }).catch(e => { console.error('AppCheck FAIL:', e); throw e; });
             firebase.appCheck().getToken().then(t => console.log('AppCheck активен, токен получен (len ' + (t.token || '').length + ')')).catch(e => console.error('AppCheck НЕ получил токен:', e && e.message));
           }
-        } catch (e) { console.warn('App Check init error:', e); }
+        } catch (e) { if (IS_DEV) console.warn('App Check init error:', e); }
       }
       firebase.firestore().enablePersistence().catch((err) => {
-        console.warn("Firebase persistence error:", err.code);
+        if (IS_DEV) console.warn("Firebase persistence error:", err.code);
       });
     }
     const db = firebase.firestore();
@@ -71,8 +72,8 @@ import 'firebase/compat/app-check';
     const challengesCol = db.collection('challenges');
     const challengeRef = (id) => db.collection('challenges').doc(id);
 
-    // Доступ из консоли браузера для разовых операций с данными (правила Firestore по-прежнему защищают).
-    if (typeof window !== 'undefined') { window.__db = db; window.__auth = auth; }
+    // Доступ из консоли браузера только для локальной диагностики.
+    if (IS_DEV && typeof window !== 'undefined') { window.__db = db; window.__auth = auth; }
 
 export default firebase;
 export { db, auth, functions, profileRef, dayRef, daysCol, bodyCol, bodyDocRef, OWNER_EMAIL, sharedFoodsRef, legacyRef, publicProfilesCol, publicProfileRef, connectionsCol, connectionRef, challengesCol, challengeRef };

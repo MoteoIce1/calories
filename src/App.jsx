@@ -7,6 +7,7 @@ import { AI_UNAVAILABLE_MESSAGE, formatParsedFoodAmount, MAX_FOOD_TEXT_LENGTH, p
 import { ACTIVITY_LEVELS, DEFAULT_ACTIVITY_KEY, calculateStepCalorieAdjustment, calculateStepsCalories, computeKbju, normalizeActivityKey } from './utils/kbju.js';
 import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
+import { buildDietCsv } from './utils/export.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
 import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconCopy, IconFlame, IconSparkles, IconInfo, IconHelpCircle, IconLogOut } from './components/Icons.jsx';
@@ -96,8 +97,9 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const key = theme === 'rain' ? 'dark-neon-rain' : theme;
       return THEMES.some((t) => t.key === key) ? key : 'lime';
     };
-    const APP_VERSION = '2026.06.28.2';
+    const APP_VERSION = '2026.06.30.1';
     const VERSION_FILE_URL = '/version.json';
+    const logDev = (...args) => { if (import.meta.env.DEV) console.warn(...args); };
     const TAB_TITLES = {
       diary: 'Дневник',
       progress: 'Прогресс',
@@ -222,7 +224,6 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const [selectedFoodId, setSelectedFoodId] = useState('');
       const [gramsInput, setGramsInput] = useState('');
       const [foodSearch, setFoodSearch] = useState('');
-      const [foodSearchFocused, setFoodSearchFocused] = useState(false);
       const [newFood, setNewFood] = useState({ name: '', cals: '', pro: '', fat: '', carb: '' });
 
       const [editingLogId, setEditingLogId] = useState(null);
@@ -406,6 +407,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           ...Object.keys(data.dailySteps || {}),
           ...Object.keys(data.dailyMetrics || {}),
           ...Object.keys(data.dailyWorkouts || {}),
+          ...Object.keys(data.dailyWater || {}),
         ]);
         const all = Array.from(dates);
         for (let i = 0; i < all.length; i += 400) {
@@ -416,10 +418,12 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
             const st = (data.dailySteps || {})[date];
             const mt = (data.dailyMetrics || {})[date];
             const wk = (data.dailyWorkouts || {})[date];
+            const wt = (data.dailyWater || {})[date];
             if (lg) payload.logs = lg;
             if (st !== undefined && st !== '') payload.steps = st;
             if (mt) payload.metrics = mt;
             payload.workout = !!wk;
+            if (wt !== undefined && wt !== '') payload.water = wt;
             batch.set(dayRef(uid, date), payload, { merge: true });
           });
           await batch.commit();
@@ -469,7 +473,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
             setPersonalFoods([]);
           }
           setIsLoading(false);
-        }, (error) => { console.log("Firebase error", error); setIsLoading(false); });
+        }, (error) => { logDev("Firebase error", error); setIsLoading(false); });
         return () => unsubscribe();
       }, [uid]);
 
@@ -487,7 +491,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
             if (d.water !== undefined && d.water !== '' && d.water !== null) water[doc.id] = d.water;
           });
           setDailyLogs(logs); setDailySteps(steps); setDailyMetrics(metrics); setDailyWorkouts(workouts); setDailyWater(water);
-        }, (e) => console.log("days listener error", e));
+        }, (e) => logDev("days listener error", e));
         return () => unsubscribe();
       }, [uid]);
 
@@ -499,7 +503,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           snap.forEach((doc) => entries.push({ id: doc.id, ...doc.data() }));
           entries.sort((a, b) => a.date.localeCompare(b.date));
           setBodyEntries(entries);
-        }, (e) => console.log("body listener error", e));
+        }, (e) => logDev("body listener error", e));
         return () => unsubscribe();
       }, [uid]);
 
@@ -508,7 +512,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         if (!uid) return;
         const unsub = sharedFoodsRef.onSnapshot((snap) => {
           setSharedFoods(snap.exists && Array.isArray(snap.data().list) ? snap.data().list : []);
-        }, (e) => console.log("shared foods error", e));
+        }, (e) => logDev("shared foods error", e));
         return () => unsub();
       }, [uid]);
 
@@ -528,7 +532,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
             if (cancelled) return;
             const favIds = Array.isArray(prof.favoriteIds) ? prof.favoriteIds : own.filter(f => f.isFavorite).map(f => f.id);
             await profileRef(uid).set({ favoriteIds: favIds, foods: [] }, { merge: true });
-          } catch (e) { console.log('publish shared foods error', e); }
+          } catch (e) { logDev('publish shared foods error', e); }
         })();
         return () => { cancelled = true; };
       }, [uid, isOwner]);
@@ -558,7 +562,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
             const upd = { bodyMigrated: true };
             if (legacy) upd.bodyEntries = firebase.firestore.FieldValue.delete();
             profileRef(uid).set(upd, { merge: true }).catch(() => {});
-          } catch (e) { console.log('body migration error', e); }
+          } catch (e) { logDev('body migration error', e); }
         })();
         return () => { cancelled = true; };
       }, [uid]);
@@ -751,7 +755,6 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         setSelectedFoodId('');
         setGramsInput('');
         setFoodSearch('');
-        setFoodSearchFocused(false);
         foodSearchRef.current?.blur();
         gramsInputRef.current?.blur();
       };
@@ -1315,33 +1318,20 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       };
 
       const downloadCSV = () => {
-        const sep = ';';
-        const fmt = (n) => (n === undefined || n === null || n === '' || isNaN(n)) ? '' : String(n).replace('.', ',');
-        const headers = ['Дата', 'Ккал', 'Белок', 'Жиры', 'Углеводы', 'Шаги', 'Расход', 'Дефицит', 'Тренировка', 'Вода (мл)', 'Вес', 'Жир %', 'БЖМ', 'Масса жира'];
-        const rows = [headers.join(sep)];
-        allExportDates.forEach(date => {
-          const g = getEffectiveGoals(date);
-          const bSteps = getUsualSteps(g.baseSteps), bMaint = g.maintenance || 2300;
-          const logs = dailyLogs[date] || [];
-          const cals = logs.reduce((s, l) => s + (l.totalCalories || 0), 0);
-          const pro = Math.round(logs.reduce((s, l) => s + (l.totalProtein || 0), 0));
-          const fat = Math.round(logs.reduce((s, l) => s + (l.totalFats || 0), 0));
-          const carb = Math.round(logs.reduce((s, l) => s + (l.totalCarbs || 0), 0));
-          const stepsRaw = dailySteps[date] !== undefined ? dailySteps[date] : '';
-          const stepsCalc = dailySteps[date] !== undefined ? dailySteps[date] : bSteps;
-          const burned = bMaint + calculateStepCalorieAdjustment(stepsCalc, bSteps);
-          const deficit = burned - cals;
-          const m = dailyMetrics[date] || {};
-          const workout = dailyWorkouts[date] ? 'да' : '';
-          const vals = [cals, pro, fat, carb, stepsRaw, burned, deficit, '__W__', dailyWater[date], m.weight, m.fatPercent, m.leanMass, m.fatMass];
-          const line = [date, ...vals.map(fmt)].join(sep).replace('__W__', workout);
-          rows.push(line);
+        const csv = buildDietCsv({
+          dates: allExportDates,
+          getGoalsForDate: getEffectiveGoals,
+          dailyLogs,
+          dailySteps,
+          dailyMetrics,
+          dailyWorkouts,
+          dailyWater,
         });
-        triggerDownload('\uFEFF' + rows.join('\n'), `diet_${exportStart}_${exportEnd}.csv`, 'text/csv;charset=utf-8;');
+        triggerDownload(csv, `diet_${exportStart}_${exportEnd}.csv`, 'text/csv;charset=utf-8;');
       };
 
       const downloadBackup = () => {
-        const data = { goals, dailyGoals, foods, bodyEntries, dailyLogs, dailySteps, dailyMetrics, dailyWorkouts, _exportedAt: new Date().toISOString() };
+        const data = { goals, dailyGoals, foods, bodyEntries, dailyLogs, dailySteps, dailyMetrics, dailyWorkouts, dailyWater, _exportedAt: new Date().toISOString() };
         triggerDownload(JSON.stringify(data, null, 2), `backup_${getLocalDateString(new Date())}.json`, 'application/json');
       };
 
@@ -1526,10 +1516,10 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         if (!uid) { setConnections([]); setChallenges([]); return; }
         const u1 = connectionsCol.where('members', 'array-contains', uid).onSnapshot(
           (s) => { const a = []; s.forEach(d => a.push({ id: d.id, ...d.data() })); setConnections(a); },
-          (e) => console.log('connections error', e));
+          (e) => logDev('connections error', e));
         const u2 = challengesCol.where('members', 'array-contains', uid).onSnapshot(
           (s) => { const a = []; s.forEach(d => a.push({ id: d.id, ...d.data() })); setChallenges(a); },
-          (e) => console.log('challenges error', e));
+          (e) => logDev('challenges error', e));
         return () => { u1(); u2(); };
       }, [uid]);
 
@@ -1554,7 +1544,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       // любой авторизованный. Данные спора живут в самом документе спора (см. ниже).
       useEffect(() => {
         if (!uid) return;
-        publicProfileRef(uid).set({ uid, friendCode: myFriendCode, displayName: myDisplayName, updatedAt: Date.now() }, { merge: true }).catch(() => {});
+        publicProfileRef(uid).set({ uid, friendCode: myFriendCode, displayName: myDisplayName, updatedAt: Date.now() }).catch(() => {});
       }, [uid, myDisplayName]);
 
       // В каждый спор, где я участник, пишу СВОЙ текущий показатель и тренд ТОЛЬКО по

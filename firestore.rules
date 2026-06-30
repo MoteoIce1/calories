@@ -5,6 +5,67 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function isOwnerEmail() { return signedIn() && request.auth.token.email == 'i9293658888@mail.ru'; }
     function isMember(data) { return signedIn() && request.auth.uid in data.members; }
+    function changedOnly(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+    function hasTwoMembers(data) {
+      return data.members is list && data.members.size() == 2;
+    }
+    function validPublicProfile(uid) {
+      return request.resource.data.keys().hasOnly(['uid', 'friendCode', 'displayName', 'updatedAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.friendCode is string
+        && request.resource.data.friendCode.size() >= 4
+        && request.resource.data.friendCode.size() <= 16
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 40;
+    }
+    function validConnectionCreate() {
+      return request.resource.data.keys().hasOnly(['members', 'status', 'requestedBy', 'createdAt'])
+        && hasTwoMembers(request.resource.data)
+        && request.auth.uid in request.resource.data.members
+        && request.resource.data.status == 'pending'
+        && request.resource.data.requestedBy == request.auth.uid;
+    }
+    function validConnectionAccept() {
+      return isMember(resource.data)
+        && resource.data.status == 'pending'
+        && resource.data.requestedBy != request.auth.uid
+        && changedOnly(['status'])
+        && request.resource.data.status == 'accepted';
+    }
+    function validChallengeCreate() {
+      return request.resource.data.keys().hasOnly(['members', 'createdBy', 'type', 'targets', 'deadline', 'status', 'acceptedBy', 'start', 'live', 'createdAt'])
+        && hasTwoMembers(request.resource.data)
+        && request.auth.uid in request.resource.data.members
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.acceptedBy is list
+        && request.resource.data.acceptedBy.size() == 1
+        && request.auth.uid in request.resource.data.acceptedBy;
+    }
+    function updatesOnlyOwnChallengeLive() {
+      return isMember(resource.data)
+        && changedOnly(['live'])
+        && resource.data.live is map
+        && request.resource.data.live is map
+        && request.resource.data.live.diff(resource.data.live).affectedKeys().hasOnly([request.auth.uid]);
+    }
+    function validChallengeAccept() {
+      return isMember(resource.data)
+        && resource.data.status == 'pending'
+        && resource.data.createdBy != request.auth.uid
+        && changedOnly(['status', 'acceptedBy', 'start', 'live'])
+        && request.resource.data.status == 'active'
+        && request.resource.data.acceptedBy is list
+        && request.auth.uid in request.resource.data.acceptedBy
+        && resource.data.start is map
+        && request.resource.data.start is map
+        && request.resource.data.start.diff(resource.data.start).affectedKeys().hasOnly([request.auth.uid])
+        && resource.data.live is map
+        && request.resource.data.live is map
+        && request.resource.data.live.diff(resource.data.live).affectedKeys().hasOnly([request.auth.uid]);
+    }
 
     // Приватные данные пользователя: цели, продукты, дни, замеры, профиль, настройки.
     match /users/{uid} {
@@ -24,19 +85,22 @@ service cloud.firestore {
     // Читают все авторизованные (поиск по коду, табло спора), пишет только владелец документа.
     match /publicProfiles/{uid} {
       allow read: if signedIn();
-      allow write: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid && validPublicProfile(uid);
+      allow delete: if signedIn() && request.auth.uid == uid;
     }
 
     // Связи (заявки в друзья / дружба). Доступ только участникам.
     match /connections/{id} {
-      allow read, update, delete: if isMember(resource.data);
-      allow create: if isMember(request.resource.data);
+      allow read, delete: if isMember(resource.data);
+      allow create: if signedIn() && validConnectionCreate();
+      allow update: if signedIn() && validConnectionAccept();
     }
 
     // Споры (вызовы). Доступ только участникам.
     match /challenges/{id} {
-      allow read, update, delete: if isMember(resource.data);
-      allow create: if isMember(request.resource.data);
+      allow read, delete: if isMember(resource.data);
+      allow create: if signedIn() && validChallengeCreate();
+      allow update: if signedIn() && (updatesOnlyOwnChallengeLive() || validChallengeAccept());
     }
   }
 }
