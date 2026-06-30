@@ -99,7 +99,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const key = theme === 'rain' ? 'dark-neon-rain' : theme;
       return THEMES.some((t) => t.key === key) ? key : 'lime';
     };
-    const APP_VERSION = '2026.06.30.6';
+    const APP_VERSION = '2026.06.30.7';
     const VERSION_FILE_URL = '/version.json';
     const logDev = (...args) => { if (import.meta.env.DEV) console.warn(...args); };
     const TAB_TITLES = {
@@ -2800,22 +2800,8 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                         <p className="text-[10px] uppercase font-bold mt-1 tracking-widest opacity-80">{calsLabel}</p>
                       </div>
                     </div>
-                    <div className="progress-track h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-5">
+                    <div className="progress-track h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-4">
                       <motion.div className={`h-full ${isOver ? 'bg-red-500' : 'bg-emerald-500'}`} initial={false} animate={{ width: `${progressCals}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }}></motion.div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 mb-4">
-                      <div className="rounded-xl bg-zinc-900/50 border border-zinc-800/50 p-2">
-                        <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Цель</p>
-                        <p className="text-sm font-black text-zinc-200 mt-0.5">{baseTargetCalories}</p>
-                      </div>
-                      <div className="rounded-xl bg-zinc-900/50 border border-zinc-800/50 p-2">
-                        <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Доп. активность</p>
-                        <p className="text-sm font-black text-emerald-400 mt-0.5">+{extraActivityCalories}</p>
-                      </div>
-                      <div className="rounded-xl bg-zinc-900/50 border border-zinc-800/50 p-2">
-                        <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Доступно</p>
-                        <p className="text-sm font-black text-zinc-100 mt-0.5">{dailyAvailableCalories}</p>
-                      </div>
                     </div>
                     </>)}
 
