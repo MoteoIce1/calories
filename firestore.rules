@@ -34,6 +34,23 @@ service cloud.firestore {
         && changedOnly(['status'])
         && request.resource.data.status == 'accepted';
     }
+    function existingConnectionProgress() {
+      return resource.data.progress is map ? resource.data.progress : {};
+    }
+    function validConnectionProgressSnapshot(data) {
+      return data is map
+        && data.keys().hasOnly(['weight', 'weightHistory', 'updatedAt'])
+        && data.weightHistory is list
+        && data.updatedAt is number;
+    }
+    function updatesOnlyOwnConnectionProgress() {
+      return isMember(resource.data)
+        && resource.data.status == 'accepted'
+        && changedOnly(['progress'])
+        && request.resource.data.progress is map
+        && request.resource.data.progress.diff(existingConnectionProgress()).affectedKeys().hasOnly([request.auth.uid])
+        && validConnectionProgressSnapshot(request.resource.data.progress[request.auth.uid]);
+    }
     function validChallengeCreate() {
       return request.resource.data.keys().hasOnly(['members', 'createdBy', 'type', 'targets', 'deadline', 'status', 'acceptedBy', 'start', 'live', 'createdAt'])
         && hasTwoMembers(request.resource.data)
@@ -81,8 +98,8 @@ service cloud.firestore {
       allow write: if isOwnerEmail();
     }
 
-    // Публичная «витрина» для соревнований: код друга, имя и сводные показатели.
-    // Читают все авторизованные (поиск по коду, табло спора), пишет только владелец документа.
+    // Публичная «витрина» для поиска друзей: код друга и имя.
+    // Читают все авторизованные (поиск по коду), пишет только владелец документа.
     match /publicProfiles/{uid} {
       allow read: if signedIn();
       allow create, update: if signedIn() && request.auth.uid == uid && validPublicProfile(uid);
@@ -93,7 +110,7 @@ service cloud.firestore {
     match /connections/{id} {
       allow read, delete: if isMember(resource.data);
       allow create: if signedIn() && validConnectionCreate();
-      allow update: if signedIn() && validConnectionAccept();
+      allow update: if signedIn() && (validConnectionAccept() || updatesOnlyOwnConnectionProgress());
     }
 
     // Споры (вызовы). Доступ только участникам.
