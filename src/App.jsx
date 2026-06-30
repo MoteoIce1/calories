@@ -98,7 +98,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const key = theme === 'rain' ? 'dark-neon-rain' : theme;
       return THEMES.some((t) => t.key === key) ? key : 'lime';
     };
-    const APP_VERSION = '2026.06.30.3';
+    const APP_VERSION = '2026.06.30.4';
     const VERSION_FILE_URL = '/version.json';
     const logDev = (...args) => { if (import.meta.env.DEV) console.warn(...args); };
     const TAB_TITLES = {
@@ -1140,6 +1140,14 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           if ('serviceWorker' in navigator) {
             const registrations = await navigator.serviceWorker.getRegistrations();
             await Promise.all(registrations.map((registration) => registration.update().catch(() => {})));
+          }
+          if ('caches' in window) {
+            const cacheKeys = await caches.keys();
+            await Promise.all(
+              cacheKeys
+                .filter((key) => key.startsWith('tracker-'))
+                .map((key) => caches.delete(key).catch(() => false))
+            );
           }
         } finally {
           const nextUrl = new URL(window.location.href);
@@ -3378,7 +3386,10 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                     {appUpdate ? (
                       <button type="button" onClick={applyAppUpdate} disabled={isApplyingUpdate} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-60"><IconDownload className="w-5 h-5" />{isApplyingUpdate ? 'Обновляем…' : 'Обновить приложение'}</button>
                     ) : (
-                      <p className="text-[11px] text-zinc-500 leading-relaxed">Приложение само проверяет обновления при запуске и при возврате во вкладку.</p>
+                      <>
+                        <button type="button" onClick={applyAppUpdate} disabled={isApplyingUpdate} className="btn-active w-full bg-zinc-800 text-zinc-100 border border-zinc-700/40 rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-60"><IconRefresh className="w-5 h-5" />{isApplyingUpdate ? 'Обновляем…' : 'Обновить приложение'}</button>
+                        <p className="text-[11px] text-zinc-500 leading-relaxed">Приложение само проверяет обновления при запуске. Эта кнопка принудительно сбрасывает кэш и подтягивает свежую сборку.</p>
+                      </>
                     )}
                     {installPrompt && <button type="button" onClick={installApp} className="btn-active w-full bg-indigo-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2"><IconDownload className="w-5 h-5" />Установить приложение</button>}
                   </div>
@@ -3829,11 +3840,10 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                     </div>
 
                     <div className="mt-auto pt-4 space-y-3">
-                      {appUpdate && (
-                        <button type="button" onClick={applyAppUpdate} disabled={isApplyingUpdate} className="btn-active w-full bg-emerald-600 text-white rounded-2xl p-3 font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-60">
-                          <IconDownload className="w-5 h-5" /> {isApplyingUpdate ? 'Обновляем…' : 'Обновить приложение'}
-                        </button>
-                      )}
+                      <button type="button" onClick={applyAppUpdate} disabled={isApplyingUpdate} className={`btn-active w-full rounded-2xl p-3 font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-60 ${appUpdate ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-100 border border-zinc-700/40'}`}>
+                        {appUpdate ? <IconDownload className="w-5 h-5" /> : <IconRefresh className="w-5 h-5" />}
+                        {isApplyingUpdate ? 'Обновляем…' : 'Обновить приложение'}
+                      </button>
                       <button type="button" onClick={signOutFromDrawer} className="drawer-item btn-active w-full flex items-center gap-3 rounded-2xl p-3 border bg-[#27272a] border-zinc-700/30 text-red-400 text-left transition-all cursor-pointer">
                         <span className="w-10 h-10 rounded-xl bg-zinc-900/50 flex items-center justify-center shrink-0"><IconLogOut className="w-5 h-5" /></span>
                         <span className="text-sm font-bold">Выход</span>

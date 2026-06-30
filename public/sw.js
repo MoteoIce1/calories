@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tracker-v7';
+const CACHE_NAME = 'tracker-v8';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -42,6 +42,12 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (!event.request.url.startsWith(self.location.origin)) return;
+
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.pathname === '/version.json' || requestUrl.pathname === '/sw.js') {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
   event.respondWith(
     fetch(event.request)
