@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import firebase, { db, auth, functions, profileRef, dayRef, daysCol, bodyCol, bodyDocRef, OWNER_EMAIL, sharedFoodsRef, legacyRef, publicProfileRef, publicProfilesCol, connectionsCol, connectionRef, challengesCol, challengeRef } from './firebase.js';
 import { motion, AnimatePresence, animate } from 'framer-motion';
 import { evaluateMath } from './utils/math.js';
@@ -11,19 +11,9 @@ import { buildDietCsv } from './utils/export.js';
 import { compareWeightLoss, filterDatesByProgressPeriod, getProgressPeriod, normalizeWeightHistory, progressPeriods, summarizeWeightProgress } from './utils/progress.js';
 import { EXTRA_ACTIVITY_TYPES, calculateDailyAvailableCalories, getExtraActivityType, normalizeExtraActivities, sumExtraActivityCalories, validateExtraActivityCalories } from './utils/activity.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
+import { CHALLENGE_TYPES, challengeType, challengeHistKey, challengeTargetFor, computeChallengeStanding, shouldFinalizeChallenge, challengeRecordVs, computeChallengeSafetyWarning } from './utils/challenges.js';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
 import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconCopy, IconFlame, IconSparkles, IconInfo, IconHelpCircle, IconLogOut } from './components/Icons.jsx';
-
-    // Типы споров (вызовов). dir: 'down' — цель достичь значения не выше target; 'up' — не ниже target.
-    const CHALLENGE_TYPES = [
-      { key: 'weight', label: 'Сбросить вес', short: 'Вес', unit: 'кг', metric: 'weight', dir: 'down', help: 'Кто первым дойдёт до целевого веса' },
-      { key: 'fat', label: 'Снизить % жира', short: 'Жир', unit: '%', metric: 'fatPercent', dir: 'down', help: 'Кто первым дойдёт до целевого % жира' },
-      { key: 'waist', label: 'Уменьшить талию', short: 'Талия', unit: 'см', metric: 'waist', dir: 'down', help: 'Кто первым дойдёт до целевого обхвата талии' },
-      { key: 'steps', label: 'Среднее шагов в день', short: 'Шаги', unit: 'шаг', metric: 'avg7Steps', dir: 'up', help: 'У кого выше среднее за 7 дней' },
-      { key: 'deficit', label: 'Средний дефицит', short: 'Дефицит', unit: 'ккал', metric: 'avg7Deficit', dir: 'up', help: 'У кого выше средний дефицит за 7 дней' },
-      { key: 'streak', label: 'Дни подряд в цели', short: 'Серия', unit: 'дн', metric: 'goalStreak', dir: 'up', help: 'Кто дольше держит дефицит без срыва' },
-    ];
-    const challengeType = (key) => CHALLENGE_TYPES.find(t => t.key === key) || CHALLENGE_TYPES[0];
 
     // Блоки дневника, которые можно скрыть в настройках профиля.
     const TOGGLEABLE_BLOCKS = [
@@ -214,6 +204,8 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const [friendCodeInput, setFriendCodeInput] = useState('');
       const [showChallengeModal, setShowChallengeModal] = useState(false);
       const [challengeDraft, setChallengeDraft] = useState({ friendUid: '', type: 'weight', myTarget: '', friendTarget: '', deadline: '' });
+      const [showAcceptModal, setShowAcceptModal] = useState(false);
+      const [acceptDraft, setAcceptDraft] = useState({ challengeId: '', myTarget: '' });
       const [challengeProgressFriendUid, setChallengeProgressFriendUid] = useState('');
       const [challengeProgressPeriod, setChallengeProgressPeriod] = useState('14d');
       // ИИ разбирает текст на продукты только через VPS API; ключи остаются на сервере.
@@ -1542,7 +1534,9 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const myFriendCode = uid ? uid.slice(0, 6).toUpperCase() : '';
       const myDisplayName = (profileData.displayName || '').trim() || (userEmail ? userEmail.split('@')[0] : 'Аноним');
       // Сводные показатели для публичной витрины (по ним считаются споры).
-      const computePublicStats = () => {
+      // Мемоизируем: внутри цикл до 400 дней (серия) + построение историй —
+      // без useMemo это пересчитывалось на каждый рендер (в т.ч. на каждый ввод символа).
+      const myStatsNow = useMemo(() => {
         const t = getLocalDateString(new Date());
         let stepSum = 0, stepCnt = 0, defSum = 0, defCnt = 0;
         for (let i = 0; i < 7; i++) {
@@ -1589,14 +1583,27 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           goalStreak: streak,
           weightHistory, fatHistory, stepsHistory, waistHistory,
         };
-      };
-      const myStatsNow = computePublicStats();
+      }, [dailySteps, dailyLogs, dailyExtraActivities, dailyMetrics, bodyEntries, measuredWeight, profileData.weight, dailyGoals, goals]);
       const acceptedFriends = connections.filter(c => c.status === 'accepted');
       const incomingRequests = connections.filter(c => c.status === 'pending' && c.requestedBy !== uid);
       const outgoingRequests = connections.filter(c => c.status === 'pending' && c.requestedBy === uid);
       const friendName = (fid) => (friendProfiles[fid]?.displayName) || 'Друг';
       const otherUid = (c) => (c.members || []).find(m => m !== uid);
-      const statFor = (fid, metric) => fid === uid ? myStatsNow[metric] : (friendProfiles[fid]?.[metric]);
+      // Текущий показатель соперника, который мы вправе видеть до старта спора.
+      // Публичный профиль хранит только имя/код, поэтому вес берём из прогресса связи
+      // (его пишут обе стороны в connections.progress). Остальные метрики приватны —
+      // до создания спора мы их не знаем и подсказку не показываем.
+      const friendMetricNow = (fid, metric) => {
+        if (fid === uid) return myStatsNow[metric];
+        if (metric === 'weight') {
+          const conn = acceptedFriends.find(c => otherUid(c) === fid);
+          const p = conn?.progress?.[fid];
+          if (p && typeof p.weight === 'number') return p.weight;
+          const hist = normalizeWeightHistory(p?.weightHistory || []);
+          if (hist.length) return hist[hist.length - 1].v;
+        }
+        return undefined;
+      };
       const progressToday = getLocalDateString(new Date());
       const acceptedFriendUids = acceptedFriends.map(c => otherUid(c)).filter(Boolean);
       const selectedChallengeFriendConnection = acceptedFriends.find(c => otherUid(c) === challengeProgressFriendUid) || null;
@@ -1714,11 +1721,12 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       // В каждый спор, где я участник, пишу СВОЙ текущий показатель и тренд ТОЛЬКО по
       // метрике этого спора. Документ спора читают лишь его участники (правила Firestore),
       // поэтому соперник видит только ту метрику, по которой поспорили, и никто посторонний.
-      const challengeHistKey = (metric) => ({ weight: 'weightHistory', fatPercent: 'fatHistory', avg7Steps: 'stepsHistory', waist: 'waistHistory' }[metric]);
+      // Завершённые/отменённые споры не трогаем — их live заморожен (это финальный результат).
       useEffect(() => {
         if (!uid || !challenges.length) return;
         challenges.forEach(c => {
           if (!(c.members || []).includes(uid)) return;
+          if (c.status === 'finished' || c.status === 'cancelled') return;
           const tp = challengeType(c.type);
           const histKey = challengeHistKey(tp.metric);
           const value = typeof myStatsNow[tp.metric] === 'number' ? myStatsNow[tp.metric] : null;
@@ -1729,6 +1737,21 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           challengeRef(c.id).set({ live: { [uid]: { value, history, updatedAt: Date.now() } } }, { merge: true }).catch(() => {});
         });
       }, [uid, challenges, dailyLogs, dailySteps, dailyMetrics, dailyExtraActivities, measuredWeight, bodyEntries]);
+
+      // Финализация: активный спор, у которого вышел срок или кто-то уже достиг цели,
+      // переводим в статус finished. Победитель считается из замороженных live-значений
+      // (клиент меняет только status — сами показатели не переписываем). Любой участник
+      // может закрыть спор — статус общий, конфликт записи безопасен (идемпотентно).
+      useEffect(() => {
+        if (!uid || !challenges.length) return;
+        const today = getLocalDateString(new Date());
+        challenges.forEach(c => {
+          if (!(c.members || []).includes(uid)) return;
+          if (shouldFinalizeChallenge({ challenge: c, uid, myStatsNow, today })) {
+            challengeRef(c.id).set({ status: 'finished', finishedAt: Date.now() }, { merge: true }).catch(() => {});
+          }
+        });
+      }, [uid, challenges, myStatsNow]);
 
       // ── Действия с друзьями и спорами ──
       const sendFriendRequest = async () => {
@@ -1755,20 +1778,28 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         setChallengeDraft({ friendUid: friendUid || (acceptedFriends[0] ? otherUid(acceptedFriends[0]) : ''), type: 'weight', myTarget: '', friendTarget: '', deadline: getLocalDateString(new Date(Date.now() + 30 * 86400000)) });
         setShowChallengeModal(true);
       };
+      // Снимок своей метрики (значение + история) для записи в спор.
+      const myChallengeSnapshot = (metric) => {
+        const hk = challengeHistKey(metric);
+        return {
+          value: typeof myStatsNow[metric] === 'number' ? myStatsNow[metric] : null,
+          history: hk ? (myStatsNow[hk] || []) : [],
+          updatedAt: Date.now(),
+        };
+      };
       const createChallenge = async () => {
         const { friendUid, type, myTarget, friendTarget, deadline } = challengeDraft;
-        if (!uid || !friendUid || myTarget === '' || friendTarget === '' || !deadline) { alert('Заполните соперника, обе цели и срок.'); return; }
+        if (!uid || !friendUid || myTarget === '' || !deadline) { alert('Заполните соперника, вашу цель и срок.'); return; }
         // Срок строго в будущем — нельзя сегодня/вчера (жёсткая проверка, не только min инпута).
         if (deadline <= getLocalDateString(new Date())) { alert('Срок спора должен быть в будущем — выберите дату от завтра.'); return; }
         const members = [uid, friendUid].sort();
-        // У каждого участника своя цель: я худею до своей, друг — до своей.
-        const targets = { [uid]: Number(myTarget), [friendUid]: Number(friendTarget) };
-        // Сразу кладу свой текущий показатель и тренд по метрике спора (видят только участники).
+        // Своя цель — обязательна. Цель соперника — лишь предложение: он подтвердит/поменяет её при принятии.
+        const targets = { [uid]: Number(myTarget) };
+        if (friendTarget !== '') targets[friendUid] = Number(friendTarget);
         const tp0 = challengeType(type);
-        const hk0 = challengeHistKey(tp0.metric);
         // Старт-снимок — ТОЛЬКО метрика спора (не весь профиль, чтобы не светить остальное).
         const start = { [uid]: { [tp0.metric]: typeof myStatsNow[tp0.metric] === 'number' ? myStatsNow[tp0.metric] : null } };
-        const live = { [uid]: { value: typeof myStatsNow[tp0.metric] === 'number' ? myStatsNow[tp0.metric] : null, history: hk0 ? (myStatsNow[hk0] || []) : [], updatedAt: Date.now() } };
+        const live = { [uid]: myChallengeSnapshot(tp0.metric) };
         const ref = challengesCol.doc();
         try {
           await ref.set({ members, createdBy: uid, type, targets, deadline, status: 'pending', acceptedBy: [uid], start, live, createdAt: Date.now() });
@@ -1776,63 +1807,113 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           alert('Вызов отправлен ' + friendName(friendUid) + '!');
         } catch (e) { alert('Не удалось создать спор: ' + e.message); }
       };
-      const acceptChallenge = (c) => {
-        const tp = challengeType(c.type); const hk = challengeHistKey(tp.metric);
-        const live = { [uid]: { value: typeof myStatsNow[tp.metric] === 'number' ? myStatsNow[tp.metric] : null, history: hk ? (myStatsNow[hk] || []) : [], updatedAt: Date.now() } };
-        const startVal = typeof myStatsNow[tp.metric] === 'number' ? myStatsNow[tp.metric] : null;
-        challengeRef(c.id).set({ status: 'active', acceptedBy: firebase.firestore.FieldValue.arrayUnion(uid), start: { [uid]: { [tp.metric]: startVal } }, live }, { merge: true }).catch(e => alert('Ошибка: ' + e.message));
+      // Принятие вызова: соперник задаёт СВОЮ цель (по умолчанию — предложенную создателем).
+      const openAcceptChallenge = (c) => {
+        const proposed = challengeTargetFor(c, uid);
+        setAcceptDraft({ challengeId: c.id, myTarget: proposed != null ? String(proposed) : '' });
+        setShowAcceptModal(true);
       };
-      const removeChallenge = (c) => { if (confirm('Удалить спор?')) challengeRef(c.id).delete().catch(e => alert('Ошибка: ' + e.message)); };
-
-      // Цель участника в споре: новые споры хранят targets[uid]; старые — единый target.
-      const challengeTargetFor = (c, m) => (c.targets && typeof c.targets[m] === 'number') ? c.targets[m] : (typeof c.target === 'number' ? c.target : null);
-      // Табло спора: у каждого своя цель; лидер — кто ближе к СВОЕЙ цели (или уже достиг).
-      const challengeStanding = (c) => {
+      const confirmAcceptChallenge = async () => {
+        const c = challenges.find(x => x.id === acceptDraft.challengeId);
+        if (!c) { setShowAcceptModal(false); return; }
+        if (acceptDraft.myTarget === '') { alert('Укажите свою цель.'); return; }
         const tp = challengeType(c.type);
-        const histKey = challengeHistKey(tp.metric);
-        const rows = (c.members || []).map(m => {
-          // Своё значение берём из свежего myStatsNow; значение соперника — из c.live (приватно).
-          const live = (c.live && c.live[m]) ? c.live[m] : null;
-          const value = m === uid ? myStatsNow[tp.metric] : (live ? live.value : undefined);
-          const history = m === uid ? (histKey ? (myStatsNow[histKey] || []) : []) : (live && Array.isArray(live.history) ? live.history : []);
-          const target = challengeTargetFor(c, m);
-          const hasV = typeof value === 'number' && !isNaN(value);
-          const hasT = typeof target === 'number' && !isNaN(target);
-          const reached = hasV && hasT && (tp.dir === 'down' ? value <= target : value >= target);
-          // Остаток до своей цели (0 — достигнута). Им меряем близость к цели.
-          const remaining = (hasV && hasT) ? Math.max(0, tp.dir === 'down' ? value - target : target - value) : null;
-          // Прогресс относительно старта спора (снимок показателей при создании/принятии).
-          const startVal = c.start && c.start[m] ? c.start[m][tp.metric] : null;
-          const delta = (hasV && typeof startVal === 'number') ? Math.round((value - startVal) * 10) / 10 : null;
-          return { uid: m, name: m === uid ? 'Вы' : friendName(m), value, target, reached, remaining, start: typeof startVal === 'number' ? startVal : null, delta, history };
-        });
-        const valid = rows.filter(r => r.remaining != null);
-        let leaderUid = null;
-        if (valid.length) leaderUid = valid.reduce((a, b) => (b.remaining < a.remaining ? b : a)).uid;
-        const daysLeft = Math.ceil((new Date(c.deadline) - new Date(getLocalDateString(new Date()))) / 86400000);
-        return { tp, rows, leaderUid, daysLeft };
+        const startVal = typeof myStatsNow[tp.metric] === 'number' ? myStatsNow[tp.metric] : null;
+        try {
+          await challengeRef(c.id).set({
+            status: 'active',
+            acceptedBy: firebase.firestore.FieldValue.arrayUnion(uid),
+            targets: { [uid]: Number(acceptDraft.myTarget) },
+            start: { [uid]: { [tp.metric]: startVal } },
+            live: { [uid]: myChallengeSnapshot(tp.metric) },
+          }, { merge: true });
+          setShowAcceptModal(false);
+        } catch (e) { alert('Ошибка: ' + e.message); }
+      };
+      // Мягкая отмена: активный/ожидающий спор переводим в cancelled (соперник видит статус),
+      // а из истории завершённые/отменённые можно удалить окончательно.
+      const removeChallenge = (c) => {
+        if (c.status === 'finished' || c.status === 'cancelled') {
+          if (confirm('Удалить спор из истории?')) challengeRef(c.id).delete().catch(e => alert('Ошибка: ' + e.message));
+          return;
+        }
+        if (confirm('Отменить спор? Соперник увидит, что спор отменён.')) {
+          challengeRef(c.id).set({ status: 'cancelled', cancelledBy: uid, finishedAt: Date.now() }, { merge: true }).catch(e => alert('Ошибка: ' + e.message));
+        }
       };
 
-      // Предупреждение об агрессивном похудении при создании спора (проверяем обе стороны).
-      const challengeSafetyWarning = (() => {
-        const { type, myTarget, friendTarget, friendUid, deadline } = challengeDraft;
-        if ((type !== 'weight' && type !== 'fat') || !deadline) return '';
-        const weeks = Math.max(0.5, (new Date(deadline) - new Date(getLocalDateString(new Date()))) / (86400000 * 7));
-        const metric = challengeType(type).metric;
-        const rateFor = (current, target) => {
-          if (typeof current !== 'number' || target === '' || target == null) return 0;
-          const drop = current - Number(target);
-          return drop <= 0 ? 0 : drop / weeks;
-        };
-        const myRate = rateFor(myStatsNow[metric], myTarget);
-        const friendRate = rateFor(friendProfiles[friendUid]?.[metric], friendTarget);
-        const limit = 1; // кг/нед или %/нед
-        const worst = Math.max(myRate, friendRate);
-        if (worst <= limit) return '';
-        const who = myRate > friendRate ? 'у вас' : 'у соперника';
-        if (type === 'weight') return `Темп ${who} ~${worst.toFixed(1)} кг/нед — такое агрессивное похудение вредит организму (безопасно ≈0,5 кг/нед, дефицит ~500 ккал/день). Поставьте срок подальше или цель помягче.`;
-        return `Темп ${who} ~${worst.toFixed(1)}% жира в неделю — слишком быстро и вредно (безопасно ≈0,5%/нед). Лучше увеличьте срок.`;
-      })();
+      // Табло спора и предупреждение о темпе — из чистого модуля utils/challenges.js.
+      const challengeStanding = (c) => computeChallengeStanding({ challenge: c, uid, myStatsNow, friendName, today: getLocalDateString(new Date()) });
+      const renderChallengeCard = (c) => {
+        const st = challengeStanding(c);
+        const isInvite = c.status === 'pending' && !(c.acceptedBy || []).includes(uid);
+        const isWaiting = c.status === 'pending' && (c.acceptedBy || []).includes(uid);
+        const won = st.finished && st.winnerUid === uid && !st.tie;
+        const lost = st.finished && st.winnerUid && st.winnerUid !== uid && !st.tie;
+        const statusLine = st.cancelled ? 'отменён' : st.finished ? 'завершён' : (st.daysLeft < 0 ? 'подводим итог…' : `осталось ${Math.max(0, st.daysLeft)} дн`);
+        const winnerName = st.winnerUid ? (st.rows.find(r => r.uid === st.winnerUid)?.name || 'Соперник') : '';
+        return (
+          <div key={c.id} className={`card-enter rounded-3xl p-4 border ${st.finished ? 'bg-[#141416] border-zinc-800/60' : 'bg-[#18181b] border-zinc-800/50'} ${st.cancelled ? 'opacity-70' : ''}`}>
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <div className="min-w-0">
+                <p className="text-sm font-black text-zinc-100">{st.tp.label}</p>
+                <p className="text-[10px] text-zinc-500 mt-0.5">У каждого своя цель · {statusLine}</p>
+              </div>
+              <button type="button" onClick={() => removeChallenge(c)} className="btn-active text-zinc-700 active:text-red-400 p-1 shrink-0"><IconTrash className="w-4 h-4" /></button>
+            </div>
+            {st.finished && (
+              <div className={`mb-3 rounded-xl px-3 py-2.5 border flex items-center gap-2 ${won ? 'bg-emerald-600/15 border-emerald-600/40 text-emerald-200' : lost ? 'bg-zinc-800/60 border-zinc-700/40 text-zinc-300' : 'bg-sky-500/15 border-sky-400/30 text-sky-100'}`}>
+                <IconTrophy className={`w-5 h-5 shrink-0 ${won ? 'text-amber-400' : lost ? 'text-zinc-400' : 'text-sky-300'}`} />
+                <span className="text-xs font-black">{st.tie || !st.winnerUid ? 'Ничья — оба молодцы!' : won ? '🏆 Вы победили!' : `Победил ${winnerName}`}</span>
+              </div>
+            )}
+            {st.cancelled && <p className="mb-3 text-[10px] text-zinc-500 text-center">Спор отменён{c.cancelledBy && c.cancelledBy !== uid ? ' соперником' : ''}.</p>}
+            <div className="space-y-2">
+              {st.rows.map(r => {
+                const goodDelta = r.delta != null && r.delta !== 0 && (st.tp.dir === 'down' ? r.delta < 0 : r.delta > 0);
+                const highlight = st.finished ? st.winnerUid === r.uid && !st.tie : st.leaderUid === r.uid;
+                return (
+                <div key={r.uid} className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 border ${highlight ? 'bg-emerald-600/15 border-emerald-600/40' : 'bg-[#27272a] border-zinc-700/30'}`}>
+                  <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5 min-w-0 truncate">{highlight && <IconFlame className="w-4 h-4 text-amber-400 shrink-0" />}{r.name}</span>
+                  <span className="shrink-0 text-right">
+                    <span className={`text-sm font-black ${r.reached ? 'text-emerald-400' : 'text-zinc-200'}`}>{typeof r.value === 'number' ? Math.round(r.value * 10) / 10 : '—'}{r.reached ? ' ✓' : ''}</span>
+                    {typeof r.target === 'number' && <span className="text-[10px] text-zinc-500 font-bold"> {st.tp.dir === 'down' ? '→ ≤' : '→ ≥'}{r.target} {st.tp.unit}</span>}
+                    {r.delta != null && r.delta !== 0 && <span className={`block text-[9px] font-bold ${goodDelta ? 'text-emerald-400' : 'text-red-400'}`}>{r.delta > 0 ? '▲ +' : '▼ −'}{Math.abs(r.delta)} {st.tp.unit} от старта</span>}
+                    {typeof r.start === 'number' && (r.delta == null || r.delta === 0) && <span className="block text-[9px] text-zinc-500">старт {Math.round(r.start * 10) / 10} {st.tp.unit}</span>}
+                  </span>
+                </div>
+                );
+              })}
+            </div>
+            {['weight', 'fat', 'steps', 'waist'].includes(st.tp.key) && st.rows.some(r => (r.history || []).length >= 2) && (
+              <div className="mt-3 space-y-2">
+                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Динамика · {st.tp.short.toLowerCase()}</p>
+                {st.rows.map(r => {
+                  const hist = r.history || [];
+                  if (hist.length < 2) return null;
+                  return <MiniWeightChart key={r.uid} title={`${r.name} · ${st.tp.short.toLowerCase()}`} data={hist.map(p => p.v)} dates={hist.map(p => { const a = (p.d || '').split('-'); return a.length === 3 ? `${a[2]}.${a[1]}` : p.d; })} color={(st.finished ? st.winnerUid === r.uid : st.leaderUid === r.uid) ? '#34d399' : '#a3e635'} unit={st.tp.unit} positiveIsGood={st.tp.dir === 'up'} />;
+                })}
+              </div>
+            )}
+            {isInvite && (
+              <div className="flex gap-2 mt-3">
+                <button type="button" onClick={() => openAcceptChallenge(c)} className="btn-active flex-1 bg-emerald-600 text-white rounded-xl p-3 text-xs font-bold">Принять вызов</button>
+                <button type="button" onClick={() => removeChallenge(c)} className="btn-active flex-1 bg-zinc-800 text-zinc-400 rounded-xl p-3 text-xs font-bold">Отказаться</button>
+              </div>
+            )}
+            {isWaiting && <p className="text-[10px] text-zinc-500 mt-2 text-center">Ждём, пока соперник примет вызов…</p>}
+          </div>
+        );
+      };
+      const challengeSafetyWarning = computeChallengeSafetyWarning({
+        type: challengeDraft.type,
+        myTarget: challengeDraft.myTarget,
+        friendTarget: challengeDraft.friendTarget,
+        myCurrent: myStatsNow[challengeType(challengeDraft.type).metric],
+        friendCurrent: friendMetricNow(challengeDraft.friendUid, challengeType(challengeDraft.type).metric),
+        deadline: challengeDraft.deadline,
+        today: getLocalDateString(new Date()),
+      });
 
       // ── ИИ: разбор текста на продукты для дневника ──
       // Ключ названия — набор слов без учёта порядка/регистра: «масло сливочное» == «Сливочное масло».
@@ -3575,11 +3656,15 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                     {acceptedFriends.length === 0 && <p className="text-xs text-zinc-500">Пока нет друзей. Добавьте по коду — и спорьте, кто быстрее придёт к цели.</p>}
                     {acceptedFriends.map(c => {
                       const fid = otherUid(c);
+                      const rec = challengeRecordVs(challenges, uid, fid);
+                      const hasRec = rec.wins + rec.losses + rec.ties > 0;
                       return (
                         <div key={c.id} className="flex items-center justify-between gap-2 bg-[#27272a] rounded-xl p-3 border border-zinc-700/30">
                           <div className="min-w-0">
                             <span className="text-sm font-bold text-zinc-200 block truncate">{friendName(fid)}</span>
-                            <span className="text-[10px] text-zinc-500">Показатели видны только в общем споре</span>
+                            {hasRec
+                              ? <span className="text-[10px] text-zinc-400 font-bold">Счёт: <span className="text-emerald-400">{rec.wins}</span> : <span className="text-red-400">{rec.losses}</span>{rec.ties ? <span className="text-zinc-500"> · {rec.ties} нич.</span> : null}</span>
+                              : <span className="text-[10px] text-zinc-500">Показатели видны только в общем споре</span>}
                           </div>
                           <div className="flex gap-2 shrink-0">
                             <button type="button" onClick={() => openChallengeWith(fid)} className="btn-active bg-emerald-600/15 text-emerald-300 border border-emerald-600/30 rounded-lg px-3 py-2 text-xs font-bold">Спорить</button>
@@ -3719,62 +3804,28 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                     )}
                   </div>
 
-                  {/* Споры */}
-                  {challenges.length > 0 && (
-                    <div className="space-y-3">
-                      <h2 className="px-1 text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconTrophy className="w-4 h-4" /> Споры ({challenges.length})</h2>
-                      {[...challenges].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).map(c => {
-                        const st = challengeStanding(c);
-                        const isInvite = c.status === 'pending' && !(c.acceptedBy || []).includes(uid);
-                        const isWaiting = c.status === 'pending' && (c.acceptedBy || []).includes(uid);
-                        const finished = st.daysLeft < 0 || c.status === 'finished';
-                        return (
-                          <div key={c.id} className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50">
-                            <div className="flex items-start justify-between gap-2 mb-3">
-                              <div className="min-w-0">
-                                <p className="text-sm font-black text-zinc-100">{st.tp.label}</p>
-                                <p className="text-[10px] text-zinc-500 mt-0.5">У каждого своя цель · {finished ? 'завершён' : `осталось ${Math.max(0, st.daysLeft)} дн`}</p>
-                              </div>
-                              <button type="button" onClick={() => removeChallenge(c)} className="btn-active text-zinc-700 active:text-red-400 p-1 shrink-0"><IconTrash className="w-4 h-4" /></button>
-                            </div>
-                            <div className="space-y-2">
-                              {st.rows.map(r => {
-                                const goodDelta = r.delta != null && r.delta !== 0 && (st.tp.dir === 'down' ? r.delta < 0 : r.delta > 0);
-                                return (
-                                <div key={r.uid} className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 border ${st.leaderUid === r.uid ? 'bg-emerald-600/15 border-emerald-600/40' : 'bg-[#27272a] border-zinc-700/30'}`}>
-                                  <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5 min-w-0 truncate">{st.leaderUid === r.uid && <IconFlame className="w-4 h-4 text-amber-400 shrink-0" />}{r.name}</span>
-                                  <span className="shrink-0 text-right">
-                                    <span className={`text-sm font-black ${r.reached ? 'text-emerald-400' : 'text-zinc-200'}`}>{typeof r.value === 'number' ? Math.round(r.value * 10) / 10 : '—'}{r.reached ? ' ✓' : ''}</span>
-                                    {typeof r.target === 'number' && <span className="text-[10px] text-zinc-500 font-bold"> {st.tp.dir === 'down' ? '→ ≤' : '→ ≥'}{r.target} {st.tp.unit}</span>}
-                                    {r.delta != null && r.delta !== 0 && <span className={`block text-[9px] font-bold ${goodDelta ? 'text-emerald-400' : 'text-red-400'}`}>{r.delta > 0 ? '▲ +' : '▼ −'}{Math.abs(r.delta)} {st.tp.unit} от старта</span>}
-                                    {typeof r.start === 'number' && (r.delta == null || r.delta === 0) && <span className="block text-[9px] text-zinc-500">старт {Math.round(r.start * 10) / 10} {st.tp.unit}</span>}
-                                  </span>
-                                </div>
-                                );
-                              })}
-                            </div>
-                            {['weight', 'fat', 'steps', 'waist'].includes(st.tp.key) && st.rows.some(r => (r.history || []).length >= 2) && (
-                              <div className="mt-3 space-y-2">
-                                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Динамика · {st.tp.short.toLowerCase()}</p>
-                                {st.rows.map(r => {
-                                  const hist = r.history || [];
-                                  if (hist.length < 2) return null;
-                                  return <MiniWeightChart key={r.uid} title={`${r.name} · ${st.tp.short.toLowerCase()}`} data={hist.map(p => p.v)} dates={hist.map(p => { const a = (p.d || '').split('-'); return a.length === 3 ? `${a[2]}.${a[1]}` : p.d; })} color={st.leaderUid === r.uid ? '#34d399' : '#a3e635'} unit={st.tp.unit} positiveIsGood={st.tp.dir === 'up'} />;
-                                })}
-                              </div>
-                            )}
-                            {isInvite && (
-                              <div className="flex gap-2 mt-3">
-                                <button type="button" onClick={() => acceptChallenge(c)} className="btn-active flex-1 bg-emerald-600 text-white rounded-xl p-3 text-xs font-bold">Принять вызов</button>
-                                <button type="button" onClick={() => removeChallenge(c)} className="btn-active flex-1 bg-zinc-800 text-zinc-400 rounded-xl p-3 text-xs font-bold">Отказаться</button>
-                              </div>
-                            )}
-                            {isWaiting && <p className="text-[10px] text-zinc-500 mt-2 text-center">Ждём, пока соперник примет вызов…</p>}
+                  {/* Активные споры */}
+                  {(() => {
+                    const sorted = [...challenges].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                    const active = sorted.filter(c => c.status !== 'finished' && c.status !== 'cancelled');
+                    const archived = sorted.filter(c => c.status === 'finished' || c.status === 'cancelled');
+                    return (
+                      <>
+                        {active.length > 0 && (
+                          <div className="space-y-3">
+                            <h2 className="px-1 text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconTrophy className="w-4 h-4" /> Активные споры ({active.length})</h2>
+                            {active.map(c => renderChallengeCard(c))}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                        )}
+                        {archived.length > 0 && (
+                          <div className="space-y-3">
+                            <h2 className="px-1 text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconTrophy className="w-4 h-4" /> История споров ({archived.length})</h2>
+                            {archived.map(c => renderChallengeCard(c))}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -4120,7 +4171,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                     {(() => {
                       const tp = challengeType(challengeDraft.type);
                       const myCur = myStatsNow[tp.metric];
-                      const frCur = friendProfiles[challengeDraft.friendUid]?.[tp.metric];
+                      const frCur = friendMetricNow(challengeDraft.friendUid, tp.metric);
                       const fmt = (v) => typeof v === 'number' ? Math.round(v * 10) / 10 : null;
                       return (
                         <div>
@@ -4132,9 +4183,10 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                             </div>
                             <div>
                               <span className="text-[10px] text-zinc-400 font-bold block mb-1 truncate">{challengeDraft.friendUid ? friendName(challengeDraft.friendUid) : 'Соперник'}{fmt(frCur) != null ? ` · ${fmt(frCur)}` : ''}</span>
-                              <input type="number" inputMode="decimal" placeholder="—" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500" value={challengeDraft.friendTarget} onChange={(e) => setChallengeDraft({ ...challengeDraft, friendTarget: e.target.value })} onFocus={(e) => e.target.select()} />
+                              <input type="number" inputMode="decimal" placeholder="необязательно" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500" value={challengeDraft.friendTarget} onChange={(e) => setChallengeDraft({ ...challengeDraft, friendTarget: e.target.value })} onFocus={(e) => e.target.select()} />
                             </div>
                           </div>
+                          <p className="text-[10px] text-zinc-600 mt-1.5">Цель соперника — лишь предложение: он подтвердит или изменит её, когда примет вызов.</p>
                         </div>
                       );
                     })()}
@@ -4151,12 +4203,42 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                         <p className="text-[11px] text-red-200/90 leading-relaxed">{challengeSafetyWarning}</p>
                       </div>
                     )}
-                    <button type="button" onClick={createChallenge} disabled={!challengeDraft.friendUid || challengeDraft.myTarget === '' || challengeDraft.friendTarget === '' || !challengeDraft.deadline} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all disabled:opacity-35">Бросить вызов</button>
+                    <button type="button" onClick={createChallenge} disabled={!challengeDraft.friendUid || challengeDraft.myTarget === '' || !challengeDraft.deadline} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all disabled:opacity-35">Бросить вызов</button>
                     <button type="button" onClick={() => setShowChallengeModal(false)} className="btn-active w-full border border-zinc-800 text-zinc-500 rounded-xl p-3 font-bold transition-all">Отмена</button>
                   </div>
                 </motion.div>
               </motion.div>
             )}
+            </AnimatePresence>
+
+            {/* Модалка: принять вызов — соперник задаёт СВОЮ цель */}
+            <AnimatePresence>
+            {showAcceptModal && (() => {
+              const c = challenges.find(x => x.id === acceptDraft.challengeId);
+              const tp = c ? challengeType(c.type) : null;
+              const myCur = tp ? myStatsNow[tp.metric] : null;
+              const fmt = (v) => typeof v === 'number' ? Math.round(v * 10) / 10 : null;
+              return (
+              <motion.div key="accept-challenge" className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+                <motion.div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm" initial={{ opacity: 0, scale: 0.9, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }}>
+                  <h3 className="text-lg font-bold mb-1 text-center flex items-center justify-center gap-2"><IconTrophy className="w-5 h-5 text-amber-400" /> Принять вызов</h3>
+                  {tp && (
+                    <>
+                      <p className="text-zinc-500 text-xs mb-4 text-center leading-relaxed">{tp.label}. Задайте свою цель ({tp.dir === 'down' ? 'не выше' : 'не ниже'}), {tp.unit}.</p>
+                      <div className="space-y-3">
+                        <div>
+                          <span className="text-[10px] text-zinc-400 font-bold block mb-1">Ваша цель{fmt(myCur) != null ? ` · сейчас ${fmt(myCur)} ${tp.unit}` : ''}</span>
+                          <input type="number" inputMode="decimal" placeholder="—" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500" value={acceptDraft.myTarget} onChange={(e) => setAcceptDraft({ ...acceptDraft, myTarget: e.target.value })} onFocus={(e) => e.target.select()} />
+                        </div>
+                        <button type="button" onClick={confirmAcceptChallenge} disabled={acceptDraft.myTarget === ''} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all disabled:opacity-35">Принять и начать</button>
+                        <button type="button" onClick={() => setShowAcceptModal(false)} className="btn-active w-full border border-zinc-800 text-zinc-500 rounded-xl p-3 font-bold transition-all">Отмена</button>
+                      </div>
+                    </>
+                  )}
+                </motion.div>
+              </motion.div>
+              );
+            })()}
             </AnimatePresence>
 
             {/* Модалка: онбординг при регистрации (данные для КБЖУ + минимум шагов) */}

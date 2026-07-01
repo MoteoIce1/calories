@@ -72,7 +72,7 @@ service cloud.firestore {
       return isMember(resource.data)
         && resource.data.status == 'pending'
         && resource.data.createdBy != request.auth.uid
-        && changedOnly(['status', 'acceptedBy', 'start', 'live'])
+        && changedOnly(['status', 'acceptedBy', 'start', 'live', 'targets'])
         && request.resource.data.status == 'active'
         && request.resource.data.acceptedBy is list
         && request.auth.uid in request.resource.data.acceptedBy
@@ -81,7 +81,26 @@ service cloud.firestore {
         && request.resource.data.start.diff(resource.data.start).affectedKeys().hasOnly([request.auth.uid])
         && resource.data.live is map
         && request.resource.data.live is map
-        && request.resource.data.live.diff(resource.data.live).affectedKeys().hasOnly([request.auth.uid]);
+        && request.resource.data.live.diff(resource.data.live).affectedKeys().hasOnly([request.auth.uid])
+        // Принимающий задаёт ТОЛЬКО свою цель — чужую не трогает.
+        && resource.data.targets is map
+        && request.resource.data.targets is map
+        && request.resource.data.targets.diff(resource.data.targets).affectedKeys().hasOnly([request.auth.uid]);
+    }
+    // Закрытие по сроку/достижению цели: любой участник переводит active → finished.
+    // Показатели (live/start/targets) не переписываем — итог считается из замороженных данных.
+    function validChallengeFinish() {
+      return isMember(resource.data)
+        && resource.data.status == 'active'
+        && changedOnly(['status', 'finishedAt'])
+        && request.resource.data.status == 'finished';
+    }
+    // Мягкая отмена: активный/ожидающий спор → cancelled (вместо удаления у обоих).
+    function validChallengeCancel() {
+      return isMember(resource.data)
+        && (resource.data.status == 'pending' || resource.data.status == 'active')
+        && changedOnly(['status', 'cancelledBy', 'finishedAt'])
+        && request.resource.data.status == 'cancelled';
     }
 
     // Приватные данные пользователя: цели, продукты, дни, замеры, профиль, настройки.
@@ -115,9 +134,17 @@ service cloud.firestore {
 
     // Споры (вызовы). Доступ только участникам.
     match /challenges/{id} {
-      allow read, delete: if isMember(resource.data);
+      allow read: if isMember(resource.data);
+      // Удалять можно только завершённый/отменённый спор — активный нельзя стереть у соперника.
+      allow delete: if isMember(resource.data)
+        && (resource.data.status == 'finished' || resource.data.status == 'cancelled');
       allow create: if signedIn() && validChallengeCreate();
-      allow update: if signedIn() && (updatesOnlyOwnChallengeLive() || validChallengeAccept());
+      allow update: if signedIn() && (
+        updatesOnlyOwnChallengeLive()
+        || validChallengeAccept()
+        || validChallengeFinish()
+        || validChallengeCancel()
+      );
     }
   }
 }
