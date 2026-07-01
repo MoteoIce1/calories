@@ -206,6 +206,27 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const [challengeDraft, setChallengeDraft] = useState({ friendUid: '', type: 'weight', myTarget: '', friendTarget: '', deadline: '' });
       const [showAcceptModal, setShowAcceptModal] = useState(false);
       const [acceptDraft, setAcceptDraft] = useState({ challengeId: '', myTarget: '' });
+      // Неблокирующие уведомления вместо alert(), и промис-подтверждение вместо confirm().
+      const [toasts, setToasts] = useState([]);
+      const [confirmState, setConfirmState] = useState(null);
+      const notify = (message, type) => {
+        if (!message) return;
+        const kind = type || (/ошиб|не удал|не найд|нельзя|пуст|некоррект|должен|должна|заполн/i.test(String(message)) ? 'error' : 'success');
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        setToasts(prev => [...prev.slice(-3), { id, message: String(message), kind }]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4200);
+      };
+      const confirmDialog = (opts) => {
+        const o = typeof opts === 'string' ? { message: opts } : (opts || {});
+        return new Promise(resolve => setConfirmState({
+          message: o.message,
+          confirmLabel: o.confirmLabel || 'Да',
+          cancelLabel: o.cancelLabel || 'Отмена',
+          danger: !!o.danger,
+          resolve,
+        }));
+      };
+      const resolveConfirm = (result) => { if (confirmState) confirmState.resolve(result); setConfirmState(null); };
       const [challengeProgressFriendUid, setChallengeProgressFriendUid] = useState('');
       const [challengeProgressPeriod, setChallengeProgressPeriod] = useState('14d');
       // ИИ разбирает текст на продукты только через VPS API; ключи остаются на сервере.
@@ -437,14 +458,14 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       // Перенос данных из старой версии (единый документ users/main_profile)
       const importLegacy = async () => {
         if (!uid) return;
-        if (!confirm('Перенести данные из старой версии (main_profile) в твой аккаунт?')) return;
+        if (!(await confirmDialog('Перенести данные из старой версии (main_profile) в твой аккаунт?'))) return;
         try {
           const snap = await legacyRef.get();
-          if (!snap.exists) { alert('Старый документ main_profile не найден.'); return; }
+          if (!snap.exists) { notify('Старый документ main_profile не найден.'); return; }
           await writeAllData(snap.data());
-          alert('Данные перенесены. Проверь дневник и отчёт.');
+          notify('Данные перенесены. Проверь дневник и отчёт.');
         } catch (err) {
-          alert('Не удалось прочитать старые данные: ' + err.message + '\nЕсли правила Firestore уже закрыты — перенеси через JSON-бэкап.');
+          notify('Не удалось прочитать старые данные: ' + err.message + '\nЕсли правила Firestore уже закрыты — перенеси через JSON-бэкап.');
         }
       };
 
@@ -699,8 +720,8 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         setDraftGoals({ ...draftGoals, maintenance: editedVal(val, m), ...(m === null ? {} : { calories: Math.max(0, Math.round(m - d)) }) });
       };
 
-      const confirmGoalSave = (mode) => {
-        if (!confirm('Вы уверены, что хотите применить новые настройки?')) return;
+      const confirmGoalSave = async (mode) => {
+        if (!(await confirmDialog('Вы уверены, что хотите применить новые настройки?'))) return;
         let updatedDailyGoals = { ...dailyGoals };
         if (mode === 'all') {
             updatedDailyGoals = {}; 
@@ -751,7 +772,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
             return next;
           });
         } catch (err) {
-          alert('Не удалось обновить шаги и замеры: ' + err.message);
+          notify('Не удалось обновить шаги и замеры: ' + err.message);
         }
         setIsRefreshingDay(false);
       };
@@ -858,22 +879,22 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       };
 
       // Запись общей базы (только владелец) и личных продуктов пользователя — с видимой ошибкой при сбое.
-      const saveSharedFoods = (list) => { setSharedFoods(list); sharedFoodsRef.set({ list }, { merge: true }).catch(err => alert('Не удалось сохранить общую базу: ' + err.message)); };
+      const saveSharedFoods = (list) => { setSharedFoods(list); sharedFoodsRef.set({ list }, { merge: true }).catch(err => notify('Не удалось сохранить общую базу: ' + err.message)); };
       const savePersonalFoods = (list) => { setPersonalFoods(list); if (profileDoc) profileDoc.set({ foods: list }, { merge: true }).catch(() => {}); };
       const saveFavoriteIds = (ids) => { setFavoriteIds(ids); if (profileDoc) profileDoc.set({ favoriteIds: ids }, { merge: true }).catch(() => {}); };
 
       // Владелец публикует текущий список продуктов в общую базу shared/foods (видят все).
       const publishSharedBase = async () => {
         const list = foods.map(({ _shared, isFavorite, ...f }) => f);
-        if (!list.length) { alert('Список продуктов пуст — публиковать нечего.'); return; }
-        if (!confirm('Опубликовать ' + list.length + ' продуктов в общую базу для всех пользователей?')) return;
+        if (!list.length) { notify('Список продуктов пуст — публиковать нечего.'); return; }
+        if (!(await confirmDialog('Опубликовать ' + list.length + ' продуктов в общую базу для всех пользователей?'))) return;
         try {
           await sharedFoodsRef.set({ list });
           // Продукты теперь в общей базе — очищаем личный список владельца, чтобы не дублировать.
           if (personalFoods.length && profileDoc) await profileDoc.set({ foods: [] }, { merge: true });
-          alert('Готово! В общей базе теперь ' + list.length + ' продуктов. Они видны всем.');
+          notify('Готово! В общей базе теперь ' + list.length + ' продуктов. Они видны всем.');
         } catch (e) {
-          alert('Не удалось опубликовать: ' + e.message + '\n\nПроверь правила Firestore для shared/foods (запись разрешена только владельцу).');
+          notify('Не удалось опубликовать: ' + e.message + '\n\nПроверь правила Firestore для shared/foods (запись разрешена только владельцу).');
         }
       };
 
@@ -956,11 +977,11 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       // Сохранение/удаление одной записи замеров в подколлекции body (ошибки записи показываем — больше не молчим).
       const persistBodyEntry = (entry) => {
         setBodyEntries(prev => [...prev.filter(e => e.id !== entry.id), entry].sort((a, b) => a.date.localeCompare(b.date)));
-        if (uid) bodyDocRef(uid, entry.id).set(entry).catch(err => alert('Не удалось сохранить запись замеров: ' + err.message));
+        if (uid) bodyDocRef(uid, entry.id).set(entry).catch(err => notify('Не удалось сохранить запись замеров: ' + err.message));
       };
       const removeBodyEntryDoc = (id) => {
         setBodyEntries(prev => prev.filter(e => e.id !== id));
-        if (uid) bodyDocRef(uid, id).delete().catch(err => alert('Не удалось удалить запись: ' + err.message));
+        if (uid) bodyDocRef(uid, id).delete().catch(err => notify('Не удалось удалить запись: ' + err.message));
       };
 
       const getBodyPhotoSrc = (photo) => typeof photo === 'string' ? photo : photo?.src;
@@ -1009,7 +1030,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           const photos = await Promise.all(selected.map(compressPhoto));
           setBodyDraft(prev => ({ ...prev, photos: fillBodyPhotoSlots(prev.photos, photos) }));
         } catch (err) {
-          alert('Не удалось добавить фото: ' + err.message);
+          notify('Не удалось добавить фото: ' + err.message);
         }
       };
 
@@ -1020,7 +1041,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           const src = await compressPhoto(file);
           setBodyDraft(prev => ({ ...prev, photos: setBodyPhotoAtSlot(prev.photos, slotIndex, src) }));
         } catch (err) {
-          alert('Не удалось добавить фото: ' + err.message);
+          notify('Не удалось добавить фото: ' + err.message);
         }
       };
 
@@ -1033,7 +1054,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           if (!entry) return;
           persistBodyEntry({ ...entry, photos: setBodyPhotoAtSlot(entry.photos, slotIndex, src) });
         } catch (err) {
-          alert('Не удалось добавить фото: ' + err.message);
+          notify('Не удалось добавить фото: ' + err.message);
         }
       };
 
@@ -1062,7 +1083,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           if (!isNaN(value) && value > 0) measures[field.key] = value;
         });
         if (!Object.keys(measures).length && !countBodyPhotos(bodyDraft.photos)) {
-          alert('Добавь хотя бы одну мерку или фото.');
+          notify('Добавь хотя бы одну мерку или фото.');
           return;
         }
         const entry = {
@@ -1077,8 +1098,8 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         localStorage.removeItem('body-reminder-dismissed');
       };
 
-      const deleteBodyEntry = (id) => {
-        if (!confirm('Удалить замеры и фото за эту дату?')) return;
+      const deleteBodyEntry = async (id) => {
+        if (!(await confirmDialog({ message: 'Удалить замеры и фото за эту дату?', confirmLabel: 'Удалить', danger: true }))) return;
         removeBodyEntryDoc(id);
       };
 
@@ -1167,9 +1188,9 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         setShowExportModal(true);
         setIsDrawerOpen(false);
       };
-      const signOutFromDrawer = () => {
+      const signOutFromDrawer = async () => {
         setIsDrawerOpen(false);
-        if (confirm('Выйти из аккаунта?')) auth.signOut();
+        if (await confirmDialog('Выйти из аккаунта?')) auth.signOut();
       };
 
       const installApp = async () => {
@@ -1299,7 +1320,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       // Автоматический расчёт КБЖУ по формуле и открытие модалки применения целей.
       const applyAutoKbju = () => {
         const res = computeKbju(effectiveProfile);
-        if (!res) { alert('Заполните пол, возраст, рост и вес — по ним считается КБЖУ.'); return; }
+        if (!res) { notify('Заполните пол, возраст, рост и вес — по ним считается КБЖУ.'); return; }
         const baseSteps = getUsualSteps(effectiveProfile.usualSteps);
         const activity = normalizeActivityKey(effectiveProfile.activity);
         setDraftGoals({
@@ -1321,7 +1342,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       // Завершение онбординга: сохраняем профиль и считаем КБЖУ по модели BMR + шаги + активность.
       const finishOnboarding = () => {
         const o = onboardDraft;
-        if (!o.age || !o.height || !o.weight) { alert('Заполните возраст, рост и вес — по ним считается КБЖУ.'); return; }
+        if (!o.age || !o.height || !o.weight) { notify('Заполните возраст, рост и вес — по ним считается КБЖУ.'); return; }
         const today = getLocalDateString(new Date());
         const usualSteps = getUsualSteps(o.usualSteps);
         const p = {
@@ -1356,26 +1377,26 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
 
       // Удаление аккаунта и всех данных (через Cloud Function), затем выход.
       const deleteAccountNow = async () => {
-        if (!confirm('Удалить аккаунт? Все данные (дневник, замеры, фото, друзья, споры) удалятся безвозвратно.')) return;
-        if (!confirm('Точно удалить? Это необратимо.')) return;
+        if (!(await confirmDialog({ message: 'Удалить аккаунт? Все данные (дневник, замеры, фото, друзья, споры) удалятся безвозвратно.', confirmLabel: 'Удалить', danger: true }))) return;
+        if (!(await confirmDialog({ message: 'Точно удалить? Это необратимо.', confirmLabel: 'Удалить навсегда', danger: true }))) return;
         setDeleteBusy(true);
         try {
           const callable = functions.httpsCallable('deleteAccount');
           await callable({});
           await auth.signOut().catch(() => {});
-          alert('Аккаунт удалён.');
+          notify('Аккаунт удалён.');
         } catch (e) {
-          alert('Не удалось удалить аккаунт: ' + (e.message || e));
+          notify('Не удалось удалить аккаунт: ' + (e.message || e));
         }
         setDeleteBusy(false);
       };
 
-      const copyPreviousDay = () => {
+      const copyPreviousDay = async () => {
         const d = new Date(currentDate); d.setDate(d.getDate() - 1);
         const prev = getLocalDateString(d);
         const prevLogs = dailyLogs[prev] || [];
-        if (prevLogs.length === 0) { alert('За предыдущий день записей нет.'); return; }
-        if (!confirm(`Скопировать ${prevLogs.length} записей из дня ${prev}?`)) return;
+        if (prevLogs.length === 0) { notify('За предыдущий день записей нет.'); return; }
+        if (!(await confirmDialog(`Скопировать ${prevLogs.length} записей из дня ${prev}?`))) return;
         const copied = prevLogs.map((l, idx) => ({ ...l, id: (Date.now() + idx).toString() }));
         const updated = { ...dailyLogs, [currentDate]: [...(dailyLogs[currentDate] || []), ...copied] };
         setDailyLogs(updated);
@@ -1417,11 +1438,11 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         reader.onload = async (ev) => {
           try {
             const data = JSON.parse(ev.target.result);
-            if (!confirm('Это перезапишет/дополнит данные аккаунта содержимым файла. Продолжить?')) { e.target.value = ''; return; }
+            if (!(await confirmDialog('Это перезапишет/дополнит данные аккаунта содержимым файла. Продолжить?'))) { e.target.value = ''; return; }
             await writeAllData(data);
-            alert('Данные восстановлены из бэкапа.');
+            notify('Данные восстановлены из бэкапа.');
           } catch (err) {
-            alert('Ошибка чтения файла: ' + err.message);
+            notify('Ошибка чтения файла: ' + err.message);
           }
           e.target.value = '';
         };
@@ -1757,22 +1778,22 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const sendFriendRequest = async () => {
         const code = friendCodeInput.trim().toUpperCase();
         if (!uid || !code) return;
-        if (code === myFriendCode) { alert('Это ваш собственный код.'); return; }
+        if (code === myFriendCode) { notify('Это ваш собственный код.'); return; }
         try {
           const snap = await publicProfilesCol.where('friendCode', '==', code).limit(1).get();
-          if (snap.empty) { alert('Пользователь с таким кодом не найден. Проверьте код (он появляется после того, как друг откроет приложение).'); return; }
+          if (snap.empty) { notify('Пользователь с таким кодом не найден. Проверьте код (он появляется после того, как друг откроет приложение).'); return; }
           const them = snap.docs[0].data();
           const theirUid = them.uid || snap.docs[0].id;
-          if (theirUid === uid) { alert('Это ваш собственный код.'); return; }
+          if (theirUid === uid) { notify('Это ваш собственный код.'); return; }
           const connId = [uid, theirUid].sort().join('__');
           await connectionRef(connId).set({ members: [uid, theirUid].sort(), status: 'pending', requestedBy: uid, createdAt: Date.now() }, { merge: true });
           setFriendProfiles(prev => ({ ...prev, [theirUid]: { id: theirUid, ...them } }));
           setFriendCodeInput('');
-          alert('Заявка отправлена ' + (them.displayName || 'другу') + '.');
-        } catch (e) { alert('Не удалось отправить заявку: ' + e.message); }
+          notify('Заявка отправлена ' + (them.displayName || 'другу') + '.');
+        } catch (e) { notify('Не удалось отправить заявку: ' + e.message); }
       };
-      const acceptConnection = (c) => connectionRef(c.id).set({ status: 'accepted' }, { merge: true }).catch(e => alert('Ошибка: ' + e.message));
-      const removeConnection = (c) => { if (confirm('Удалить?')) connectionRef(c.id).delete().catch(e => alert('Ошибка: ' + e.message)); };
+      const acceptConnection = (c) => connectionRef(c.id).set({ status: 'accepted' }, { merge: true }).catch(e => notify('Ошибка: ' + e.message));
+      const removeConnection = async (c) => { if (await confirmDialog({ message: 'Удалить друга?', confirmLabel: 'Удалить', danger: true })) connectionRef(c.id).delete().catch(e => notify('Ошибка: ' + e.message)); };
 
       const openChallengeWith = (friendUid) => {
         setChallengeDraft({ friendUid: friendUid || (acceptedFriends[0] ? otherUid(acceptedFriends[0]) : ''), type: 'weight', myTarget: '', friendTarget: '', deadline: getLocalDateString(new Date(Date.now() + 30 * 86400000)) });
@@ -1789,9 +1810,9 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       };
       const createChallenge = async () => {
         const { friendUid, type, myTarget, friendTarget, deadline } = challengeDraft;
-        if (!uid || !friendUid || myTarget === '' || !deadline) { alert('Заполните соперника, вашу цель и срок.'); return; }
+        if (!uid || !friendUid || myTarget === '' || !deadline) { notify('Заполните соперника, вашу цель и срок.'); return; }
         // Срок строго в будущем — нельзя сегодня/вчера (жёсткая проверка, не только min инпута).
-        if (deadline <= getLocalDateString(new Date())) { alert('Срок спора должен быть в будущем — выберите дату от завтра.'); return; }
+        if (deadline <= getLocalDateString(new Date())) { notify('Срок спора должен быть в будущем — выберите дату от завтра.'); return; }
         const members = [uid, friendUid].sort();
         // Своя цель — обязательна. Цель соперника — лишь предложение: он подтвердит/поменяет её при принятии.
         const targets = { [uid]: Number(myTarget) };
@@ -1804,8 +1825,8 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         try {
           await ref.set({ members, createdBy: uid, type, targets, deadline, status: 'pending', acceptedBy: [uid], start, live, createdAt: Date.now() });
           setShowChallengeModal(false);
-          alert('Вызов отправлен ' + friendName(friendUid) + '!');
-        } catch (e) { alert('Не удалось создать спор: ' + e.message); }
+          notify('Вызов отправлен ' + friendName(friendUid) + '!');
+        } catch (e) { notify('Не удалось создать спор: ' + e.message); }
       };
       // Принятие вызова: соперник задаёт СВОЮ цель (по умолчанию — предложенную создателем).
       const openAcceptChallenge = (c) => {
@@ -1816,7 +1837,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       const confirmAcceptChallenge = async () => {
         const c = challenges.find(x => x.id === acceptDraft.challengeId);
         if (!c) { setShowAcceptModal(false); return; }
-        if (acceptDraft.myTarget === '') { alert('Укажите свою цель.'); return; }
+        if (acceptDraft.myTarget === '') { notify('Укажите свою цель.'); return; }
         const tp = challengeType(c.type);
         const startVal = typeof myStatsNow[tp.metric] === 'number' ? myStatsNow[tp.metric] : null;
         try {
@@ -1828,17 +1849,17 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
             live: { [uid]: myChallengeSnapshot(tp.metric) },
           }, { merge: true });
           setShowAcceptModal(false);
-        } catch (e) { alert('Ошибка: ' + e.message); }
+        } catch (e) { notify('Ошибка: ' + e.message); }
       };
       // Мягкая отмена: активный/ожидающий спор переводим в cancelled (соперник видит статус),
       // а из истории завершённые/отменённые можно удалить окончательно.
-      const removeChallenge = (c) => {
+      const removeChallenge = async (c) => {
         if (c.status === 'finished' || c.status === 'cancelled') {
-          if (confirm('Удалить спор из истории?')) challengeRef(c.id).delete().catch(e => alert('Ошибка: ' + e.message));
+          if (await confirmDialog({ message: 'Удалить спор из истории?', confirmLabel: 'Удалить', danger: true })) challengeRef(c.id).delete().catch(e => notify('Ошибка: ' + e.message));
           return;
         }
-        if (confirm('Отменить спор? Соперник увидит, что спор отменён.')) {
-          challengeRef(c.id).set({ status: 'cancelled', cancelledBy: uid, finishedAt: Date.now() }, { merge: true }).catch(e => alert('Ошибка: ' + e.message));
+        if (await confirmDialog({ message: 'Отменить спор? Соперник увидит, что спор отменён.', confirmLabel: 'Отменить спор', danger: true })) {
+          challengeRef(c.id).set({ status: 'cancelled', cancelledBy: uid, finishedAt: Date.now() }, { merge: true }).catch(e => notify('Ошибка: ' + e.message));
         }
       };
 
@@ -3616,7 +3637,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                       <span className="text-[9px] text-zinc-500 font-bold block mb-1">ВАШ КОД ДЛЯ ДРУЗЕЙ</span>
                       <div className="flex items-center gap-2">
                         <div className="flex-1 bg-[#27272a] rounded-xl p-3 font-black text-lg tracking-[0.3em] text-emerald-400 text-center border border-zinc-700/30">{myFriendCode || '—'}</div>
-                        <button type="button" onClick={() => { if (navigator.clipboard) { navigator.clipboard.writeText(myFriendCode); alert('Код скопирован'); } }} className="btn-active w-12 h-12 shrink-0 bg-zinc-800 rounded-xl flex items-center justify-center text-zinc-300 border border-zinc-700/30" aria-label="Скопировать код"><IconCopy className="w-5 h-5" /></button>
+                        <button type="button" onClick={() => { if (navigator.clipboard) { navigator.clipboard.writeText(myFriendCode); notify('Код скопирован'); } }} className="btn-active w-12 h-12 shrink-0 bg-zinc-800 rounded-xl flex items-center justify-center text-zinc-300 border border-zinc-700/30" aria-label="Скопировать код"><IconCopy className="w-5 h-5" /></button>
                       </div>
                       <p className="text-[10px] text-zinc-600 mt-1.5">Поделитесь кодом, чтобы вас добавили в друзья.</p>
                     </div>
@@ -4240,6 +4261,32 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
               );
             })()}
             </AnimatePresence>
+
+            {/* Подтверждение действия (замена нативного confirm) */}
+            <AnimatePresence>
+            {confirmState && (
+              <motion.div key="confirm" className="fixed inset-0 bg-black/80 z-[70] flex items-center justify-center p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} onClick={() => resolveConfirm(false)}>
+                <motion.div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-xs" initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }} onClick={(e) => e.stopPropagation()}>
+                  <p className="text-sm text-zinc-200 leading-relaxed text-center mb-5">{confirmState.message}</p>
+                  <div className="flex gap-3">
+                    <button type="button" onClick={() => resolveConfirm(false)} className="btn-active flex-1 border border-zinc-800 text-zinc-400 rounded-xl p-3 font-bold transition-all">{confirmState.cancelLabel}</button>
+                    <button type="button" onClick={() => resolveConfirm(true)} className={`btn-active flex-1 rounded-xl p-3 font-bold text-white transition-all ${confirmState.danger ? 'bg-red-600' : 'bg-emerald-600'}`}>{confirmState.confirmLabel}</button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+            </AnimatePresence>
+
+            {/* Всплывающие уведомления (замена нативного alert) */}
+            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] flex flex-col items-center gap-2 w-[calc(100%-2rem)] max-w-sm pointer-events-none">
+              <AnimatePresence>
+                {toasts.map(t => (
+                  <motion.div key={t.id} layout initial={{ opacity: 0, y: -16, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.96 }} transition={{ type: 'spring', stiffness: 400, damping: 30 }} role="status" aria-live="polite" onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className={`pointer-events-auto w-full rounded-2xl px-4 py-3 text-sm font-bold shadow-xl border backdrop-blur-sm text-center ${t.kind === 'error' ? 'bg-red-500/20 border-red-400/40 text-red-100' : 'bg-emerald-600/20 border-emerald-500/40 text-emerald-100'}`}>
+                    {t.message}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
 
             {/* Модалка: онбординг при регистрации (данные для КБЖУ + минимум шагов) */}
             <AnimatePresence>
