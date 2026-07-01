@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import firebase, { db, auth, functions, profileRef, dayRef, daysCol, bodyCol, bodyDocRef, OWNER_EMAIL, sharedFoodsRef, legacyRef, publicProfileRef, publicProfilesCol, connectionsCol, connectionRef, challengesCol, challengeRef } from './firebase.js';
-import { motion, AnimatePresence, animate } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { evaluateMath } from './utils/math.js';
 import { calculateFoodPortion, createEstimatedFood, findBestFoodMatch, getFoodNameWords, normalizeFoodName, searchFoodsByName } from './utils/food.js';
 import { AI_UNAVAILABLE_MESSAGE, formatParsedFoodAmount, MAX_FOOD_TEXT_LENGTH, parseFoodText } from './services/foodAi.js';
@@ -12,118 +12,12 @@ import { compareWeightLoss, filterDatesByProgressPeriod, getProgressPeriod, norm
 import { EXTRA_ACTIVITY_TYPES, calculateDailyAvailableCalories, getExtraActivityType, normalizeExtraActivities, sumExtraActivityCalories, validateExtraActivityCalories } from './utils/activity.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
 import { CHALLENGE_TYPES, challengeType, challengeHistKey, challengeTargetFor, computeChallengeStanding, shouldFinalizeChallenge, challengeRecordVs, computeChallengeSafetyWarning } from './utils/challenges.js';
+import { TOGGLEABLE_BLOCKS, DAILY_BODY_METRICS, DEFAULT_USUAL_STEPS, DEFAULT_PROFILE, DEFAULT_SETTINGS, WATER_QUICK, NON_SELECTABLE_INPUT_TYPES, THEMES, THEME_META_COLOR, normalizeThemeKey, APP_VERSION, VERSION_FILE_URL, logDev, TAB_TITLES, getUsualSteps } from './config.js';
+import AnimatedNumber from './components/AnimatedNumber.jsx';
+import Toasts from './components/Toasts.jsx';
+import ConfirmModal from './components/ConfirmModal.jsx';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
 import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconCopy, IconFlame, IconSparkles, IconInfo, IconHelpCircle, IconLogOut } from './components/Icons.jsx';
-
-    // Блоки дневника, которые можно скрыть в настройках профиля.
-    const TOGGLEABLE_BLOCKS = [
-      { key: 'calories', label: 'Калории', hint: 'счётчик калорий и прогресс дня' },
-      { key: 'protein', label: 'Белок', hint: 'прогресс-бар белка' },
-      { key: 'fats', label: 'Жиры', hint: 'прогресс-бар жиров' },
-      { key: 'carbs', label: 'Углеводы', hint: 'прогресс-бар углеводов' },
-      { key: 'steps', label: 'Шаги', hint: 'шаги и калории от ходьбы считаются отдельной строкой' },
-      { key: 'workout', label: 'Силовая тренировка', hint: 'отметка тренировки' },
-      { key: 'water', label: 'Вода', hint: 'учёт выпитой воды' },
-      { key: 'bodyMetrics', label: 'Показатели тела', hint: 'вес, жир, БЖМ и масса жира' },
-    ];
-
-    const DAILY_BODY_METRICS = [
-      { key: 'weight', label: 'Вес' },
-      { key: 'fatPercent', label: 'Жир %' },
-      { key: 'leanMass', label: 'БЖМ' },
-      { key: 'fatMass', label: 'Жир кг' },
-    ];
-
-    const DEFAULT_USUAL_STEPS = 2000;
-    const DEFAULT_PROFILE = {
-      sex: 'male',
-      age: '',
-      height: '',
-      weight: '',
-      activity: DEFAULT_ACTIVITY_KEY,
-      usualSteps: DEFAULT_USUAL_STEPS,
-      mode: 'manual',
-      deficit: 500,
-    };
-    const DEFAULT_SETTINGS = { fontScale: 'normal', theme: 'lime', blocks: TOGGLEABLE_BLOCKS.reduce((acc, b) => ({ ...acc, [b.key]: true }), {}) };
-    const WATER_QUICK = [100, 300, 500];
-    const NON_SELECTABLE_INPUT_TYPES = [
-      'button',
-      'checkbox',
-      'color',
-      'date',
-      'file',
-      'hidden',
-      'radio',
-      'range',
-      'reset',
-      'submit',
-    ];
-
-    // Темы оформления (выбираются в профиле). bg/dot — для превью-чипа.
-    const THEMES = [
-      { key: 'lime', label: 'Тёмная · лайм', bg: '#0a0a0b', dot: '#a3e635' },
-      { key: 'sky', label: 'Тёмная · голубая', bg: '#0a0a0b', dot: '#38bdf8' },
-      { key: 'violet', label: 'Тёмная · фиолетовая', bg: '#0a0a0b', dot: '#a78bfa' },
-      { key: 'light', label: 'Светлая · голубая', bg: '#eef3f8', dot: '#0ea5e9' },
-      { key: 'orange', label: 'Тёмная · оранжевая', bg: '#101010', dot: '#FF8A00' },
-      { key: 'red', label: 'Тёмная · красная', bg: '#0d0b0b', dot: '#FF3B30' },
-      { key: 'turquoise', label: 'Тёмная · бирюзовая', bg: '#081111', dot: '#00D4C7' },
-      { key: 'light-green', label: 'Светлая · зелёная', bg: '#f3faf5', dot: '#34C759' },
-      { key: 'gold', label: 'Тёмная · золотая', bg: '#0e0d09', dot: '#D4AF37' },
-      { key: 'dark-neon-rain', label: 'Тёмная · неоновый дождь', bg: '#05070d', dot: '#00E5FF' },
-    ];
-    const THEME_META_COLOR = {
-      lime: '#0a0a0b',
-      sky: '#0a0a0b',
-      violet: '#0a0a0b',
-      light: '#eef3f8',
-      orange: '#101010',
-      red: '#0d0b0b',
-      turquoise: '#081111',
-      'light-green': '#f3faf5',
-      gold: '#0e0d09',
-      'dark-neon-rain': '#05070d',
-    };
-    const normalizeThemeKey = (theme) => {
-      const key = theme === 'rain' ? 'dark-neon-rain' : theme;
-      return THEMES.some((t) => t.key === key) ? key : 'lime';
-    };
-    const APP_VERSION = '2026.06.30.7';
-    const VERSION_FILE_URL = '/version.json';
-    const logDev = (...args) => { if (import.meta.env.DEV) console.warn(...args); };
-    const TAB_TITLES = {
-      diary: 'Дневник',
-      progress: 'Прогресс',
-      directory: 'База',
-      profile: 'Профиль',
-      social: 'Друзья и споры',
-      settings: 'Настройки',
-      about: 'О приложении',
-      support: 'Поддержка',
-    };
-
-    function getUsualSteps(value) {
-      const steps = Number(value);
-      return Number.isFinite(steps) ? Math.max(0, Math.round(steps)) : DEFAULT_USUAL_STEPS;
-    }
-
-    // Плавный «накрут» числа при изменении значения (count-up).
-    function AnimatedNumber({ value, className }) {
-      const [display, setDisplay] = useState(Math.round(Number(value) || 0));
-      const prev = useRef(Math.round(Number(value) || 0));
-      useEffect(() => {
-        const target = Math.round(Number(value) || 0);
-        const controls = animate(prev.current, target, {
-          duration: 0.5,
-          ease: [0.22, 1, 0.36, 1],
-          onUpdate: (v) => setDisplay(Math.round(v)),
-        });
-        prev.current = target;
-        return () => controls.stop();
-      }, [value]);
-      return <span className={className}>{display}</span>;
-    }
 
     function App() {
       const [isLoading, setIsLoading] = useState(true);
@@ -4262,31 +4156,8 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
             })()}
             </AnimatePresence>
 
-            {/* Подтверждение действия (замена нативного confirm) */}
-            <AnimatePresence>
-            {confirmState && (
-              <motion.div key="confirm" className="fixed inset-0 bg-black/80 z-[70] flex items-center justify-center p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} onClick={() => resolveConfirm(false)}>
-                <motion.div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-xs" initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }} onClick={(e) => e.stopPropagation()}>
-                  <p className="text-sm text-zinc-200 leading-relaxed text-center mb-5">{confirmState.message}</p>
-                  <div className="flex gap-3">
-                    <button type="button" onClick={() => resolveConfirm(false)} className="btn-active flex-1 border border-zinc-800 text-zinc-400 rounded-xl p-3 font-bold transition-all">{confirmState.cancelLabel}</button>
-                    <button type="button" onClick={() => resolveConfirm(true)} className={`btn-active flex-1 rounded-xl p-3 font-bold text-white transition-all ${confirmState.danger ? 'bg-red-600' : 'bg-emerald-600'}`}>{confirmState.confirmLabel}</button>
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
-            </AnimatePresence>
-
-            {/* Всплывающие уведомления (замена нативного alert) */}
-            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] flex flex-col items-center gap-2 w-[calc(100%-2rem)] max-w-sm pointer-events-none">
-              <AnimatePresence>
-                {toasts.map(t => (
-                  <motion.div key={t.id} layout initial={{ opacity: 0, y: -16, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.96 }} transition={{ type: 'spring', stiffness: 400, damping: 30 }} role="status" aria-live="polite" onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))} className={`pointer-events-auto w-full rounded-2xl px-4 py-3 text-sm font-bold shadow-xl border backdrop-blur-sm text-center ${t.kind === 'error' ? 'bg-red-500/20 border-red-400/40 text-red-100' : 'bg-emerald-600/20 border-emerald-500/40 text-emerald-100'}`}>
-                    {t.message}
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
+            <ConfirmModal state={confirmState} onResolve={resolveConfirm} />
+            <Toasts toasts={toasts} onDismiss={(id) => setToasts(prev => prev.filter(x => x.id !== id))} />
 
             {/* Модалка: онбординг при регистрации (данные для КБЖУ + минимум шагов) */}
             <AnimatePresence>
