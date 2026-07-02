@@ -18,6 +18,9 @@ import { TAB_TITLES } from './constants/routes.js';
 import AnimatedNumber from './components/AnimatedNumber.jsx';
 import Toasts from './components/Toasts.jsx';
 import ConfirmModal from './components/ConfirmModal.jsx';
+import Header from './components/layout/Header.jsx';
+import BottomNav from './components/layout/BottomNav.jsx';
+import DrawerMenu from './components/layout/DrawerMenu.jsx';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
 import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconCopy, IconFlame, IconSparkles, IconInfo, IconHelpCircle, IconLogOut } from './components/Icons.jsx';
 
@@ -2751,17 +2754,13 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
           onFocusCapture={handleEditableFieldFocus}
         >
             {isNeonRainTheme && <div className="rain-atmosphere" aria-hidden="true" />}
-            <header className="app-header shrink-0 pt-8 px-4 pb-4 bg-[#09090b] flex justify-between items-center z-10">
-              <div>
-                <h1 key={activeTab} className="text-2xl font-bold">{activeTabTitle}</h1>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setIsDrawerOpen(true)} className="relative btn-active p-2 bg-zinc-800 rounded-xl text-zinc-300 transition-all border border-zinc-800/50 cursor-pointer" aria-label="Открыть меню" aria-expanded={isDrawerOpen}>
-                  <IconMenu className="w-5 h-5" />
-                  {incomingRequests.length > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-[#09090b]">+{incomingRequests.length}</span>}
-                </button>
-              </div>
-            </header>
+            <Header
+              title={activeTabTitle}
+              activeTabKey={activeTab}
+              isDrawerOpen={isDrawerOpen}
+              onOpenDrawer={() => setIsDrawerOpen(true)}
+              badgeCount={incomingRequests.length}
+            />
 
             <main ref={scrollContainerRef} onClick={() => { if (selectedFoodId) setSelectedFoodId(''); }} className="app-main flex-1 overflow-y-auto overflow-x-hidden px-3 pt-2 pb-8">
               {appUpdate && !appUpdate.mandatory && <UpdateCallout />}
@@ -3881,83 +3880,18 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
               </AnimatePresence>
             </main>
 
-            <AnimatePresence>
-              {isDrawerOpen && (
-                <motion.div
-                  key="drawer-overlay"
-                  className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex justify-end"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.18 }}
-                  onClick={closeDrawer}
-                >
-                  <motion.aside
-                    className="drawer-panel h-full w-[84%] max-w-[360px] bg-[#18181b] border-l border-zinc-800/50 shadow-2xl p-4 flex flex-col"
-                    initial={{ x: '100%' }}
-                    animate={{ x: 0 }}
-                    exit={{ x: '100%' }}
-                    transition={{ type: 'spring', stiffness: 360, damping: 34 }}
-                    drag="x"
-                    dragConstraints={{ left: 0, right: 0 }}
-                    dragElastic={{ left: 0, right: 0.18 }}
-                    onDragEnd={(_, info) => {
-                      if (info.offset.x > 80 || info.velocity.x > 500) closeDrawer();
-                    }}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <div className="flex items-center justify-between gap-3 mb-5 pt-[max(0px,env(safe-area-inset-top))]">
-                      <div className="min-w-0">
-                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">MoteoTracker</p>
-                        <p className="text-sm font-bold text-zinc-200 truncate">{auth.currentUser?.email || userEmail || 'Профиль'}</p>
-                      </div>
-                      <button type="button" onClick={closeDrawer} className="btn-active shrink-0 w-10 h-10 bg-zinc-800 rounded-xl text-zinc-300 border border-zinc-800/50 flex items-center justify-center cursor-pointer" aria-label="Закрыть меню"><IconClose className="w-5 h-5" /></button>
-                    </div>
+            <DrawerMenu
+              isOpen={isDrawerOpen}
+              onClose={closeDrawer}
+              userEmail={auth.currentUser?.email || userEmail}
+              items={drawerItems}
+              hasUpdate={!!appUpdate}
+              isApplyingUpdate={isApplyingUpdate}
+              onApplyUpdate={applyAppUpdate}
+              onSignOut={signOutFromDrawer}
+            />
 
-                    <div className="space-y-2">
-                      {drawerItems.map(({ key, label, icon: DrawerIcon, onClick, active, badge }) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={onClick}
-                          className={`drawer-item btn-active w-full flex items-center justify-between gap-3 rounded-2xl p-3 border text-left transition-all cursor-pointer ${active ? 'drawer-item-active bg-emerald-600/15 border-emerald-600/30 text-emerald-300' : 'bg-[#27272a] border-zinc-700/30 text-zinc-300'}`}
-                        >
-                          <span className="flex items-center gap-3 min-w-0">
-                            <span className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${active ? 'bg-emerald-600/20' : 'bg-zinc-900/50'}`}><DrawerIcon className="w-5 h-5" /></span>
-                            <span className="text-sm font-bold truncate">{label}</span>
-                          </span>
-                          {badge > 0 && <span className="shrink-0 min-w-[22px] h-[22px] px-1.5 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center">+{badge}</span>}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="mt-auto pt-4 space-y-3">
-                      <button type="button" onClick={applyAppUpdate} disabled={isApplyingUpdate} className={`btn-active w-full rounded-2xl p-3 font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-60 ${appUpdate ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-100 border border-zinc-700/40'}`}>
-                        {appUpdate ? <IconDownload className="w-5 h-5" /> : <IconRefresh className="w-5 h-5" />}
-                        {isApplyingUpdate ? 'Обновляем…' : 'Обновить приложение'}
-                      </button>
-                      <button type="button" onClick={signOutFromDrawer} className="drawer-item btn-active w-full flex items-center gap-3 rounded-2xl p-3 border bg-[#27272a] border-zinc-700/30 text-red-400 text-left transition-all cursor-pointer">
-                        <span className="w-10 h-10 rounded-xl bg-zinc-900/50 flex items-center justify-center shrink-0"><IconLogOut className="w-5 h-5" /></span>
-                        <span className="text-sm font-bold">Выход</span>
-                      </button>
-                      <p className="text-[10px] text-zinc-600 text-center">v{APP_VERSION}</p>
-                    </div>
-                  </motion.aside>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <nav className="bottom-nav shrink-0 bg-[#09090b] flex justify-around gap-1 px-1 pb-2 pt-2 safe-pb relative z-40 border-t border-zinc-900">
-              <button onClick={() => setActiveTab('diary')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'diary' ? 'text-emerald-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
-                <IconCalendar className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase tracking-widest">Дневник</span>
-              </button>
-              <button onClick={() => setActiveTab('progress')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'progress' ? 'text-violet-300 bg-zinc-900/50' : 'text-zinc-600'}`}>
-                <IconCamera className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase tracking-widest">Прогресс</span>
-              </button>
-              <button onClick={() => setActiveTab('directory')} className={`btn-active flex-1 flex flex-col items-center py-2 transition-all rounded-xl ${activeTab === 'directory' ? 'text-indigo-400 bg-zinc-900/50' : 'text-zinc-600'}`}>
-                <IconBook className="w-6 h-6" /><span className="text-[9px] font-bold mt-1 uppercase tracking-widest">База</span>
-              </button>
-            </nav>
+            <BottomNav activeTab={activeTab} onSelect={setActiveTab} />
 
             {/* Модалки */}
             <AnimatePresence>
