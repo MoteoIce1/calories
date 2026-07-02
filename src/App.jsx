@@ -21,6 +21,10 @@ import ConfirmModal from './components/ConfirmModal.jsx';
 import Header from './components/layout/Header.jsx';
 import BottomNav from './components/layout/BottomNav.jsx';
 import DrawerMenu from './components/layout/DrawerMenu.jsx';
+import SettingsScreen from './features/settings/SettingsScreen.jsx';
+import ProfileScreen from './features/profile/ProfileScreen.jsx';
+import SupportScreen from './features/settings/SupportScreen.jsx';
+import AboutScreen from './features/updates/AboutScreen.jsx';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
 import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconCopy, IconFlame, IconSparkles, IconInfo, IconHelpCircle, IconLogOut } from './components/Icons.jsx';
 
@@ -3339,196 +3343,48 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
               )}
 
               {activeTab === 'profile' && (
-                <div className="space-y-5">
-                  {/* Личные данные */}
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconUser className="w-4 h-4" /> Личные данные</h2>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[['male', 'Мужчина'], ['female', 'Женщина']].map(([s, label]) => (
-                        <button key={s} type="button" onClick={() => handleProfileChange('sex', s)} className={`btn-active rounded-xl p-3 text-sm font-bold border transition-all ${profileData.sex === s ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-[#27272a] text-zinc-300 border-zinc-700/30'}`}>{label}</button>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ВОЗРАСТ</span><input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={profileData.age} onChange={(e) => handleProfileChange('age', e.target.value)} onFocus={(e) => e.target.select()} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">РОСТ, СМ</span><input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={profileData.height} onChange={(e) => handleProfileChange('height', e.target.value)} onFocus={(e) => e.target.select()} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ВЕС, КГ</span><input type="number" inputMode="decimal" step="0.1" disabled={measuredWeight != null} title={measuredWeight != null ? 'Берётся из показателей в «Дневнике»' : undefined} className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors disabled:opacity-70" value={measuredWeight != null ? measuredWeight : profileData.weight} onChange={(e) => handleProfileChange('weight', e.target.value)} onFocus={(e) => e.target.select()} /></div>
-                    </div>
-                    {measuredWeight != null && <p className="text-[10px] text-zinc-600 leading-relaxed">Вес берётся из последних показателей в «Дневнике» ({measuredWeight} кг). Он обновляется автоматически.</p>}
-                    <div>
-                      <span className="text-[9px] text-zinc-500 font-bold block mb-2">УРОВЕНЬ АКТИВНОСТИ</span>
-                      <p className="text-[10px] text-zinc-600 leading-relaxed mb-2">
-                        Уровень активности — это фиксированная надбавка за NEAT, работу и тренировки. Шаги считаются отдельной строкой.
-                      </p>
-                      <div className="flex flex-col gap-2">
-                        {ACTIVITY_LEVELS.map(l => (
-                          <button key={l.key} type="button" onClick={() => handleProfileChange('activity', l.key)} className={`btn-active text-left rounded-xl p-3 border transition-all ${selectedActivityKey === l.key ? 'bg-emerald-600/15 border-emerald-600/40' : 'bg-[#27272a] border-zinc-700/30'}`}>
-                            <span className={`text-sm font-bold ${selectedActivityKey === l.key ? 'text-emerald-300' : 'text-zinc-200'}`}>{l.label}</span>
-                            <span className="block text-[10px] text-zinc-500 mt-0.5">{l.hint} · +{l.activityCalories} ккал</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label htmlFor="usual-steps" className="text-[9px] text-zinc-500 font-bold block mb-1">ОБЫЧНО ШАГОВ В ДЕНЬ</label>
-                      <input
-                        id="usual-steps"
-                        type="number"
-                        inputMode="numeric"
-                        min="0"
-                        className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors"
-                        value={profileData.usualSteps ?? DEFAULT_USUAL_STEPS}
-                        onChange={(e) => handleUsualStepsChange(e.target.value)}
-                        onFocus={(e) => e.target.select()}
-                      />
-                      <p className="text-[10px] text-zinc-600 leading-relaxed mt-1.5">Шаги добавляются к расходу отдельно: шаги × 0.04 ккал. В активности они не спрятаны.</p>
-                    </div>
-                  </div>
-
-                  {/* Расчёт КБЖУ */}
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconCalc className="w-4 h-4" /> Расчёт КБЖУ</h2>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[['auto', 'Автоматически'], ['manual', 'Вручную']].map(([m, label]) => (
-                        <button key={m} type="button" onClick={() => handleProfileChange('mode', m)} className={`btn-active rounded-xl p-3 text-sm font-bold border transition-all ${profileData.mode === m ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-[#27272a] text-zinc-300 border-zinc-700/30'}`}>{label}</button>
-                      ))}
-                    </div>
-                    {profileData.mode === 'auto' ? (
-                      <>
-                        <div>
-                          <span className="text-[9px] text-zinc-500 font-bold block mb-1">ДЕФИЦИТ, ККАЛ/ДЕНЬ</span>
-                          <input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={profileData.deficit} onChange={(e) => handleProfileChange('deficit', e.target.value === '' ? '' : parseInt(e.target.value))} onFocus={(e) => e.target.select()} />
-                          <p className="text-[10px] text-zinc-600 leading-relaxed mt-1.5">По умолчанию 500 — комфортное похудение ~0,5 кг/нед. Поставьте 0, чтобы удерживать вес, или отрицательное значение — для набора массы.</p>
-                        </div>
-                        {kbjuPreview ? (
-                          <div className="bg-[#27272a] rounded-2xl p-4 border border-zinc-700/30">
-                            <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mb-3">Расчёт по формуле Миффлина</p>
-                            <div className="grid grid-cols-2 gap-y-2 text-sm">
-                              <span className="text-zinc-400">Базовый обмен (BMR)</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.bmr} ккал</span>
-                              <span className="text-zinc-400">Шаги</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.steps} × {kbjuPreview.kcalPerStep.toFixed(2)} = {kbjuPreview.stepsCalories} ккал</span>
-                              <span className="text-zinc-400">Активность</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.activityLabel}, +{kbjuPreview.activityCalories} ккал</span>
-                              <span className="text-zinc-400">Норма (TDEE)</span><span className="text-right font-bold text-zinc-200">{kbjuPreview.maintenance} ккал</span>
-                              <span className="text-zinc-400">Цель калорий</span><span className="text-right font-bold text-emerald-400">{kbjuPreview.calories} ккал</span>
-                              <span className="text-zinc-400">Белок</span><span className="text-right font-bold text-indigo-400">{kbjuPreview.protein} г</span>
-                              <span className="text-zinc-400">Жиры</span><span className="text-right font-bold text-amber-400">{kbjuPreview.fats} г</span>
-                              <span className="text-zinc-400">Углеводы</span><span className="text-right font-bold text-blue-400">{kbjuPreview.carbs} г</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-xs text-amber-400/90 leading-relaxed">Заполните пол, возраст, рост и вес выше — расчёт появится здесь.</p>
-                        )}
-                        <button type="button" onClick={applyAutoKbju} disabled={!kbjuPreview} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-35"><IconCheck className="w-5 h-5" /> Рассчитать и применить</button>
-                      </>
-                    ) : (
-                      <p className="text-xs text-zinc-500 leading-relaxed">Ручной режим: задайте КБЖУ самостоятельно во вкладке «База» → «Ваши цели».</p>
-                    )}
-                  </div>
-
-                  {/* Норма воды */}
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconDrop className="w-4 h-4" /> Норма воды</h2>
-                    <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЦЕЛЬ, МЛ/ДЕНЬ</span><input type="number" inputMode="numeric" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={draftGoals.waterGoal} onChange={(e) => handleDraftGoalChange('waterGoal', e.target.value === '' ? '' : parseInt(e.target.value))} onFocus={(e) => e.target.select()} /></div>
-                    {hasUnsavedGoals && <button type="button" onClick={() => setShowGoalModal(true)} className="btn-active w-full bg-indigo-600 text-white p-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2"><IconSave className="w-5 h-5" /> Сохранить цели</button>}
-                  </div>
-
-                </div>
+                <ProfileScreen
+                  profileData={profileData}
+                  handleProfileChange={handleProfileChange}
+                  measuredWeight={measuredWeight}
+                  selectedActivityKey={selectedActivityKey}
+                  handleUsualStepsChange={handleUsualStepsChange}
+                  kbjuPreview={kbjuPreview}
+                  applyAutoKbju={applyAutoKbju}
+                  draftGoals={draftGoals}
+                  handleDraftGoalChange={handleDraftGoalChange}
+                  hasUnsavedGoals={hasUnsavedGoals}
+                  onOpenGoalModal={() => setShowGoalModal(true)}
+                />
               )}
 
               {activeTab === 'settings' && (
-                <div className="space-y-5">
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconSliders className="w-4 h-4" /> Тема оформления</h2>
-                    <p className="text-[11px] text-zinc-500 leading-relaxed">Темы применяются сразу, сохраняются в профиле и меняют главный цвет интерфейса глобально.</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {THEMES.map(t => (
-                        <button key={t.key} type="button" onClick={() => setTheme(t.key)} className={`btn-active flex items-center gap-2.5 rounded-xl p-3 border transition-all cursor-pointer ${activeTheme === t.key ? 'border-emerald-500 bg-emerald-600/15' : 'bg-[#27272a] border-zinc-700/30'}`}>
-                          <span className="shrink-0 w-7 h-7 rounded-lg border border-white/10 flex items-center justify-center" style={{ background: t.bg }}><span className="w-3 h-3 rounded-full" style={{ background: t.dot }} /></span>
-                          <span className={`text-xs font-bold text-left leading-tight ${activeTheme === t.key ? 'text-emerald-300' : 'text-zinc-300'}`}>{t.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconSliders className="w-4 h-4" /> Размер шрифта</h2>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[['normal', 'Стандартный'], ['large', 'Увеличенный']].map(([sc, label]) => (
-                        <button key={sc} type="button" onClick={() => setFontScale(sc)} className={`btn-active rounded-xl p-3 text-sm font-bold border transition-all cursor-pointer ${settings.fontScale === sc ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-[#27272a] text-zinc-300 border-zinc-700/30'}`}>{label}</button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Блоки в дневнике</h2>
-                    <p className="text-[11px] text-zinc-500 leading-relaxed">По умолчанию включены все блоки. Отключите лишние — они исчезнут из дневника, но данные сохранятся.</p>
-                    <div className="space-y-2">
-                      {TOGGLEABLE_BLOCKS.map(b => (
-                        <button key={b.key} type="button" role="switch" aria-checked={!!blocks[b.key]} onClick={() => toggleBlock(b.key)} className="btn-active w-full flex items-center justify-between gap-3 bg-[#27272a] rounded-xl p-3 border border-zinc-700/30 text-left transition-all cursor-pointer">
-                          <div className="min-w-0">
-                            <span className="text-sm font-bold text-zinc-200">{b.label}</span>
-                            <span className="block text-[10px] text-zinc-500 mt-0.5">{b.hint}</span>
-                          </div>
-                          <div className={`shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${blocks[b.key] ? 'bg-emerald-500' : 'bg-zinc-700'}`}>
-                            <div className={`w-5 h-5 rounded-full bg-white transition-transform ${blocks[b.key] ? 'translate-x-5' : 'translate-x-0'}`} />
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Аккаунт</h2>
-                    <p className="text-xs text-zinc-500 break-all">{auth.currentUser ? auth.currentUser.email : ''}</p>
-                    {installPrompt && <button type="button" onClick={installApp} className="btn-active w-full bg-indigo-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2"><IconDownload className="w-5 h-5" />Установить приложение</button>}
-                    <button type="button" onClick={deleteAccountNow} disabled={deleteBusy} className="btn-active w-full bg-red-950/40 text-red-400 border border-red-900/50 rounded-xl p-3 font-bold transition-all disabled:opacity-50">{deleteBusy ? 'Удаление…' : 'Удалить аккаунт'}</button>
-                    <p className="text-[10px] text-zinc-600 leading-relaxed">Удаление аккаунта стирает все данные безвозвратно. Расчёты КБЖУ и ИИ-оценки — ориентировочные, не медицинская рекомендация.</p>
-                  </div>
-                </div>
+                <SettingsScreen
+                  activeTheme={activeTheme}
+                  setTheme={setTheme}
+                  fontScale={settings.fontScale}
+                  setFontScale={setFontScale}
+                  blocks={blocks}
+                  toggleBlock={toggleBlock}
+                  accountEmail={auth.currentUser ? auth.currentUser.email : ''}
+                  installPrompt={installPrompt}
+                  installApp={installApp}
+                  deleteAccountNow={deleteAccountNow}
+                  deleteBusy={deleteBusy}
+                />
               )}
 
               {activeTab === 'about' && (
-                <div className="space-y-5">
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
-                    <div className="w-14 h-14 rounded-2xl bg-emerald-600/15 border border-emerald-600/30 flex items-center justify-center"><IconBowl className="w-7 h-7 text-emerald-400" /></div>
-                    <div>
-                      <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconInfo className="w-4 h-4" /> О приложении</h2>
-                      <p className="text-2xl font-black text-zinc-100 mt-2">MoteoTracker</p>
-                      <p className="text-xs text-zinc-500 leading-relaxed mt-2">Дневник питания, активности, прогресса тела и личной базы продуктов. Расчёты КБЖУ и ИИ-подсказки — ориентировочные, не медицинская рекомендация.</p>
-                    </div>
-                    <div className="bg-[#27272a] rounded-2xl p-4 border border-zinc-700/30 space-y-2">
-                      <div className="flex items-center justify-between gap-3 text-sm">
-                        <span className="text-zinc-500">Текущая версия</span>
-                        <span className="font-bold text-zinc-200">{APP_VERSION}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 text-sm">
-                        <span className="text-zinc-500">Обновления</span>
-                        <span className={`font-bold ${appUpdate ? 'text-amber-400' : 'text-emerald-400'}`}>{appUpdate ? `доступна ${appUpdate.version}` : 'актуально'}</span>
-                      </div>
-                    </div>
-                    {appUpdate ? (
-                      <button type="button" onClick={applyAppUpdate} disabled={isApplyingUpdate} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-60"><IconDownload className="w-5 h-5" />{isApplyingUpdate ? 'Обновляем…' : 'Обновить приложение'}</button>
-                    ) : (
-                      <>
-                        <button type="button" onClick={applyAppUpdate} disabled={isApplyingUpdate} className="btn-active w-full bg-zinc-800 text-zinc-100 border border-zinc-700/40 rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-60"><IconRefresh className="w-5 h-5" />{isApplyingUpdate ? 'Обновляем…' : 'Обновить приложение'}</button>
-                        <p className="text-[11px] text-zinc-500 leading-relaxed">Приложение само проверяет обновления при запуске. Эта кнопка принудительно сбрасывает кэш и подтягивает свежую сборку.</p>
-                      </>
-                    )}
-                    {installPrompt && <button type="button" onClick={installApp} className="btn-active w-full bg-indigo-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2"><IconDownload className="w-5 h-5" />Установить приложение</button>}
-                  </div>
-                </div>
+                <AboutScreen
+                  appUpdate={appUpdate}
+                  applyAppUpdate={applyAppUpdate}
+                  isApplyingUpdate={isApplyingUpdate}
+                  installPrompt={installPrompt}
+                  installApp={installApp}
+                />
               )}
 
-              {activeTab === 'support' && (
-                <div className="space-y-5">
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
-                    <div className="w-14 h-14 rounded-2xl bg-emerald-600/15 border border-emerald-600/30 flex items-center justify-center"><IconHelpCircle className="w-7 h-7 text-emerald-400" /></div>
-                    <div>
-                      <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconHelpCircle className="w-4 h-4" /> Поддержка</h2>
-                      <p className="text-sm text-zinc-400 leading-relaxed mt-2">Если что-то сломалось, не считается или хочется предложить улучшение — напишите владельцу приложения.</p>
-                    </div>
-                    <a href={`mailto:${OWNER_EMAIL}?subject=MoteoTracker%20support`} className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2 text-center">{OWNER_EMAIL}</a>
-                  </div>
-                </div>
-              )}
+              {activeTab === 'support' && <SupportScreen />}
 
               {activeTab === 'social' && (
                 <div className="space-y-5">
