@@ -12,7 +12,9 @@ import { compareWeightLoss, filterDatesByProgressPeriod, getProgressPeriod, norm
 import { EXTRA_ACTIVITY_TYPES, calculateDailyAvailableCalories, getExtraActivityType, normalizeExtraActivities, sumExtraActivityCalories, validateExtraActivityCalories } from './utils/activity.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
 import { CHALLENGE_TYPES, challengeType, challengeHistKey, challengeTargetFor, computeChallengeStanding, shouldFinalizeChallenge, challengeRecordVs, computeChallengeSafetyWarning } from './utils/challenges.js';
-import { TOGGLEABLE_BLOCKS, DAILY_BODY_METRICS, DEFAULT_USUAL_STEPS, DEFAULT_PROFILE, DEFAULT_SETTINGS, WATER_QUICK, NON_SELECTABLE_INPUT_TYPES, THEMES, THEME_META_COLOR, normalizeThemeKey, APP_VERSION, VERSION_FILE_URL, logDev, TAB_TITLES, getUsualSteps } from './config.js';
+import { TOGGLEABLE_BLOCKS, DAILY_BODY_METRICS, DEFAULT_USUAL_STEPS, DEFAULT_PROFILE, DEFAULT_SETTINGS, WATER_QUICK, NON_SELECTABLE_INPUT_TYPES, APP_VERSION, VERSION_FILE_URL, logDev, getUsualSteps } from './constants/app.js';
+import { THEMES, THEME_META_COLOR, normalizeThemeKey } from './constants/themes.js';
+import { TAB_TITLES } from './constants/routes.js';
 import AnimatedNumber from './components/AnimatedNumber.jsx';
 import Toasts from './components/Toasts.jsx';
 import ConfirmModal from './components/ConfirmModal.jsx';
