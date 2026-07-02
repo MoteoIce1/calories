@@ -8,12 +8,12 @@ import { ACTIVITY_LEVELS, DEFAULT_ACTIVITY_KEY, calculateStepCalorieAdjustment, 
 import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
 import { buildDietCsv } from './utils/export.js';
-import { compareWeightLoss, filterDatesByProgressPeriod, getProgressPeriod, normalizeWeightHistory, progressPeriods, summarizeWeightProgress } from './utils/progress.js';
+import { compareWeightLoss, filterDatesByProgressPeriod, getProgressPeriod, normalizeWeightHistory, summarizeWeightProgress } from './utils/progress.js';
 import { EXTRA_ACTIVITY_TYPES, calculateDailyAvailableCalories, getExtraActivityType, normalizeExtraActivities, sumExtraActivityCalories, validateExtraActivityCalories } from './utils/activity.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
 import { CHALLENGE_TYPES, challengeType, challengeHistKey, challengeTargetFor, computeChallengeStanding, shouldFinalizeChallenge, computeChallengeSafetyWarning } from './utils/challenges.js';
-import { TOGGLEABLE_BLOCKS, DAILY_BODY_METRICS, DEFAULT_USUAL_STEPS, DEFAULT_PROFILE, DEFAULT_SETTINGS, WATER_QUICK, NON_SELECTABLE_INPUT_TYPES, APP_VERSION, VERSION_FILE_URL, logDev, getUsualSteps } from './constants/app.js';
-import { THEMES, THEME_META_COLOR, normalizeThemeKey } from './constants/themes.js';
+import { DEFAULT_USUAL_STEPS, DEFAULT_PROFILE, DEFAULT_SETTINGS, NON_SELECTABLE_INPUT_TYPES, APP_VERSION, VERSION_FILE_URL, logDev, getUsualSteps } from './constants/app.js';
+import { THEME_META_COLOR, normalizeThemeKey } from './constants/themes.js';
 import { TAB_TITLES } from './constants/routes.js';
 import AnimatedNumber from './components/AnimatedNumber.jsx';
 import Toasts from './components/Toasts.jsx';
@@ -41,8 +41,7 @@ const ScreenLoader = () => (
     <div className="loader" />
   </div>
 );
-import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
-import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconSparkles, IconInfo, IconHelpCircle, IconLogOut } from './components/Icons.jsx';
+import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft, IconPrinter, IconUser, IconSliders, IconUsers, IconTrophy, IconSparkles, IconInfo, IconHelpCircle } from './components/Icons.jsx';
 
     function App() {
       const [isLoading, setIsLoading] = useState(true);
