@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import firebase, { db, auth, functions, profileRef, dayRef, daysCol, bodyCol, bodyDocRef, OWNER_EMAIL, sharedFoodsRef, legacyRef, publicProfileRef, publicProfilesCol, connectionsCol, connectionRef, challengesCol, challengeRef } from './firebase.js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { evaluateMath } from './utils/math.js';
@@ -21,17 +21,26 @@ import ConfirmModal from './components/ConfirmModal.jsx';
 import Header from './components/layout/Header.jsx';
 import BottomNav from './components/layout/BottomNav.jsx';
 import DrawerMenu from './components/layout/DrawerMenu.jsx';
-import SettingsScreen from './features/settings/SettingsScreen.jsx';
-import ProfileScreen from './features/profile/ProfileScreen.jsx';
-import SocialScreen from './features/friends/SocialScreen.jsx';
-import ProgressScreen from './features/progress/ProgressScreen.jsx';
-import FoodBaseScreen from './features/food/FoodBaseScreen.jsx';
 import DiaryScreen from './features/diary/DiaryScreen.jsx';
-import ExportReport from './features/export/ExportReport.jsx';
 import UpdateCallout from './features/updates/UpdateCallout.jsx';
 import { getBodyPhotoSrc, getBodyPhotoLabel, countBodyPhotos } from './features/progress/bodyPhotos.js';
-import SupportScreen from './features/settings/SupportScreen.jsx';
-import AboutScreen from './features/updates/AboutScreen.jsx';
+
+// Дневник — стартовый экран, грузится сразу; остальные экраны подтягиваются лениво,
+// чтобы уменьшить первичный бандл.
+const SettingsScreen = lazy(() => import('./features/settings/SettingsScreen.jsx'));
+const ProfileScreen = lazy(() => import('./features/profile/ProfileScreen.jsx'));
+const SocialScreen = lazy(() => import('./features/friends/SocialScreen.jsx'));
+const ProgressScreen = lazy(() => import('./features/progress/ProgressScreen.jsx'));
+const FoodBaseScreen = lazy(() => import('./features/food/FoodBaseScreen.jsx'));
+const ExportReport = lazy(() => import('./features/export/ExportReport.jsx'));
+const SupportScreen = lazy(() => import('./features/settings/SupportScreen.jsx'));
+const AboutScreen = lazy(() => import('./features/updates/AboutScreen.jsx'));
+
+const ScreenLoader = () => (
+  <div className="flex justify-center py-16">
+    <div className="loader" />
+  </div>
+);
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
 import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconSparkles, IconInfo, IconHelpCircle, IconLogOut } from './components/Icons.jsx';
 
@@ -2028,18 +2037,24 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
       };
 
       // Избранное — в порядке favoriteIds (порядок задаёт сам пользователь).
-      const favoriteFoods = favoriteIds.map(id => foods.find(f => f.id === id)).filter(Boolean);
-      const favoriteFoodIds = new Set(favoriteFoods.map(food => food.id));
-      const regularFoods = foods
-        .filter(food => !favoriteFoodIds.has(food.id))
-        .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-      const sortedFoods = [
-        ...favoriteFoods,
-        ...regularFoods,
-      ];
+      // Сортировка базы мемоизирована: пересчитывается только при изменении продуктов/избранного.
+      const { favoriteFoods, regularFoods, sortedFoods } = useMemo(() => {
+        const favorites = favoriteIds.map(id => foods.find(f => f.id === id)).filter(Boolean);
+        const favoriteFoodIds = new Set(favorites.map(food => food.id));
+        const regular = foods
+          .filter(food => !favoriteFoodIds.has(food.id))
+          .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+        return { favoriteFoods: favorites, regularFoods: regular, sortedFoods: [...favorites, ...regular] };
+      }, [foods, favoriteIds]);
       // Поиск работает в обеих строках, но продукт выводится только в одной из них.
-      const favoriteMealFoods = foodSearch.trim() ? searchFoodsByName(favoriteFoods, foodSearch, 200) : favoriteFoods;
-      const allMealFoods = foodSearch.trim() ? searchFoodsByName(regularFoods, foodSearch, 200) : regularFoods;
+      const favoriteMealFoods = useMemo(
+        () => foodSearch.trim() ? searchFoodsByName(favoriteFoods, foodSearch, 200) : favoriteFoods,
+        [favoriteFoods, foodSearch],
+      );
+      const allMealFoods = useMemo(
+        () => foodSearch.trim() ? searchFoodsByName(regularFoods, foodSearch, 200) : regularFoods,
+        [regularFoods, foodSearch],
+      );
       const selectedFood = selectedFoodId ? foods.find(f => f.id === selectedFoodId) : null;
       const sortedBodyEntries = [...bodyEntries].sort((a, b) => b.date.localeCompare(a.date));
       const bodyEntryOptions = [...bodyEntries].sort((a, b) => a.date.localeCompare(b.date));
@@ -2391,7 +2406,9 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                  {isPrinting ? 'Обработка...' : <><IconPrinter className="w-4 h-4" /> Сохранить PDF</>}
                </button>
             </div>
+            <Suspense fallback={<ScreenLoader />}>
             <ExportReport {...{ exportStart, exportEnd, allExportDates, totalPeriodCals, totalPeriodBurned, totalPeriodExtraActivityCalories, totalPeriodSteps, avgPeriodSteps, periodDefText, avgDeficit, filteredDatesForPdf, rangeDayCount, adherence, streak, latestWeekTrend, latestWeek, projectionDate, targetFat, daysToGoal, fatWeeklyRate, latestSmoothedFat, projectionConfidence, projectionConfidenceText, dayStats, bestDeficitDays, worstBalanceDays, highStepAvgDeficit, lowStepAvgDeficit, stepDeficitDelta, workoutDays, restDays, workoutAvgDeficit, workoutAvgCals, workoutAvgSteps, restAvgDeficit, restAvgCals, restAvgSteps, tdeeReal, weeklyRate, modelTdee, tdeeDiff, daysBetweenWeigh, workoutCount, weeklySummary, hasBodyData, wStart, wEnd, fStart, fEnd, lStart, lEnd, fmStart, fmEnd, bodyMeasureSummary, bodyMeasureSeries, bodyMeasureDates, datesWithMetrics, allWeight, allFat, allLean, allFatMass, chartDates, allSteps, stepChartLabels, getEffectiveGoals, dailyLogs, dailyMetrics, dailySteps, dailyWater, dailyExtraActivities, dailyWorkouts, foods }} />
+            </Suspense>
           </div>
         );
       }
@@ -2414,6 +2431,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
               {appUpdate && !appUpdate.mandatory && <UpdateCallout appUpdate={appUpdate} applyAppUpdate={applyAppUpdate} isApplyingUpdate={isApplyingUpdate} />}
               <AnimatePresence initial={false}>
               <motion.div key={activeTab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -2 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} style={{ willChange: 'opacity, transform' }}>
+              <Suspense fallback={<ScreenLoader />}>
               {activeTab === 'diary' && (
                 <DiaryScreen
                   showKbjuRecalc={showKbjuRecalc}
@@ -2647,6 +2665,7 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                   publishSharedBase={publishSharedBase}
                 />
               )}
+              </Suspense>
               </motion.div>
               </AnimatePresence>
             </main>
