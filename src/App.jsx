@@ -626,8 +626,16 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
                 if (date < todayStr && !updatedDailyGoals[date]) updatedDailyGoals[date] = { ...goals };
             });
         }
-        if (profileDoc) profileDoc.set({ goals: draftGoals, dailyGoals: updatedDailyGoals }, { merge: true });
-        setGoals(draftGoals); setDailyGoals(updatedDailyGoals); setShowGoalModal(false);
+        // База шагов живёт в двух местах: goals.baseSteps и profileData.usualSteps.
+        // Синхронизируем профиль при сохранении целей, иначе настройки показывают старое
+        // значение, а авто-режим КБЖУ перезаписывает цели обратно из profileData.usualSteps.
+        const nextUsualSteps = getUsualSteps(draftGoals.baseSteps);
+        const profileChanged = getUsualSteps(profileData.usualSteps) !== nextUsualSteps;
+        const nextProfile = profileChanged ? { ...profileData, usualSteps: nextUsualSteps } : profileData;
+        if (profileDoc) profileDoc.set({ goals: draftGoals, dailyGoals: updatedDailyGoals, ...(profileChanged ? { profileData: nextProfile } : {}) }, { merge: true });
+        setGoals(draftGoals); setDailyGoals(updatedDailyGoals);
+        if (profileChanged) setProfileData(nextProfile);
+        setShowGoalModal(false);
       };
 
       const getEffectiveGoals = (date) => dailyGoals[date] || goals;

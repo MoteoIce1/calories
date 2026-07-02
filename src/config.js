@@ -76,7 +76,7 @@ export const normalizeThemeKey = (theme) => {
   const key = theme === 'rain' ? 'dark-neon-rain' : theme;
   return THEMES.some((t) => t.key === key) ? key : 'lime';
 };
-export const APP_VERSION = '2026.06.30.7';
+export const APP_VERSION = '2026.07.02.1';
 export const VERSION_FILE_URL = '/version.json';
 export const logDev = (...args) => { if (import.meta.env.DEV) console.warn(...args); };
 export const TAB_TITLES = {
