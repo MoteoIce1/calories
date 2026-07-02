@@ -11,7 +11,7 @@ import { buildDietCsv } from './utils/export.js';
 import { compareWeightLoss, filterDatesByProgressPeriod, getProgressPeriod, normalizeWeightHistory, progressPeriods, summarizeWeightProgress } from './utils/progress.js';
 import { EXTRA_ACTIVITY_TYPES, calculateDailyAvailableCalories, getExtraActivityType, normalizeExtraActivities, sumExtraActivityCalories, validateExtraActivityCalories } from './utils/activity.js';
 import { BODY_MEASURE_FIELDS, EMPTY_BODY_MEASURES, BODY_PHOTO_LABELS } from './constants.js';
-import { CHALLENGE_TYPES, challengeType, challengeHistKey, challengeTargetFor, computeChallengeStanding, shouldFinalizeChallenge, challengeRecordVs, computeChallengeSafetyWarning } from './utils/challenges.js';
+import { CHALLENGE_TYPES, challengeType, challengeHistKey, challengeTargetFor, computeChallengeStanding, shouldFinalizeChallenge, computeChallengeSafetyWarning } from './utils/challenges.js';
 import { TOGGLEABLE_BLOCKS, DAILY_BODY_METRICS, DEFAULT_USUAL_STEPS, DEFAULT_PROFILE, DEFAULT_SETTINGS, WATER_QUICK, NON_SELECTABLE_INPUT_TYPES, APP_VERSION, VERSION_FILE_URL, logDev, getUsualSteps } from './constants/app.js';
 import { THEMES, THEME_META_COLOR, normalizeThemeKey } from './constants/themes.js';
 import { TAB_TITLES } from './constants/routes.js';
@@ -23,10 +23,11 @@ import BottomNav from './components/layout/BottomNav.jsx';
 import DrawerMenu from './components/layout/DrawerMenu.jsx';
 import SettingsScreen from './features/settings/SettingsScreen.jsx';
 import ProfileScreen from './features/profile/ProfileScreen.jsx';
+import SocialScreen from './features/friends/SocialScreen.jsx';
 import SupportScreen from './features/settings/SupportScreen.jsx';
 import AboutScreen from './features/updates/AboutScreen.jsx';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
-import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconCopy, IconFlame, IconSparkles, IconInfo, IconHelpCircle, IconLogOut } from './components/Icons.jsx';
+import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCalendar, IconChevronLeft, IconChevronRight, IconTrash, IconTarget, IconCheck, IconDownload, IconRefresh, IconBowl, IconSteps, IconDumbbell, IconTimer, IconSave, IconArrowLeft, IconPrinter, IconCamera, IconUser, IconDrop, IconMinus, IconCalc, IconSliders, IconUsers, IconTrophy, IconSparkles, IconInfo, IconHelpCircle, IconLogOut } from './components/Icons.jsx';
 
     function App() {
       const [isLoading, setIsLoading] = useState(true);
@@ -1776,67 +1777,6 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
 
       // Табло спора и предупреждение о темпе — из чистого модуля utils/challenges.js.
       const challengeStanding = (c) => computeChallengeStanding({ challenge: c, uid, myStatsNow, friendName, today: getLocalDateString(new Date()) });
-      const renderChallengeCard = (c) => {
-        const st = challengeStanding(c);
-        const isInvite = c.status === 'pending' && !(c.acceptedBy || []).includes(uid);
-        const isWaiting = c.status === 'pending' && (c.acceptedBy || []).includes(uid);
-        const won = st.finished && st.winnerUid === uid && !st.tie;
-        const lost = st.finished && st.winnerUid && st.winnerUid !== uid && !st.tie;
-        const statusLine = st.cancelled ? 'отменён' : st.finished ? 'завершён' : (st.daysLeft < 0 ? 'подводим итог…' : `осталось ${Math.max(0, st.daysLeft)} дн`);
-        const winnerName = st.winnerUid ? (st.rows.find(r => r.uid === st.winnerUid)?.name || 'Соперник') : '';
-        return (
-          <div key={c.id} className={`card-enter rounded-3xl p-4 border ${st.finished ? 'bg-[#141416] border-zinc-800/60' : 'bg-[#18181b] border-zinc-800/50'} ${st.cancelled ? 'opacity-70' : ''}`}>
-            <div className="flex items-start justify-between gap-2 mb-3">
-              <div className="min-w-0">
-                <p className="text-sm font-black text-zinc-100">{st.tp.label}</p>
-                <p className="text-[10px] text-zinc-500 mt-0.5">У каждого своя цель · {statusLine}</p>
-              </div>
-              <button type="button" onClick={() => removeChallenge(c)} className="btn-active text-zinc-700 active:text-red-400 p-1 shrink-0"><IconTrash className="w-4 h-4" /></button>
-            </div>
-            {st.finished && (
-              <div className={`mb-3 rounded-xl px-3 py-2.5 border flex items-center gap-2 ${won ? 'bg-emerald-600/15 border-emerald-600/40 text-emerald-200' : lost ? 'bg-zinc-800/60 border-zinc-700/40 text-zinc-300' : 'bg-sky-500/15 border-sky-400/30 text-sky-100'}`}>
-                <IconTrophy className={`w-5 h-5 shrink-0 ${won ? 'text-amber-400' : lost ? 'text-zinc-400' : 'text-sky-300'}`} />
-                <span className="text-xs font-black">{st.tie || !st.winnerUid ? 'Ничья — оба молодцы!' : won ? '🏆 Вы победили!' : `Победил ${winnerName}`}</span>
-              </div>
-            )}
-            {st.cancelled && <p className="mb-3 text-[10px] text-zinc-500 text-center">Спор отменён{c.cancelledBy && c.cancelledBy !== uid ? ' соперником' : ''}.</p>}
-            <div className="space-y-2">
-              {st.rows.map(r => {
-                const goodDelta = r.delta != null && r.delta !== 0 && (st.tp.dir === 'down' ? r.delta < 0 : r.delta > 0);
-                const highlight = st.finished ? st.winnerUid === r.uid && !st.tie : st.leaderUid === r.uid;
-                return (
-                <div key={r.uid} className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 border ${highlight ? 'bg-emerald-600/15 border-emerald-600/40' : 'bg-[#27272a] border-zinc-700/30'}`}>
-                  <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5 min-w-0 truncate">{highlight && <IconFlame className="w-4 h-4 text-amber-400 shrink-0" />}{r.name}</span>
-                  <span className="shrink-0 text-right">
-                    <span className={`text-sm font-black ${r.reached ? 'text-emerald-400' : 'text-zinc-200'}`}>{typeof r.value === 'number' ? Math.round(r.value * 10) / 10 : '—'}{r.reached ? ' ✓' : ''}</span>
-                    {typeof r.target === 'number' && <span className="text-[10px] text-zinc-500 font-bold"> {st.tp.dir === 'down' ? '→ ≤' : '→ ≥'}{r.target} {st.tp.unit}</span>}
-                    {r.delta != null && r.delta !== 0 && <span className={`block text-[9px] font-bold ${goodDelta ? 'text-emerald-400' : 'text-red-400'}`}>{r.delta > 0 ? '▲ +' : '▼ −'}{Math.abs(r.delta)} {st.tp.unit} от старта</span>}
-                    {typeof r.start === 'number' && (r.delta == null || r.delta === 0) && <span className="block text-[9px] text-zinc-500">старт {Math.round(r.start * 10) / 10} {st.tp.unit}</span>}
-                  </span>
-                </div>
-                );
-              })}
-            </div>
-            {['weight', 'fat', 'steps', 'waist'].includes(st.tp.key) && st.rows.some(r => (r.history || []).length >= 2) && (
-              <div className="mt-3 space-y-2">
-                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Динамика · {st.tp.short.toLowerCase()}</p>
-                {st.rows.map(r => {
-                  const hist = r.history || [];
-                  if (hist.length < 2) return null;
-                  return <MiniWeightChart key={r.uid} title={`${r.name} · ${st.tp.short.toLowerCase()}`} data={hist.map(p => p.v)} dates={hist.map(p => { const a = (p.d || '').split('-'); return a.length === 3 ? `${a[2]}.${a[1]}` : p.d; })} color={(st.finished ? st.winnerUid === r.uid : st.leaderUid === r.uid) ? '#34d399' : '#a3e635'} unit={st.tp.unit} positiveIsGood={st.tp.dir === 'up'} />;
-                })}
-              </div>
-            )}
-            {isInvite && (
-              <div className="flex gap-2 mt-3">
-                <button type="button" onClick={() => openAcceptChallenge(c)} className="btn-active flex-1 bg-emerald-600 text-white rounded-xl p-3 text-xs font-bold">Принять вызов</button>
-                <button type="button" onClick={() => removeChallenge(c)} className="btn-active flex-1 bg-zinc-800 text-zinc-400 rounded-xl p-3 text-xs font-bold">Отказаться</button>
-              </div>
-            )}
-            {isWaiting && <p className="text-[10px] text-zinc-500 mt-2 text-center">Ждём, пока соперник примет вызов…</p>}
-          </div>
-        );
-      };
       const challengeSafetyWarning = computeChallengeSafetyWarning({
         type: challengeDraft.type,
         myTarget: challengeDraft.myTarget,
@@ -3387,226 +3327,39 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
               {activeTab === 'support' && <SupportScreen />}
 
               {activeTab === 'social' && (
-                <div className="space-y-5">
-                  {/* Мой код */}
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconUser className="w-4 h-4" /> Моя карточка</h2>
-                    <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ИМЯ (видят друзья)</span><input type="text" maxLength={24} placeholder="Как вас зовут" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 font-bold outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={profileData.displayName || ''} onChange={(e) => handleProfileChange('displayName', e.target.value)} /></div>
-                    <div>
-                      <span className="text-[9px] text-zinc-500 font-bold block mb-1">ВАШ КОД ДЛЯ ДРУЗЕЙ</span>
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-[#27272a] rounded-xl p-3 font-black text-lg tracking-[0.3em] text-emerald-400 text-center border border-zinc-700/30">{myFriendCode || '—'}</div>
-                        <button type="button" onClick={() => { if (navigator.clipboard) { navigator.clipboard.writeText(myFriendCode); notify('Код скопирован'); } }} className="btn-active w-12 h-12 shrink-0 bg-zinc-800 rounded-xl flex items-center justify-center text-zinc-300 border border-zinc-700/30" aria-label="Скопировать код"><IconCopy className="w-5 h-5" /></button>
-                      </div>
-                      <p className="text-[10px] text-zinc-600 mt-1.5">Поделитесь кодом, чтобы вас добавили в друзья.</p>
-                    </div>
-                  </div>
-
-                  {/* Добавить друга */}
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Добавить друга по коду</h2>
-                    <div className="flex gap-2">
-                      <input type="text" placeholder="Код друга" maxLength={6} className="flex-1 min-w-0 bg-[#27272a] rounded-xl p-3 font-black tracking-[0.2em] uppercase text-zinc-200 outline-none border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={friendCodeInput} onChange={(e) => setFriendCodeInput(e.target.value.toUpperCase())} />
-                      <button type="button" onClick={sendFriendRequest} disabled={!friendCodeInput.trim()} className="btn-active px-4 shrink-0 bg-emerald-600 text-white rounded-xl font-bold transition-all disabled:opacity-35">Добавить</button>
-                    </div>
-                  </div>
-
-                  {/* Входящие заявки */}
-                  {incomingRequests.length > 0 && (
-                    <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
-                      <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Заявки в друзья ({incomingRequests.length})</h2>
-                      {incomingRequests.map(c => (
-                        <div key={c.id} className="flex items-center justify-between gap-2 bg-[#27272a] rounded-xl p-3 border border-zinc-700/30">
-                          <span className="text-sm font-bold text-zinc-200 truncate">{friendName(otherUid(c))}</span>
-                          <div className="flex gap-2 shrink-0">
-                            <button type="button" onClick={() => acceptConnection(c)} className="btn-active bg-emerald-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Принять</button>
-                            <button type="button" onClick={() => removeConnection(c)} className="btn-active bg-zinc-800 text-zinc-400 rounded-lg px-3 py-2 text-xs font-bold">Отклонить</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Друзья */}
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconUsers className="w-4 h-4" /> Друзья ({acceptedFriends.length})</h2>
-                      {acceptedFriends.length > 0 && <button type="button" onClick={() => openChallengeWith('')} className="btn-active flex items-center gap-1.5 bg-emerald-600 text-white rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-widest"><IconTrophy className="w-4 h-4" /> Новый спор</button>}
-                    </div>
-                    {acceptedFriends.length === 0 && <p className="text-xs text-zinc-500">Пока нет друзей. Добавьте по коду — и спорьте, кто быстрее придёт к цели.</p>}
-                    {acceptedFriends.map(c => {
-                      const fid = otherUid(c);
-                      const rec = challengeRecordVs(challenges, uid, fid);
-                      const hasRec = rec.wins + rec.losses + rec.ties > 0;
-                      return (
-                        <div key={c.id} className="flex items-center justify-between gap-2 bg-[#27272a] rounded-xl p-3 border border-zinc-700/30">
-                          <div className="min-w-0">
-                            <span className="text-sm font-bold text-zinc-200 block truncate">{friendName(fid)}</span>
-                            {hasRec
-                              ? <span className="text-[10px] text-zinc-400 font-bold">Счёт: <span className="text-emerald-400">{rec.wins}</span> : <span className="text-red-400">{rec.losses}</span>{rec.ties ? <span className="text-zinc-500"> · {rec.ties} нич.</span> : null}</span>
-                              : <span className="text-[10px] text-zinc-500">Показатели видны только в общем споре</span>}
-                          </div>
-                          <div className="flex gap-2 shrink-0">
-                            <button type="button" onClick={() => openChallengeWith(fid)} className="btn-active bg-emerald-600/15 text-emerald-300 border border-emerald-600/30 rounded-lg px-3 py-2 text-xs font-bold">Спорить</button>
-                            <button type="button" onClick={() => removeConnection(c)} className="btn-active text-zinc-700 active:text-red-400 p-2"><IconTrash className="w-5 h-5" /></button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Сравнение прогресса */}
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconTrophy className="w-4 h-4" /> Сравнение прогресса</h2>
-                        <p className="text-xs text-zinc-500 mt-2 leading-relaxed">Выберите друга и период, чтобы сравнить динамику веса.</p>
-                      </div>
-                      <div className="w-11 h-11 shrink-0 rounded-2xl bg-emerald-600/15 border border-emerald-600/30 flex items-center justify-center"><IconTarget className="w-5 h-5 text-emerald-400" /></div>
-                    </div>
-
-                    {acceptedFriends.length === 0 ? (
-                      <div className="rounded-2xl bg-[#27272a] border border-zinc-700/30 p-4">
-                        <p className="text-sm font-bold text-zinc-200">У вас пока нет друзей для спора</p>
-                        <p className="text-[11px] text-zinc-500 mt-1">Добавьте друга по коду, и здесь появится сравнение прогресса.</p>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="space-y-2">
-                          <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Выберите друга</p>
-                          <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 -mx-1 px-1">
-                            {acceptedFriends.map(c => {
-                              const fid = otherUid(c);
-                              const active = challengeProgressFriendUid === fid;
-                              return (
-                                <button
-                                  key={c.id}
-                                  type="button"
-                                  onClick={() => setChallengeProgressFriendUid(fid)}
-                                  aria-pressed={active}
-                                  className={`btn-active shrink-0 cursor-pointer rounded-2xl px-3.5 py-2.5 text-xs font-bold border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/60 ${active ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-950/20' : 'bg-[#27272a] text-zinc-300 border-zinc-700/30 hover:border-zinc-600 hover:text-zinc-100'}`}
-                                >
-                                  {friendName(fid)}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Период</p>
-                          <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 -mx-1 px-1">
-                            {progressPeriods.map(period => {
-                              const active = challengeProgressPeriod === period.key;
-                              return (
-                                <button
-                                  key={period.key}
-                                  type="button"
-                                  onClick={() => setChallengeProgressPeriod(period.key)}
-                                  aria-pressed={active}
-                                  className={`btn-active shrink-0 cursor-pointer rounded-2xl px-3 py-2 text-[10px] font-black uppercase tracking-widest border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/60 ${active ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-900/70 text-zinc-400 border-zinc-800/70 hover:text-zinc-200 hover:border-zinc-700'}`}
-                                >
-                                  {period.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div className={`rounded-2xl border p-4 ${challengeProgressToneClass}`}>
-                          <p className="text-[9px] font-black uppercase tracking-widest opacity-70">Итог</p>
-                          <p className="text-sm font-black mt-1">{challengeProgressOutcome.text}</p>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {[
-                            { key: 'me', title: 'Мой прогресс', name: myDisplayName, summary: myWeightProgressSummary, empty: 'У вас пока нет записей прогресса', color: '#34d399' },
-                            { key: 'friend', title: 'Прогресс друга', name: challengeProgressFriendUid ? friendName(challengeProgressFriendUid) : 'Друг', summary: friendWeightProgressSummary, empty: 'У друга пока нет записей прогресса', color: '#38bdf8' },
-                          ].map(card => {
-                            const summary = card.summary;
-                            const deltaClass = summary.delta == null || summary.delta === 0 ? 'text-zinc-400' : (summary.delta < 0 ? 'text-emerald-400' : 'text-red-400');
-                            const deltaText = summary.delta == null ? '—' : `${summary.delta > 0 ? '+' : ''}${summary.delta} кг`;
-                            const percentText = summary.percent == null ? '' : ` (${summary.percent > 0 ? '+' : ''}${summary.percent}%)`;
-                            return (
-                              <div key={card.key} className="bg-[#27272a] rounded-2xl p-4 border border-zinc-700/30 space-y-3">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">{card.title}</p>
-                                    <p className="text-sm font-black text-zinc-100 mt-1 truncate">{card.name}</p>
-                                  </div>
-                                  <span className={`shrink-0 rounded-xl px-2.5 py-1 text-[9px] font-bold ${summary.hasData ? 'bg-emerald-600/15 text-emerald-300' : 'bg-zinc-900/70 text-zinc-500'}`}>{summary.status}</span>
-                                </div>
-
-                                {summary.hasData ? (
-                                  <>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div className="rounded-xl bg-zinc-900/60 p-3 border border-zinc-800/60">
-                                        <p className="text-[9px] text-zinc-500 font-bold uppercase">Текущий вес</p>
-                                        <p className="text-lg font-black text-zinc-100 mt-1">{summary.currentWeight != null ? `${summary.currentWeight} кг` : '—'}</p>
-                                      </div>
-                                      <div className="rounded-xl bg-zinc-900/60 p-3 border border-zinc-800/60">
-                                        <p className="text-[9px] text-zinc-500 font-bold uppercase">Изменение</p>
-                                        <p className={`text-lg font-black mt-1 ${deltaClass}`}>{deltaText}</p>
-                                        {percentText && <p className="text-[9px] text-zinc-500 font-bold">{percentText}</p>}
-                                      </div>
-                                      <div className="rounded-xl bg-zinc-900/60 p-3 border border-zinc-800/60">
-                                        <p className="text-[9px] text-zinc-500 font-bold uppercase">Записей</p>
-                                        <p className="text-lg font-black text-zinc-100 mt-1">{summary.count}</p>
-                                      </div>
-                                      <div className="rounded-xl bg-zinc-900/60 p-3 border border-zinc-800/60">
-                                        <p className="text-[9px] text-zinc-500 font-bold uppercase">Лучший вес</p>
-                                        <p className="text-lg font-black text-zinc-100 mt-1">{summary.bestWeight != null ? `${summary.bestWeight} кг` : '—'}</p>
-                                      </div>
-                                    </div>
-                                    {summary.filteredHistory.length >= 2 ? (
-                                      <MiniWeightChart
-                                        title={`${card.title} · ${selectedChallengeProgressPeriod.label.toLowerCase()}`}
-                                        data={summary.filteredHistory.map(point => point.v)}
-                                        dates={summary.filteredHistory.map(point => point.d.slice(5))}
-                                        color={card.color}
-                                        unit="кг"
-                                      />
-                                    ) : (
-                                      <p className="text-[11px] text-zinc-500 leading-relaxed">Для честного сравнения нужна ещё одна запись в выбранном периоде.</p>
-                                    )}
-                                  </>
-                                ) : (
-                                  <div className="rounded-xl bg-zinc-900/60 p-4 border border-zinc-800/60">
-                                    <p className="text-sm font-bold text-zinc-200">{card.empty}</p>
-                                    <p className="text-[11px] text-zinc-500 mt-1">Карточка обновится автоматически, когда появятся записи.</p>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Активные споры */}
-                  {(() => {
-                    const sorted = [...challenges].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-                    const active = sorted.filter(c => c.status !== 'finished' && c.status !== 'cancelled');
-                    const archived = sorted.filter(c => c.status === 'finished' || c.status === 'cancelled');
-                    return (
-                      <>
-                        {active.length > 0 && (
-                          <div className="space-y-3">
-                            <h2 className="px-1 text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconTrophy className="w-4 h-4" /> Активные споры ({active.length})</h2>
-                            {active.map(c => renderChallengeCard(c))}
-                          </div>
-                        )}
-                        {archived.length > 0 && (
-                          <div className="space-y-3">
-                            <h2 className="px-1 text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2"><IconTrophy className="w-4 h-4" /> История споров ({archived.length})</h2>
-                            {archived.map(c => renderChallengeCard(c))}
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
+                <SocialScreen
+                  uid={uid}
+                  profileData={profileData}
+                  handleProfileChange={handleProfileChange}
+                  myFriendCode={myFriendCode}
+                  notify={notify}
+                  friendCodeInput={friendCodeInput}
+                  setFriendCodeInput={setFriendCodeInput}
+                  sendFriendRequest={sendFriendRequest}
+                  incomingRequests={incomingRequests}
+                  acceptedFriends={acceptedFriends}
+                  friendName={friendName}
+                  otherUid={otherUid}
+                  acceptConnection={acceptConnection}
+                  removeConnection={removeConnection}
+                  openChallengeWith={openChallengeWith}
+                  challenges={challenges}
+                  challengeStanding={challengeStanding}
+                  removeChallenge={removeChallenge}
+                  openAcceptChallenge={openAcceptChallenge}
+                  compareProps={{
+                    challengeProgressFriendUid,
+                    setChallengeProgressFriendUid,
+                    challengeProgressPeriod,
+                    setChallengeProgressPeriod,
+                    challengeProgressToneClass,
+                    challengeProgressOutcome,
+                    myDisplayName,
+                    myWeightProgressSummary,
+                    friendWeightProgressSummary,
+                    selectedChallengeProgressPeriod,
+                  }}
+                />
               )}
 
               {activeTab === 'directory' && (
