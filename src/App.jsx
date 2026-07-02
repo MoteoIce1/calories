@@ -24,6 +24,10 @@ import DrawerMenu from './components/layout/DrawerMenu.jsx';
 import SettingsScreen from './features/settings/SettingsScreen.jsx';
 import ProfileScreen from './features/profile/ProfileScreen.jsx';
 import SocialScreen from './features/friends/SocialScreen.jsx';
+import ProgressScreen from './features/progress/ProgressScreen.jsx';
+import FoodBaseScreen from './features/food/FoodBaseScreen.jsx';
+import DiaryScreen from './features/diary/DiaryScreen.jsx';
+import { getBodyPhotoSrc, getBodyPhotoLabel, countBodyPhotos } from './features/progress/bodyPhotos.js';
 import SupportScreen from './features/settings/SupportScreen.jsx';
 import AboutScreen from './features/updates/AboutScreen.jsx';
 import { MacroBar, ProgressChart, MiniWeightChart } from './components/Charts.jsx';
@@ -896,9 +900,6 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
         if (uid) bodyDocRef(uid, id).delete().catch(err => notify('Не удалось удалить запись: ' + err.message));
       };
 
-      const getBodyPhotoSrc = (photo) => typeof photo === 'string' ? photo : photo?.src;
-      const getBodyPhotoLabel = (photo, idx) => typeof photo === 'string' ? (BODY_PHOTO_LABELS[idx] || `Фото ${idx + 1}`) : (photo?.label || BODY_PHOTO_LABELS[idx] || `Фото ${idx + 1}`);
-      const countBodyPhotos = (photos) => (photos || []).filter(photo => getBodyPhotoSrc(photo)).length;
       const fillBodyPhotoSlots = (currentPhotos, newSources) => {
         const next = [...(currentPhotos || [])].slice(0, 3);
         newSources.forEach((src) => {
@@ -2711,575 +2712,122 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
               <AnimatePresence initial={false}>
               <motion.div key={activeTab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -2 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} style={{ willChange: 'opacity, transform' }}>
               {activeTab === 'diary' && (
-                <div className="space-y-4">
-                  {showKbjuRecalc && (
-                    <div className="card-enter bg-amber-500/10 border border-amber-400/30 rounded-3xl p-4 flex gap-3 items-start">
-                      <div className="w-10 h-10 shrink-0 rounded-2xl bg-amber-400/15 flex items-center justify-center"><IconCalc className="w-5 h-5 text-amber-400" /></div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-amber-100">Пора пересчитать КБЖУ</p>
-                        <p className="text-xs text-amber-200/70 mt-1">Замеры изменились — по формуле выходит {kbjuPreview.calories} ккал вместо {goals.calories}. Обновить цели?</p>
-                        <button type="button" onClick={applyAutoKbju} className="btn-active mt-2 bg-amber-400 text-amber-950 rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-widest">Пересчитать</button>
-                      </div>
-                      <button type="button" onClick={dismissKbjuRecalc} className="btn-active shrink-0 text-[10px] font-bold text-amber-100/70 bg-amber-950/40 rounded-xl px-3 py-2">Позже</button>
-                    </div>
-                  )}
-                  <div className="date-toolbar card-enter flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
-                    <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(getLocalDateString(d));}} className="btn-active p-3 text-zinc-400"><IconChevronLeft className="w-5 h-5" /></button>
-                    <div className="relative font-bold text-sm text-zinc-200 flex items-center justify-center cursor-pointer px-4">
-                      {displayDate(currentDate)}
-                      <input type="date" className="absolute opacity-0 top-0 left-0 w-full h-full cursor-pointer" value={currentDate} max={getLocalDateString(new Date())} onChange={(e) => { if(e.target.value) setCurrentDate(e.target.value); }} />
-                    </div>
-                    <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()+1); setCurrentDate(getLocalDateString(d));}} disabled={currentDate === getLocalDateString(new Date())} className="btn-active p-3 text-zinc-400 disabled:opacity-20"><IconChevronRight className="w-5 h-5" /></button>
-                  </div>
-
-                  {(blocks.calories || blocks.steps || blocks.workout || blocks.protein || blocks.fats || blocks.carbs) && (
-                  <div className="calorie-overview section-card card-enter bg-[#18181b] rounded-3xl p-5 shadow-xl border border-zinc-800/50">
-                    <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest">КБЖУ и активность</h2>
-                    {blocks.calories && (<>
-                    <div className="flex justify-between items-end mb-3">
-                      <div>
-                        <p className="text-[10px] text-zinc-500 uppercase font-bold mb-1 tracking-widest">Калории</p>
-                        <div className="flex items-baseline gap-1">
-                          <AnimatedNumber value={totalCals} className="text-4xl font-black" />
-                          <span className="text-zinc-600 text-sm">/ {dailyAvailableCalories}</span>
-                        </div>
-                      </div>
-                      <div className={`text-right ${calsColorClass}`}>
-                        <span className="text-2xl font-black">{displayCals}</span>
-                        <p className="text-[10px] uppercase font-bold mt-1 tracking-widest opacity-80">{calsLabel}</p>
-                      </div>
-                    </div>
-                    <div className="progress-track h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-4">
-                      <motion.div className={`h-full ${isOver ? 'bg-red-500' : 'bg-emerald-500'}`} initial={false} animate={{ width: `${progressCals}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }}></motion.div>
-                    </div>
-                    </>)}
-
-                    {blocks.steps && (
-                    <div className="movement-panel mt-4 mb-4 flex items-center justify-between bg-zinc-900/40 p-3 rounded-2xl border border-zinc-800/40">
-                      <div className="step-summary flex min-w-0 flex-1 items-center gap-3">
-                        <IconSteps className="w-5 h-5 text-amber-400" />
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">Шаги</span>
-                          <span className="text-[9px] text-zinc-500 font-bold mt-0.5">
-                            {todaySteps} × 0.04 = {todayStepCalories} ккал{stepCaloriesDelta !== 0 ? ` · ${stepCaloriesDelta > 0 ? '+' : ''}${stepCaloriesDelta} к цели` : ''}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="step-controls flex shrink-0 items-center gap-2">
-                        <button type="button" onClick={refreshCurrentDayVitals} disabled={isRefreshingDay || !uid} className="btn-active w-10 h-10 rounded-xl bg-zinc-800 text-zinc-300 flex items-center justify-center border border-zinc-700/30 disabled:opacity-40 transition-all" title="Обновить шаги">
-                          <IconRefresh className={`w-5 h-5 ${isRefreshingDay ? 'animate-spin' : ''}`} />
-                        </button>
-                        <input type="number" className="step-input w-24 bg-zinc-800 rounded-xl p-2 text-center text-sm font-bold outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={todaySteps} onChange={(e) => handleUpdateSteps(e.target.value)} onFocus={(e) => e.target.select()} />
-                      </div>
-                    </div>
-                    )}
-
-                    {blocks.workout && (
-                    <div className="activity-panel mb-4 space-y-3">
-                      <button onClick={toggleWorkout} className={`workout-toggle btn-active w-full flex items-center justify-between p-3 rounded-2xl border transition-all ${dailyWorkouts[currentDate] ? 'bg-emerald-900/30 border-emerald-700/50' : 'bg-zinc-900/40 border-zinc-800/40'}`}>
-                        <div className="flex items-center gap-3">
-                          <IconDumbbell className="w-5 h-5 text-amber-400" />
-                          <span className={`text-[10px] uppercase font-bold tracking-widest ${dailyWorkouts[currentDate] ? 'text-emerald-400' : 'text-zinc-400'}`}>Силовая тренировка</span>
-                        </div>
-                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${dailyWorkouts[currentDate] ? 'bg-emerald-500' : 'bg-zinc-700'}`}>
-                          {dailyWorkouts[currentDate] && <IconCheck className="w-4 h-4 text-white" />}
-                        </div>
-                      </button>
-
-                      <div className="rounded-2xl border border-zinc-800/40 bg-zinc-900/40 p-3 space-y-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[10px] uppercase font-bold tracking-widest text-zinc-400">Дополнительная активность</p>
-                            <p className={`text-xs font-bold mt-1 ${extraActivityCalories > 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                              {extraActivityCalories > 0 ? `+${extraActivityCalories} ккал` : 'не добавлена'}
-                            </p>
-                          </div>
-                          <button type="button" onClick={() => openExtraActivityModal()} className="btn-active shrink-0 cursor-pointer rounded-xl bg-emerald-600/15 border border-emerald-600/30 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-300 transition-all">
-                            + Добавить
-                          </button>
-                        </div>
-
-                        {todayExtraActivities.length > 0 && (
-                          <div className="flex flex-col gap-2">
-                            {todayExtraActivities.map((activity) => (
-                              <div key={activity.id} className="flex items-center justify-between gap-2 rounded-xl bg-[#27272a] border border-zinc-700/30 px-3 py-2">
-                                <span className="min-w-0 text-xs font-bold text-zinc-200 truncate">{activity.name} <span className="text-emerald-400">+{activity.calories} ккал</span></span>
-                                <div className="flex shrink-0 items-center gap-1">
-                                  <button type="button" onClick={() => openExtraActivityModal(activity)} className="btn-active rounded-lg px-2 py-1 text-[10px] font-bold text-zinc-400 border border-zinc-700/30">Изменить</button>
-                                  <button type="button" onClick={() => removeExtraActivity(activity.id)} className="btn-active rounded-lg px-2 py-1 text-[10px] font-bold text-zinc-500 active:text-red-400" aria-label={`Удалить ${activity.name}`}>Удалить</button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    )}
-
-                    {(blocks.protein || blocks.fats || blocks.carbs) && (
-                    <div className="macro-stack flex flex-col gap-3 mt-4 border-t border-zinc-800/50 pt-4">
-                      {blocks.protein && <MacroBar label="Белок" current={totalPro} goal={activeGoals.protein} colorClass="text-indigo-400" bgClass="bg-indigo-500" />}
-                      {blocks.fats && <MacroBar label="Жиры" current={totalFats} goal={activeGoals.fats} colorClass="text-amber-400" bgClass="bg-amber-500" />}
-                      {blocks.carbs && <MacroBar label="Углеводы" current={totalCarbs} goal={dailyCarbGoal} colorClass="text-blue-400" bgClass="bg-blue-500" />}
-                      {blocks.protein && proteinPerKg !== null && (
-                        <div className="flex items-center justify-between pt-1">
-                          <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Белок на кг веса</span>
-                          <span className={`text-[11px] font-bold ${proteinPerKg >= 1.6 ? 'text-emerald-400' : 'text-amber-400'}`}>{proteinPerKg} г/кг <span className="text-zinc-600">· цель {proteinGoalPerKg}</span></span>
-                        </div>
-                      )}
-                    </div>
-                    )}
-                  </div>
-                  )}
-
-                  {blocks.bodyMetrics && (
-                    <div className="section-card card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
-                      <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Показатели тела</h2>
-                      <div className="metric-date-nav flex items-center w-full min-h-14 bg-zinc-900 rounded-2xl border border-zinc-800/70 p-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const date = new Date(currentDate);
-                            date.setDate(date.getDate() - 1);
-                            setCurrentDate(getLocalDateString(date));
-                          }}
-                          className="btn-active h-11 w-14 shrink-0 rounded-xl text-zinc-400 flex items-center justify-center"
-                          aria-label="Предыдущий день"
-                        >
-                          <IconChevronLeft className="w-7 h-7" />
-                        </button>
-                        <div className="relative flex-1 self-stretch flex items-center justify-center">
-                          <span className="text-sm font-bold text-zinc-200">{displayDate(currentDate)}</span>
-                          <input type="date" aria-label="Дата показателей тела" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" value={currentDate} max={getLocalDateString(new Date())} onChange={(e) => { if(e.target.value) setCurrentDate(e.target.value); }} />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const date = new Date(currentDate);
-                            date.setDate(date.getDate() + 1);
-                            setCurrentDate(getLocalDateString(date));
-                          }}
-                          disabled={currentDate === getLocalDateString(new Date())}
-                          className="btn-active h-11 w-14 shrink-0 rounded-xl text-zinc-400 flex items-center justify-center disabled:opacity-20"
-                          aria-label="Следующий день"
-                        >
-                          <IconChevronRight className="w-7 h-7" />
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-4 gap-2">
-                        {DAILY_BODY_METRICS.map((metric) => (
-                          <div key={metric.key} className="bg-[#27272a] rounded-xl p-2 flex flex-col items-center border border-zinc-700/50 focus-within:border-emerald-500">
-                            <label htmlFor={`daily-metric-${metric.key}`} className="text-[8px] text-zinc-400 uppercase font-bold tracking-widest mb-1 text-center leading-tight">{metric.label}</label>
-                            <input
-                              id={`daily-metric-${metric.key}`}
-                              type="number"
-                              inputMode="decimal"
-                              step="0.1"
-                              min="0"
-                              className="w-full bg-transparent text-center text-sm font-bold text-zinc-200 outline-none"
-                              value={dailyMetrics[currentDate]?.[metric.key] ?? ''}
-                              onChange={(e) => handleUpdateMetrics(metric.key, e.target.value)}
-                              onFocus={(e) => e.target.select()}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {blocks.water && (
-                    <div className="water-card section-card card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
-                      <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest flex items-center gap-1.5"><IconDrop className="w-3.5 h-3.5 text-blue-400" /> Вода</h2>
-                      <div className="flex justify-between items-end mb-3">
-                        <div>
-                          <div className="flex items-baseline gap-1">
-                            <AnimatedNumber value={todayWater} className="text-4xl font-black" />
-                            <span className="text-zinc-600 text-sm">/ {waterGoal} мл</span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-2xl font-black text-blue-400">{Math.max(0, waterGoal - todayWater)}</span>
-                          <p className="text-[10px] uppercase font-bold mt-1 tracking-widest opacity-80 text-blue-400">осталось</p>
-                        </div>
-                      </div>
-                      <div className="progress-track h-2 w-full bg-zinc-900 rounded-full overflow-hidden mb-4">
-                        <motion.div className="h-full bg-blue-500" initial={false} animate={{ width: `${waterProgress}%` }} transition={{ type: 'spring', stiffness: 120, damping: 20 }}></motion.div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {WATER_QUICK.map(v => (
-                          <motion.button whileTap={{ scale: 0.92 }} type="button" key={v} onClick={() => addWater(v)} className="btn-active flex-1 min-w-[64px] bg-zinc-900/40 border border-zinc-800/40 text-zinc-200 rounded-2xl py-3 text-sm font-bold transition-all">+{v}</motion.button>
-                        ))}
-                        <motion.button whileTap={{ scale: 0.92 }} type="button" onClick={() => addWater(-100)} disabled={todayWater <= 0} className="btn-active w-12 bg-zinc-900/40 border border-zinc-800/40 text-zinc-400 rounded-2xl py-3 flex items-center justify-center transition-all disabled:opacity-30" aria-label="Убрать 100 мл"><IconMinus className="w-4 h-4" /></motion.button>
-                      </div>
-                      <div className="flex gap-2 mt-2">
-                        <input type="number" inputMode="numeric" placeholder="Своё значение (мл)" className="flex-1 bg-[#27272a] rounded-2xl p-3 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-blue-500" value={customWater} onChange={(e) => setCustomWater(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addCustomWater(); }} onFocus={(e) => e.target.select()} />
-                        <button type="button" onClick={addCustomWater} disabled={!customWater} className="btn-active w-14 shrink-0 bg-blue-600 rounded-2xl flex items-center justify-center transition-all disabled:opacity-35" aria-label="Добавить воду"><IconPlus className="w-6 h-6 text-white" /></button>
-                        <button type="button" onClick={resetWater} disabled={todayWater <= 0} className="btn-active w-14 shrink-0 bg-zinc-800 text-zinc-400 rounded-2xl flex items-center justify-center transition-all disabled:opacity-30" aria-label="Сбросить воду"><IconRefresh className="w-5 h-5" /></button>
-                      </div>
-                    </div>
-                  )}
-
-                  <form ref={mealFormRef} onSubmit={handleAddLog} className="meal-composer section-card card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-3">
-                    <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</h2>
-
-                    <div className="flex items-center justify-between gap-3" onClick={(e) => e.stopPropagation()}>
-                      <p className="min-w-0 text-[10px] text-zinc-500 leading-tight">Введите список продуктов — ИИ разберёт названия и количество.</p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowMealAiModal(true);
-                          setMealAiText('');
-                          setMealAiError('');
-                          setMealAiItems(null);
-                        }}
-                        className="btn-active shrink-0 flex items-center gap-1 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all"
-                      >
-                        <IconSparkles className="w-3.5 h-3.5" />
-                        Распознать
-                      </button>
-                    </div>
-
-                    {/* Поиск — первая точка выбора продукта. */}
-                    <div className="relative" onClick={(e) => e.stopPropagation()}>
-                      <label htmlFor="food-search" className="sr-only">Поиск продукта</label>
-                      <IconSearch aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500" />
-                      <input
-                        ref={foodSearchRef}
-                        id="food-search"
-                        type="search"
-                        enterKeyHint="search"
-                        autoComplete="off"
-                        autoCorrect="off"
-                        spellCheck={false}
-                        placeholder="Поиск продукта"
-                        className="w-full bg-[#27272a] rounded-2xl py-3 pl-11 pr-14 outline-none text-zinc-200 text-base border border-zinc-700/30 focus:border-emerald-500"
-                        value={foodSearch}
-                        onChange={(e) => setFoodSearch(e.target.value)}
-                      />
-                      {foodSearch && (
-                        <button type="button" onClick={() => { setFoodSearch(''); foodSearchRef.current?.focus(); }} className="absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 bg-transparent text-zinc-400 flex items-center justify-center active:text-zinc-200" title="Очистить поиск">
-                          <IconClose className="w-12 h-12" />
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
-                      <p className="px-1 text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Избранные</p>
-                      <div ref={favScrollRef} className="hscroll-fade flex gap-2 overflow-x-auto py-2 -my-2 px-1 -mx-1">
-                        {favoriteMealFoods.map(f => (
-                          <motion.button whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 22 }} type="button" key={f.id} onClick={() => selectedFoodId === f.id ? clearFoodSelection() : selectFood(f.id)} className={`shrink-0 text-xs font-bold px-3.5 py-2.5 rounded-xl border transition-colors ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</motion.button>
-                        ))}
-                        {favoriteMealFoods.length === 0 && <span className="self-center text-xs text-zinc-500 px-1 py-2 whitespace-nowrap">{foodSearch.trim() ? 'Нет совпадений' : 'Нет избранных'}</span>}
-                      </div>
-                    </div>
-
-                    <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
-                      <p className="px-1 text-[9px] text-zinc-500 uppercase font-bold tracking-widest">Все</p>
-                      <div className="flex items-center gap-2 -mx-1 px-1">
-                        <button type="button" onClick={clearFoodSelection} title="Сбросить выбор" aria-label="Сбросить выбор продукта" className={`btn-active shrink-0 flex items-center justify-center w-10 h-10 rounded-xl border transition-all ${!selectedFoodId ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-emerald-300 border-emerald-700/40'}`}><IconClose className="w-4 h-4" /></button>
-                        <div ref={mealListScrollRef} className="hscroll-fade flex gap-2 overflow-x-auto py-2 -my-2 pl-1 -ml-1 min-w-0">
-                          {allMealFoods.map(f => (
-                            <motion.button whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 22 }} type="button" key={f.id} onClick={() => selectFood(f.id)} className={`shrink-0 text-xs font-bold px-3.5 py-2.5 rounded-xl border transition-colors ${selectedFoodId === f.id ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-800/60 text-zinc-300 border-zinc-700/40'}`}>{f.name}</motion.button>
-                          ))}
-                          {allMealFoods.length === 0 && <span className="self-center text-xs text-zinc-500 px-1 py-2 whitespace-nowrap">{foodSearch.trim() ? 'Ничего не найдено' : 'Нет продуктов'}</span>}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Вес и добавление — после поиска и списка продуктов. */}
-                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                      <label htmlFor="grams-input" className="sr-only">Вес продукта в граммах</label>
-                      <input ref={gramsInputRef} id="grams-input" type="number" step="0.1" inputMode="decimal" placeholder="Вес (г)" className="flex-1 bg-[#27272a] rounded-2xl p-4 outline-none text-zinc-200 text-base border border-zinc-700/30 focus:border-emerald-500" value={gramsInput} onChange={(e) => setGramsInput(e.target.value)} onFocus={(e) => e.target.select()} required />
-                      <button type="submit" disabled={!selectedFoodId || !gramsInput} className="btn-active w-14 shrink-0 bg-emerald-600 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-35 disabled:shadow-none" aria-label="Добавить продукт"><IconPlus className="w-6 h-6 text-white" /></button>
-                    </div>
-                  </form>
-
-                  <div className="food-log-list space-y-3 pt-2">
-                    <AnimatePresence initial={false}>
-                    {currentDayLogs.map(log => (
-                      <motion.div key={log.id} layout initial={{ opacity: 0, y: -10, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, x: 60, scale: 0.95 }} transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }} className="food-log-row list-item-active bg-[#18181b] rounded-2xl p-4 flex justify-between items-center border border-zinc-800/30 transition-colors">
-                        <div className="flex-1 cursor-pointer pr-4 overflow-hidden" onClick={() => { if(editingLogId !== log.id) { setEditingLogId(log.id); setEditValue({ grams: log.grams }); setModifier({ type: null, value: '' }); }}}>
-                          {editingLogId === log.id ? (
-                            <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-                              <input autoFocus={!modifier.type} type="number" step="0.1" className="w-16 bg-zinc-900 rounded-lg p-2 text-sm outline-none border border-emerald-500 text-white text-center" value={editValue.grams} onChange={(e) => setEditValue({grams: e.target.value})} onFocus={(e) => e.target.select()} />
-                              
-                              {!modifier.type ? (
-                                <>
-                                  <button type="button" onClick={() => setModifier({type: '+', value: ''})} className="w-8 h-8 bg-zinc-800 rounded-lg flex items-center justify-center text-emerald-400 font-bold text-lg active:bg-zinc-700">+</button>
-                                  <button type="button" onClick={() => setModifier({type: '-', value: ''})} className="w-8 h-8 bg-zinc-800 rounded-lg flex items-center justify-center text-red-400 font-bold text-lg active:bg-zinc-700">-</button>
-                                </>
-                              ) : (
-                                <>
-                                  <span className={`font-bold text-lg ${modifier.type === '+' ? 'text-emerald-400' : 'text-red-400'}`}>{modifier.type}</span>
-                                  <input autoFocus type="number" step="0.1" className="w-16 bg-zinc-900 rounded-lg p-2 text-sm outline-none border border-emerald-500 text-white text-center" value={modifier.value} onChange={(e) => setModifier({...modifier, value: e.target.value})} placeholder="0" onFocus={(e) => e.target.select()} />
-                                </>
-                              )}
-                              
-                              <button type="button" onClick={() => submitEdit(log.id)} className="w-8 h-8 ml-1 bg-emerald-600 rounded-lg flex items-center justify-center text-white active:bg-emerald-500"><IconCheck className="w-5 h-5"/></button>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col">
-                              <span className="text-[10px] text-zinc-500 font-medium mb-0.5">{new Date(parseInt(log.id)).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
-                              <p className="font-bold text-sm text-zinc-200 leading-tight break-words">{foods.find(f => f.id === log.foodId)?.name || 'Удалено'}</p>
-                              <p className="text-[10px] text-zinc-400 font-bold uppercase block mt-1">{log.grams}г</p>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <div className="flex flex-col justify-center items-end text-right">
-                            <span className="text-emerald-400 font-bold text-sm mb-1">{Math.round(log.totalCalories || 0)} ккал</span>
-                            <div className="flex gap-1.5 opacity-80">
-                                <span className="text-indigo-400 text-[9px] font-bold">Б:{Math.round(log.totalProtein || 0)}</span>
-                                <span className="text-amber-400 text-[9px] font-bold">Ж:{Math.round(log.totalFats || 0)}</span>
-                                <span className="text-blue-400 text-[9px] font-bold">У:{Math.round(log.totalCarbs || 0)}</span>
-                            </div>
-                          </div>
-                          <button onClick={() => deleteLog(log.id)} className="btn-active text-zinc-700 active:text-red-500 p-2 transition-colors"><IconTrash className="w-5 h-5" /></button>
-                        </div>
-                      </motion.div>
-                    ))}
-                    </AnimatePresence>
-                    {currentDayLogs.length === 0 && <div className="text-center text-zinc-600 text-sm mt-10">Записей нет. Добавьте первый прием пищи.</div>}
-                  </div>
-                </div>
+                <DiaryScreen
+                  showKbjuRecalc={showKbjuRecalc}
+                  kbjuPreview={kbjuPreview}
+                  goals={goals}
+                  applyAutoKbju={applyAutoKbju}
+                  dismissKbjuRecalc={dismissKbjuRecalc}
+                  currentDate={currentDate}
+                  setCurrentDate={setCurrentDate}
+                  blocks={blocks}
+                  totalCals={totalCals}
+                  dailyAvailableCalories={dailyAvailableCalories}
+                  calsColorClass={calsColorClass}
+                  displayCals={displayCals}
+                  calsLabel={calsLabel}
+                  isOver={isOver}
+                  progressCals={progressCals}
+                  todaySteps={todaySteps}
+                  todayStepCalories={todayStepCalories}
+                  stepCaloriesDelta={stepCaloriesDelta}
+                  refreshCurrentDayVitals={refreshCurrentDayVitals}
+                  isRefreshingDay={isRefreshingDay}
+                  uid={uid}
+                  handleUpdateSteps={handleUpdateSteps}
+                  toggleWorkout={toggleWorkout}
+                  dailyWorkouts={dailyWorkouts}
+                  extraActivityCalories={extraActivityCalories}
+                  openExtraActivityModal={openExtraActivityModal}
+                  todayExtraActivities={todayExtraActivities}
+                  removeExtraActivity={removeExtraActivity}
+                  totalPro={totalPro}
+                  totalFats={totalFats}
+                  totalCarbs={totalCarbs}
+                  activeGoals={activeGoals}
+                  dailyCarbGoal={dailyCarbGoal}
+                  proteinPerKg={proteinPerKg}
+                  proteinGoalPerKg={proteinGoalPerKg}
+                  dailyMetrics={dailyMetrics}
+                  handleUpdateMetrics={handleUpdateMetrics}
+                  todayWater={todayWater}
+                  waterGoal={waterGoal}
+                  waterProgress={waterProgress}
+                  addWater={addWater}
+                  customWater={customWater}
+                  setCustomWater={setCustomWater}
+                  addCustomWater={addCustomWater}
+                  resetWater={resetWater}
+                  mealFormRef={mealFormRef}
+                  handleAddLog={handleAddLog}
+                  setShowMealAiModal={setShowMealAiModal}
+                  setMealAiText={setMealAiText}
+                  setMealAiError={setMealAiError}
+                  setMealAiItems={setMealAiItems}
+                  foodSearchRef={foodSearchRef}
+                  foodSearch={foodSearch}
+                  setFoodSearch={setFoodSearch}
+                  favScrollRef={favScrollRef}
+                  favoriteMealFoods={favoriteMealFoods}
+                  selectedFoodId={selectedFoodId}
+                  clearFoodSelection={clearFoodSelection}
+                  selectFood={selectFood}
+                  mealListScrollRef={mealListScrollRef}
+                  allMealFoods={allMealFoods}
+                  gramsInputRef={gramsInputRef}
+                  gramsInput={gramsInput}
+                  setGramsInput={setGramsInput}
+                  currentDayLogs={currentDayLogs}
+                  editingLogId={editingLogId}
+                  setEditingLogId={setEditingLogId}
+                  editValue={editValue}
+                  setEditValue={setEditValue}
+                  modifier={modifier}
+                  setModifier={setModifier}
+                  submitEdit={submitEdit}
+                  foods={foods}
+                  deleteLog={deleteLog}
+                />
               )}
 
               {activeTab === 'progress' && (
-                <div className="progress-panel space-y-4 w-full max-w-full">
-                  {showBodyReminder && (
-                    <div className="card-enter bg-amber-500/10 border border-amber-400/30 rounded-3xl p-4 flex gap-3 items-start max-w-full">
-                      <div className="w-10 h-10 shrink-0 rounded-2xl bg-amber-400/15 flex items-center justify-center"><IconTimer className="w-5 h-5 text-amber-400" /></div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-amber-100">Добавьте замеры (талия и др.) и фото</p>
-                        <p className="text-xs text-amber-200/70 mt-1">{latestBodyDate ? `Последняя запись была ${displayDate(latestBodyDate).toLowerCase()}.` : 'Замеров пока нет.'} Фиксируйте обхваты и фото раз в 2 недели — так будет проще видеть изменения.</p>
-                      </div>
-                      <button type="button" onClick={dismissBodyReminder} className="btn-active shrink-0 text-[10px] font-bold text-amber-100/70 bg-amber-950/40 rounded-xl px-3 py-2">Позже</button>
-                    </div>
-                  )}
-
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-3">
-                    <div>
-                      <h2 className="text-sm font-bold text-zinc-100">Период графиков</h2>
-                      <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mt-1">Фильтр от сегодняшней даты назад</p>
-                    </div>
-                    <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 -mx-1 px-1">
-                      {progressPeriods.map(period => {
-                        const active = progressChartPeriod === period.key;
-                        return (
-                          <button
-                            key={period.key}
-                            type="button"
-                            onClick={() => setProgressChartPeriod(period.key)}
-                            aria-pressed={active}
-                            className={`btn-active shrink-0 cursor-pointer rounded-2xl px-3.5 py-2 text-[10px] font-black uppercase tracking-widest border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/60 ${active ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-950/20' : 'bg-zinc-900/70 text-zinc-400 border-zinc-800/70 hover:text-zinc-200 hover:border-zinc-700'}`}
-                          >
-                            {period.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {metricChartSeries.some(series => series.data.filter(v => v !== null && v !== undefined && v !== '' && !isNaN(Number(v))).length >= 2) && (
-                    <div className="space-y-3">
-                      <h2 className="px-1 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Графики тела</h2>
-                      {metricChartSeries.map(series => (
-                        <MiniWeightChart key={series.key} title={series.title} data={series.data} dates={metricChartLabels} color={series.color} unit={series.unit} />
-                      ))}
-                    </div>
-                  )}
-
-                  {progressBodyMeasureSeries.length > 0 && (
-                    <div className="space-y-3">
-                      <h2 className="px-1 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Графики замеров</h2>
-                      {progressBodyMeasureSeries.map(series => (
-                        <MiniWeightChart key={series.key} title={series.label} data={series.data} dates={progressBodyMeasureDates} color={series.color} unit="см" />
-                      ))}
-                    </div>
-                  )}
-
-                  <button type="button" onClick={toggleBodyEditor} className="btn-active w-full rounded-3xl bg-zinc-900/70 border border-zinc-800/70 p-4 flex items-center justify-between">
-                    <span className="text-sm font-black text-zinc-100">{showBodyEditor ? 'Скрыть фото и замеры' : 'Открыть фото и замеры'}</span>
-                    <span className="text-lg text-zinc-500">{showBodyEditor ? '−' : '+'}</span>
-                  </button>
-
-                  {showBodyEditor && (
-                  <div className="body-editor-panel space-y-6">
-                  <form onSubmit={addBodyEntry} className="bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <h2 className="text-sm font-bold text-zinc-100">Новая запись</h2>
-                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mt-1">Мерки тела и фото</p>
-                      </div>
-                      <div className="relative shrink-0 bg-zinc-900 rounded-xl px-3 py-2 border border-zinc-800/70">
-                        <span className="text-xs font-bold text-zinc-200">{displayDate(bodyDraft.date)}</span>
-                        <input type="date" className="absolute inset-0 opacity-0" value={bodyDraft.date} max={getLocalDateString(new Date())} onChange={(e) => setBodyDraft(prev => ({ ...prev, date: e.target.value }))} />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      {BODY_MEASURE_FIELDS.map(field => (
-                        <label key={field.key} className="bg-[#27272a] rounded-2xl p-3 border border-zinc-700/50">
-                          <span className="block text-[9px] text-zinc-500 uppercase font-bold tracking-widest mb-2 leading-tight">{field.label}</span>
-                          <div className="flex items-baseline gap-1">
-                            <input type="number" step="0.1" inputMode="decimal" className="w-full bg-transparent text-lg font-black text-zinc-100 outline-none" value={bodyDraft.measures[field.key]} onChange={(e) => handleBodyMeasureChange(field.key, e.target.value)} onFocus={(e) => e.target.select()} />
-                            <span className="text-[10px] text-zinc-500 font-bold">{field.unit}</span>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-
-                    <div className="bg-zinc-900/50 rounded-2xl p-3 border border-zinc-800/60">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-bold text-zinc-200">Фото прогресса</p>
-                          <p className="text-[10px] text-zinc-500 mt-1">До 3 фото: анфас, бок, спина. Они сжимаются перед сохранением.</p>
-                        </div>
-                        <label className="btn-active shrink-0 rounded-xl bg-indigo-500/20 text-indigo-200 px-3 py-2 text-[10px] font-bold uppercase tracking-widest border border-indigo-400/20">
-                          Добавить
-                          <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { handleBodyPhotoFiles(e.target.files); e.target.value = ''; }} />
-                        </label>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 mt-3">
-                        {BODY_PHOTO_LABELS.map((label, idx) => {
-                          const photo = bodyDraft.photos[idx];
-                          const src = getBodyPhotoSrc(photo);
-                          return (
-                            <label key={label} className="relative aspect-[3/4] rounded-xl overflow-hidden border border-zinc-700/60 bg-zinc-950 btn-active cursor-pointer block">
-                              {src ? (
-                                <img src={src} className="w-full h-full object-cover pointer-events-none" alt={label} />
-                              ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center px-2 text-center gap-1 bg-zinc-900/70 pointer-events-none">
-                                  <span className="text-lg text-zinc-600">+</span>
-                                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">{label}</span>
-                                </div>
-                              )}
-                              <span className="absolute left-1 bottom-1 rounded-full bg-black/60 px-2 py-0.5 text-[8px] font-bold text-white/80 pointer-events-none">{label}</span>
-                              <input type="file" accept="image/*" className="hidden" onChange={(e) => { handleBodyDraftPhotoSlot(idx, e.target.files); e.target.value = ''; }} />
-                              {src && <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBodyDraft(prev => ({ ...prev, photos: (prev.photos || []).map((item, itemIdx) => itemIdx === idx ? null : item) })); }} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 text-white text-xs z-10">×</button>}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <button type="submit" className="btn-active w-full bg-gradient-to-r from-indigo-500 via-violet-500 to-rose-500 text-white rounded-2xl p-4 font-black transition-all">Сохранить замеры</button>
-                  </form>
-
-                  {bodyEntryOptions.length >= 2 && (
-                    <div className="bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
-                      <div>
-                        <h2 className="text-sm font-bold text-zinc-100">Сравнение</h2>
-                        <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mt-1">Выбери две записи</p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {[0, 1].map(idx => (
-                          <select key={idx} className="w-full min-w-0 bg-zinc-900 border border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none" value={compareBodyIds[idx] || (idx === 0 ? compareBodyA?.id : compareBodyB?.id) || ''} onChange={(e) => { setCompareBodyIds(prev => idx === 0 ? [e.target.value, prev[1]] : [prev[0], e.target.value]); setComparePhotoIndexes(prev => idx === 0 ? [0, prev[1]] : [prev[0], 0]); }}>
-                            {bodyEntryOptions.map(entry => <option key={entry.id} value={entry.id}>{displayDate(entry.date)}</option>)}
-                          </select>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {[compareBodyA, compareBodyB].map((entry, idx) => (
-                          <select key={idx} className="w-full min-w-0 bg-zinc-900/70 border border-zinc-800 rounded-2xl p-3 text-xs font-bold outline-none" value={comparePhotoIndexes[idx]} onChange={(e) => setComparePhotoIndexes(prev => idx === 0 ? [Number(e.target.value), prev[1]] : [prev[0], Number(e.target.value)])}>
-                            {BODY_PHOTO_LABELS.map((label, photoIdx) => <option key={label} value={photoIdx}>{label}{getBodyPhotoSrc(entry?.photos?.[photoIdx]) ? '' : ' (нет)'}</option>)}
-                          </select>
-                        ))}
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between px-1">
-                          <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Сравнение фото</p>
-                          <button type="button" onClick={() => { setBodyPhotoZoom(false); setShowBodyPhotoCompare(true); }} className="btn-active text-[10px] font-bold text-violet-200 bg-violet-500/15 border border-violet-400/15 rounded-xl px-3 py-2">На весь экран</button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          {[[compareBodyA, comparePhotoA], [compareBodyB, comparePhotoB]].map(([entry, photo], idx) => (
-                            <div key={entry?.id || idx} className="rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-800">
-                              <div className="aspect-[9/16] bg-zinc-900 relative">
-                                {getBodyPhotoSrc(photo) ? <img src={getBodyPhotoSrc(photo)} className="w-full h-full object-contain" /> : <div className="h-full flex items-center justify-center text-[10px] text-zinc-600 font-bold uppercase text-center px-2">Нет фото</div>}
-                                <span className="absolute left-2 top-2 rounded-full bg-black/30 px-2 py-1 text-[9px] font-black text-white/65">{idx === 0 ? 'Было' : 'Стало'}</span>
-                              </div>
-                              <p className="p-2 text-center text-[10px] font-bold text-zinc-400">{entry ? `${displayDate(entry.date)} · ${getBodyPhotoLabel(photo, comparePhotoIndexes[idx])}` : '—'}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {compareBodyA && compareBodyB && (
-                        <div className="space-y-2">
-                          {BODY_MEASURE_FIELDS.map(field => {
-                            const a = Number(compareBodyA.measures?.[field.key]);
-                            const b = Number(compareBodyB.measures?.[field.key]);
-                            const hasBoth = !isNaN(a) && !isNaN(b) && a > 0 && b > 0;
-                            const delta = hasBoth ? Math.round((b - a) * 10) / 10 : null;
-                            return (
-                              <div key={field.key} className="flex items-center justify-between bg-zinc-900/50 rounded-2xl p-3 border border-zinc-800/50">
-                                <span className="text-xs font-bold text-zinc-300">{field.label}</span>
-                                <div className="text-right">
-                                  <span className="text-xs text-zinc-500">{hasBoth ? `${a} → ${b} см` : '—'}</span>
-                                  {hasBoth && <span className={`ml-2 text-sm font-black ${delta < 0 ? 'text-emerald-400' : delta > 0 ? 'text-rose-400' : 'text-zinc-500'}`}>{delta > 0 ? '+' : ''}{delta}</span>}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="space-y-3">
-                    <h2 className="px-1 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">История ({bodyEntries.length})</h2>
-                    {sortedBodyEntries.map(entry => (
-                      <div key={entry.id} className="bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50">
-                        <div className="flex items-start justify-between gap-3 mb-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-black text-zinc-100">{displayDate(entry.date)}</p>
-                            <p className="text-[10px] text-zinc-500 mt-1">{countBodyPhotos(entry.photos)} фото</p>
-                          </div>
-                          <div className="shrink-0">
-                            <button type="button" onClick={() => deleteBodyEntry(entry.id)} className="btn-active text-zinc-700 active:text-red-400 p-2"><IconTrash className="w-5 h-5" /></button>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 mb-3">
-                          {BODY_PHOTO_LABELS.map((label, idx) => {
-                            const photo = entry.photos?.[idx];
-                            const src = getBodyPhotoSrc(photo);
-                            return (
-                              <label key={label} className="relative aspect-[3/4] rounded-xl overflow-hidden border border-zinc-700/60 bg-zinc-950 btn-active cursor-pointer block">
-                                {src ? (
-                                  <img src={src} className="w-full h-full object-cover pointer-events-none" alt={label} />
-                                ) : (
-                                  <div className="w-full h-full flex flex-col items-center justify-center px-2 text-center gap-1 bg-zinc-900/70 pointer-events-none">
-                                    <span className="text-lg text-zinc-600">+</span>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">{label}</span>
-                                  </div>
-                                )}
-                                <span className="absolute left-1 bottom-1 rounded-full bg-black/60 px-2 py-0.5 text-[8px] font-bold text-white/80 pointer-events-none">{label}</span>
-                                <input type="file" accept="image/*" className="hidden" onChange={(e) => { handleBodyEntryPhotoSlot(entry.id, idx, e.target.files); e.target.value = ''; }} />
-                                {src && (
-                                  <>
-                                    <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSingleBodyPhotoZoom(false); setSingleBodyPhoto({ src, date: entry.date, label: getBodyPhotoLabel(photo, idx) }); }} className="absolute top-1 left-1 w-6 h-6 rounded-full bg-black/70 text-white text-[10px] z-10">⤢</button>
-                                    <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeBodyEntryPhoto(entry.id, idx); }} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white text-[10px] z-10">×</button>
-                                  </>
-                                )}
-                              </label>
-                            );
-                          })}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          {BODY_MEASURE_FIELDS.map(field => entry.measures?.[field.key] ? (
-                            <div key={field.key} className="bg-zinc-900/50 rounded-xl p-2 border border-zinc-800/40">
-                              <p className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest leading-tight">{field.label}</p>
-                              <p className="text-sm font-black text-zinc-200 mt-1">{entry.measures[field.key]} см</p>
-                            </div>
-                          ) : null)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  </div>
-                  )}
-                </div>
+                <ProgressScreen
+                  showBodyReminder={showBodyReminder}
+                  latestBodyDate={latestBodyDate}
+                  dismissBodyReminder={dismissBodyReminder}
+                  progressChartPeriod={progressChartPeriod}
+                  setProgressChartPeriod={setProgressChartPeriod}
+                  metricChartSeries={metricChartSeries}
+                  metricChartLabels={metricChartLabels}
+                  progressBodyMeasureSeries={progressBodyMeasureSeries}
+                  progressBodyMeasureDates={progressBodyMeasureDates}
+                  showBodyEditor={showBodyEditor}
+                  toggleBodyEditor={toggleBodyEditor}
+                  addBodyEntry={addBodyEntry}
+                  bodyDraft={bodyDraft}
+                  setBodyDraft={setBodyDraft}
+                  handleBodyMeasureChange={handleBodyMeasureChange}
+                  handleBodyPhotoFiles={handleBodyPhotoFiles}
+                  handleBodyDraftPhotoSlot={handleBodyDraftPhotoSlot}
+                  bodyEntryOptions={bodyEntryOptions}
+                  compareBodyIds={compareBodyIds}
+                  setCompareBodyIds={setCompareBodyIds}
+                  comparePhotoIndexes={comparePhotoIndexes}
+                  setComparePhotoIndexes={setComparePhotoIndexes}
+                  compareBodyA={compareBodyA}
+                  compareBodyB={compareBodyB}
+                  comparePhotoA={comparePhotoA}
+                  comparePhotoB={comparePhotoB}
+                  setBodyPhotoZoom={setBodyPhotoZoom}
+                  setShowBodyPhotoCompare={setShowBodyPhotoCompare}
+                  bodyEntries={bodyEntries}
+                  sortedBodyEntries={sortedBodyEntries}
+                  deleteBodyEntry={deleteBodyEntry}
+                  handleBodyEntryPhotoSlot={handleBodyEntryPhotoSlot}
+                  setSingleBodyPhotoZoom={setSingleBodyPhotoZoom}
+                  setSingleBodyPhoto={setSingleBodyPhoto}
+                  removeBodyEntryPhoto={removeBodyEntryPhoto}
+                />
               )}
 
               {activeTab === 'profile' && (
@@ -3363,127 +2911,38 @@ import { IconStar, IconPlus, IconClose, IconMenu, IconSearch, IconBook, IconCale
               )}
 
               {activeTab === 'directory' && (
-                <div className="space-y-6">
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 flex items-center gap-2"><IconTarget className="w-4 h-4" /> Ваши цели</h2>
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ККАЛ (ЦЕЛЬ)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-emerald-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.calories} onChange={(e) => handleCaloriesChange(e.target.value)} onFocus={(e) => e.target.select()} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЖЕЛАЕМЫЙ ДЕФИЦИТ</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.deficit} onChange={(e) => handleDeficitChange(e.target.value)} onFocus={(e) => e.target.select()} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">НОРМА (БЕЗ ДЕФИЦИТА)</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-white font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.maintenance} onChange={(e) => handleMaintenanceChange(e.target.value)} onFocus={(e) => e.target.select()} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">БАЗА ШАГОВ</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-300 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.baseSteps} onChange={(e) => handleDraftGoalChange('baseSteps', e.target.value === '' ? '' : parseInt(e.target.value))} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">БЕЛОК (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-indigo-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.protein} onChange={(e) => handleDraftGoalChange('protein', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЖИРЫ (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.fats} onChange={(e) => handleDraftGoalChange('fats', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
-                      <div className="col-span-2"><span className="text-[9px] text-zinc-500 font-bold block mb-1">УГЛЕВОДЫ (Г)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.carbs} onChange={(e) => handleDraftGoalChange('carbs', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ЦЕЛЬ ПО ЖИРУ (%)</span><input type="number" step="0.1" className="w-full bg-[#27272a] rounded-xl p-3 text-amber-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.targetFat} onChange={(e) => handleDraftGoalChange('targetFat', e.target.value === '' ? '' : parseFloat(e.target.value))} /></div>
-                      <div><span className="text-[9px] text-zinc-500 font-bold block mb-1">ВОДА (МЛ)</span><input type="number" className="w-full bg-[#27272a] rounded-xl p-3 text-blue-400 font-bold outline-none border border-zinc-700/30 focus:border-indigo-500 transition-colors" value={draftGoals.waterGoal} onChange={(e) => handleDraftGoalChange('waterGoal', e.target.value === '' ? '' : parseInt(e.target.value))} /></div>
-                    </div>
-                    <p className="text-[10px] text-zinc-600 leading-relaxed px-1">Дефицит и цель калорий связаны: цель = норма − дефицит. Измените дефицит — пересчитается цель, и наоборот.</p>
-                    {hasUnsavedGoals && <button onClick={() => setShowGoalModal(true)} className="btn-active w-full bg-indigo-600 text-white p-4 rounded-xl font-bold mt-4 shadow-lg shadow-indigo-900/30 transition-all flex items-center justify-center gap-2"><IconSave className="w-5 h-5" />Сохранить цели</button>}
-                  </div>
-
-                  <form onSubmit={handleAddFood} className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Добавить продукт (на 100г)</h2>
-                    <input type="text" placeholder="Название" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.name} onChange={(e) => setNewFood({...newFood, name: e.target.value})} required />
-                    <div className="grid grid-cols-2 gap-3">
-                      <input type="number" step="0.1" placeholder="Ккал" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.cals} onChange={(e) => setNewFood({...newFood, cals: e.target.value})} onFocus={(e) => e.target.select()} required />
-                      <input type="number" step="0.1" placeholder="Б (г)" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.pro} onChange={(e) => setNewFood({...newFood, pro: e.target.value})} onFocus={(e) => e.target.select()} required />
-                      <input type="number" step="0.1" placeholder="Ж (г)" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.fat} onChange={(e) => setNewFood({...newFood, fat: e.target.value})} onFocus={(e) => e.target.select()} required />
-                      <input type="number" step="0.1" placeholder="У (г)" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.carb} onChange={(e) => setNewFood({...newFood, carb: e.target.value})} onFocus={(e) => e.target.select()} required />
-                    </div>
-                    <button type="submit" className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold shadow-lg shadow-emerald-900/20 transition-all">Добавить в базу</button>
-                  </form>
-
-                  {false && (
-                  <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
-                    <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Резервное копирование</h2>
-                    <button onClick={downloadBackup} className="btn-active w-full bg-zinc-800 text-zinc-200 rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2"><IconDownload className="w-5 h-5" /> Скачать бэкап (JSON)</button>
-                    <label className="btn-active w-full bg-zinc-800 text-zinc-200 rounded-xl p-4 font-bold transition-all flex items-center justify-center gap-2 cursor-pointer">
-                      ♻️ Восстановить из файла
-                      <input type="file" accept="application/json,.json" className="hidden" onChange={importBackup} />
-                    </label>
-                    <p className="text-[10px] text-zinc-600 leading-relaxed">JSON — полная копия всех данных. Восстановление дополнит/перезапишет данные аккаунта.</p>
-                    <button onClick={importLegacy} className="btn-active w-full bg-zinc-900 text-zinc-400 rounded-xl p-3 text-sm font-bold transition-all border border-zinc-800">⬆️ Перенести из старой версии</button>
-                  </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <p className="text-[11px] text-zinc-500 leading-relaxed px-1 mb-1">
-                      Отмечайте часто используемые продукты звёздочкой: они появятся в «Избранном» для быстрого выбора в дневнике.<br />
-                      ➕ Не нашли нужный продукт? Добавьте свой с КБЖУ через форму выше.
-                    </p>
-                    <div className="flex items-center justify-between gap-3 px-1 mb-2">
-                      <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">База продуктов ({foods.length})</h2>
-                      {favoriteFoods.length > 1 && (
-                        <button type="button" onClick={() => { setIsReorderingFavorites(!isReorderingFavorites); setDraggingFavoriteId(null); }} className={`btn-active px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all ${isReorderingFavorites ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-900 text-zinc-400 border-zinc-800'}`}>
-                          {isReorderingFavorites ? 'Готово' : 'Изменить порядок'}
-                        </button>
-                      )}
-                    </div>
-                    {isReorderingFavorites && <p className="text-[10px] text-zinc-500 px-1 pb-1">Перетаскивай избранные продукты за ручку ☰. Обычные продукты не двигаются.</p>}
-                    {sortedFoods.map(f => (
-                      <div
-                        key={f.id}
-                        data-favorite-id={isReorderingFavorites && f.isFavorite ? f.id : undefined}
-                        className={`card-enter list-item-active reorder-item bg-[#18181b] rounded-xl p-3 border ${isReorderingFavorites ? 'select-none' : ''} ${draggingFavoriteId === f.id ? 'reorder-item-active border-emerald-500/70' : 'border-zinc-800/30'}`}
-                        style={isReorderingFavorites ? { WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' } : undefined}
-                      >
-                        {editingFoodId === f.id ? (
-                          <div className="space-y-3">
-                             <input autoFocus className="w-full bg-zinc-900 rounded-lg p-2 text-sm text-white border border-indigo-500 outline-none" value={editValue.name} onChange={e => setEditValue({...editValue, name: e.target.value})} />
-                             <div className="grid grid-cols-2 gap-2">
-                                <input type="number" step="0.1" placeholder="Ккал" className="bg-zinc-900 rounded-lg p-2 text-sm text-emerald-400 outline-none text-center" value={editValue.calories} onChange={e => setEditValue({...editValue, calories: e.target.value})} onFocus={(e) => e.target.select()} />
-                                <input type="number" step="0.1" placeholder="Белок" className="bg-zinc-900 rounded-lg p-2 text-sm text-indigo-400 outline-none text-center" value={editValue.protein} onChange={e => setEditValue({...editValue, protein: e.target.value})} onFocus={(e) => e.target.select()} />
-                                <input type="number" step="0.1" placeholder="Жиры" className="bg-zinc-900 rounded-lg p-2 text-sm text-amber-400 outline-none text-center" value={editValue.fats} onChange={e => setEditValue({...editValue, fats: e.target.value})} onFocus={(e) => e.target.select()} />
-                                <input type="number" step="0.1" placeholder="Углев" className="bg-zinc-900 rounded-lg p-2 text-sm text-blue-400 outline-none text-center" value={editValue.carbs} onChange={e => setEditValue({...editValue, carbs: e.target.value})} onFocus={(e) => e.target.select()} />
-                             </div>
-                             <button onClick={() => updateFoodBase(f.id)} className="btn-active w-full bg-emerald-600 p-2 rounded-lg flex justify-center transition-all"><IconCheck className="w-5 h-5 text-white" /></button>
-                          </div>
-                        ) : (
-                          <div className="flex justify-between items-center cursor-pointer">
-                            <div className="flex items-center">
-                              <button onClick={(e) => toggleFavorite(e, f.id)} className="btn-active p-2 pl-0 transition-colors">
-                                <IconStar className={`w-6 h-6 ${f.isFavorite ? 'text-amber-400' : 'text-zinc-700'}`} fill={f.isFavorite ? "currentColor" : "none"} />
-                              </button>
-                              {isReorderingFavorites && f.isFavorite && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => e.stopPropagation()}
-                                  onContextMenu={(e) => e.preventDefault()}
-                                  onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); setDraggingFavoriteId(f.id); e.currentTarget.setPointerCapture?.(e.pointerId); }}
-                                  onPointerMove={(e) => { if (draggingFavoriteId) { e.preventDefault(); moveFavoritePointer(e.clientX, e.clientY); } }}
-                                  onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.releasePointerCapture?.(e.pointerId); setDraggingFavoriteId(null); }}
-                                  onPointerCancel={() => setDraggingFavoriteId(null)}
-                                  className={`btn-active drag-handle mr-2 px-3 py-3 rounded-xl bg-zinc-900 text-zinc-400 active:text-zinc-100 cursor-grab touch-none ${draggingFavoriteId === f.id ? 'drag-handle-active' : ''}`}
-                                  style={{ WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none', touchAction: 'none' }}
-                                  title="Перетащить избранное"
-                                >
-                                  ☰
-                                </button>
-                              )}
-                            </div>
-                            <div className="flex-1" onClick={() => { if (!isReorderingFavorites && (!f._shared || isOwner)) { setEditingFoodId(f.id); setEditValue({ ...f, fats: f.fats || 0, carbs: f.carbs || 0 }); } }}>
-                              <span className="text-sm font-medium border-b border-zinc-800/50 pb-0.5">{f.name}{f._shared && <span className="ml-2 text-[9px] text-zinc-600 uppercase tracking-wider">база</span>}</span>
-                              <div className="flex gap-3 text-[10px] font-bold uppercase mt-1.5 opacity-80">
-                                <span className="text-emerald-500">{f.calories}</span>
-                                <span className="text-indigo-500">Б: {f.protein}</span>
-                                <span className="text-amber-500">Ж: {f.fats}</span>
-                                <span className="text-blue-500">У: {f.carbs}</span>
-                              </div>
-                            </div>
-                            {(!f._shared || isOwner) && <button onClick={(e) => deleteFood(e, f.id)} className="btn-active text-zinc-800 active:text-red-500 p-2 transition-colors"><IconTrash className="w-5 h-5" /></button>}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {isOwner && (
-                    <button type="button" onClick={publishSharedBase} className="btn-active w-full bg-indigo-600/15 text-indigo-300/90 border border-indigo-600/30 rounded-2xl p-3 text-[11px] font-bold uppercase tracking-widest transition-all">
-                      Опубликовать базу для всех ({foods.length})
-                    </button>
-                  )}
-
-                </div>
+                <FoodBaseScreen
+                  draftGoals={draftGoals}
+                  handleCaloriesChange={handleCaloriesChange}
+                  handleDeficitChange={handleDeficitChange}
+                  handleMaintenanceChange={handleMaintenanceChange}
+                  handleDraftGoalChange={handleDraftGoalChange}
+                  hasUnsavedGoals={hasUnsavedGoals}
+                  onOpenGoalModal={() => setShowGoalModal(true)}
+                  handleAddFood={handleAddFood}
+                  newFood={newFood}
+                  setNewFood={setNewFood}
+                  downloadBackup={downloadBackup}
+                  importBackup={importBackup}
+                  importLegacy={importLegacy}
+                  foods={foods}
+                  favoriteFoods={favoriteFoods}
+                  sortedFoods={sortedFoods}
+                  isReorderingFavorites={isReorderingFavorites}
+                  setIsReorderingFavorites={setIsReorderingFavorites}
+                  draggingFavoriteId={draggingFavoriteId}
+                  setDraggingFavoriteId={setDraggingFavoriteId}
+                  moveFavoritePointer={moveFavoritePointer}
+                  editingFoodId={editingFoodId}
+                  setEditingFoodId={setEditingFoodId}
+                  editValue={editValue}
+                  setEditValue={setEditValue}
+                  updateFoodBase={updateFoodBase}
+                  toggleFavorite={toggleFavorite}
+                  deleteFood={deleteFood}
+                  isOwner={isOwner}
+                  publishSharedBase={publishSharedBase}
+                />
               )}
               </motion.div>
               </AnimatePresence>
