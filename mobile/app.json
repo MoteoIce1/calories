@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Трекер Диеты",
+    "slug": "tracker-diet",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0a0a0b",
+    "scheme": "trackerdiet",
+    "platforms": ["ios", "android"],
+    "assetBundlePatterns": ["**/*"],
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "ios": {
+      "bundleIdentifier": "ru.moteotracker.app",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "ru.moteotracker.app",
+      "versionCode": 1,
+      "edgeToEdgeEnabled": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "TODO_EAS_PROJECT_ID"
+      }
+    }
+  }
+}
