@@ -1,0 +1,6 @@
+node_modules/
+.env
+.git/
+*.backup*
+server.js.broken*
+server.js.fix-*
