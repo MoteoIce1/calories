@@ -19,7 +19,7 @@ export default function DiaryScreen(props) {
     dailyMetrics, handleUpdateMetrics,
     todayWater, waterGoal, waterProgress, addWater, customWater, setCustomWater, addCustomWater, resetWater,
     mealFormRef, handleAddLog,
-    setShowMealAiModal, setMealAiText, setMealAiError, setMealAiItems,
+    setShowMealAiModal,
     foodSearchRef, foodSearch, setFoodSearch,
     favScrollRef, favoriteMealFoods, selectedFoodId, clearFoodSelection, selectFood,
     mealListScrollRef, allMealFoods,
@@ -243,12 +243,7 @@ export default function DiaryScreen(props) {
           <p className="min-w-0 text-[10px] text-zinc-500 leading-tight">Введите список продуктов — ИИ разберёт названия и количество.</p>
           <button
             type="button"
-            onClick={() => {
-              setShowMealAiModal(true);
-              setMealAiText('');
-              setMealAiError('');
-              setMealAiItems(null);
-            }}
+            onClick={() => setShowMealAiModal(true)}
             className="btn-active shrink-0 flex items-center gap-1 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all"
           >
             <IconSparkles className="w-3.5 h-3.5" />

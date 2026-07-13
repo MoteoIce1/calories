@@ -1,6 +1,12 @@
+import { validateNutritionPer100g } from '../utils/foodNutrition.js';
+
 export const DEFAULT_AI_API_BASE_URL = 'https://api.moteotracker.ru:8443';
 export const MAX_FOOD_TEXT_LENGTH = 500;
+export const MAX_FOOD_NAME_LENGTH = 120;
 export const AI_UNAVAILABLE_MESSAGE = 'ИИ временно недоступен. Можно добавить продукт вручную.';
+export const AI_ESTIMATE_ERROR_MESSAGE = 'Не удалось рассчитать КБЖУ. Попробуйте ещё раз или добавьте значения вручную.';
+export const VAGUE_FOOD_QUERY_MESSAGE = 'Уточните название продукта или блюда, например: курица с рисом, омлет или пицца Маргарита.';
+export const SEARCH_UNAVAILABLE_MESSAGE = 'Не удалось проверить базу продуктов. Повторите попытку.';
 
 const SUPPORTED_UNITS = new Set(['g', 'kg', 'ml', 'l', 'pcs', 'unknown']);
 
@@ -12,8 +18,8 @@ export class FoodAiInputError extends Error {
 }
 
 export class FoodAiUnavailableError extends Error {
-  constructor() {
-    super(AI_UNAVAILABLE_MESSAGE);
+  constructor(message = AI_UNAVAILABLE_MESSAGE) {
+    super(message);
     this.name = 'FoodAiUnavailableError';
   }
 }
@@ -98,4 +104,144 @@ export async function parseFoodText(text, { fetchImpl = fetch, env = import.meta
   }
 
   return { items, provider: typeof data.provider === 'string' ? data.provider : 'unknown' };
+}
+
+function ensureValidEstimate(estimate) {
+  if (!estimate) return null;
+  const validation = validateNutritionPer100g(estimate);
+  if (!validation.valid) return null;
+  return {
+    ...estimate,
+    caloriesPer100g: validation.values.calories,
+    proteinPer100g: validation.values.protein,
+    fatPer100g: validation.values.fats,
+    carbsPer100g: validation.values.carbs,
+  };
+}
+
+const VAGUE_QUERY_PATTERNS = [
+  /что[\s-]?то\s+вкусн/i,
+  /мой\s+(ужин|обед|завтрак|перекус)/i,
+  /кусок\s+ед/i,
+  /^тарелка$/i,
+  /что[\s-]?то\s+съел/i,
+  /моя\s+еда/i,
+];
+
+export function isVagueFoodQuery(name) {
+  const trimmed = String(name || '').trim();
+  if (!trimmed || trimmed.length < 3) return true;
+  return VAGUE_QUERY_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+function normalizeAiEstimatePayload(raw, fallbackName) {
+  const name = typeof raw?.name === 'string' && raw.name.trim()
+    ? raw.name.trim()
+    : String(fallbackName || '').trim();
+  if (!name) return null;
+
+  return {
+    name,
+    normalizedName: typeof raw?.normalizedName === 'string' ? raw.normalizedName.trim() : name,
+    caloriesPer100g: asNullableFiniteNumber(raw?.caloriesPer100g ?? raw?.calories),
+    proteinPer100g: asNullableFiniteNumber(raw?.proteinPer100g ?? raw?.protein),
+    fatPer100g: asNullableFiniteNumber(raw?.fatPer100g ?? raw?.fats),
+    carbsPer100g: asNullableFiniteNumber(raw?.carbsPer100g ?? raw?.carbs),
+    source: typeof raw?.source === 'string' ? raw.source : 'ai_estimate',
+    isAiGenerated: raw?.isAiGenerated !== false,
+    confidence: asNullableFiniteNumber(raw?.confidence) ?? 0.5,
+    notes: typeof raw?.notes === 'string' ? raw.notes.trim() : '',
+    approximate: Boolean(raw?.approximate),
+  };
+}
+
+async function requestAiEstimate(name, { fetchImpl, env }) {
+  const response = await fetchImpl(`${getFoodAiBaseUrl(env)}/api/ai/estimate-food`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name.trim() }),
+  });
+
+  let data;
+  try {
+    data = await response.json();
+  } catch (error) {
+    throw new FoodAiUnavailableError(AI_ESTIMATE_ERROR_MESSAGE);
+  }
+
+  if (!response.ok) {
+    if (response.status === 503 || data?.error === 'AI temporarily unavailable') {
+      throw new FoodAiUnavailableError(AI_ESTIMATE_ERROR_MESSAGE);
+    }
+    if (response.status === 400 && data?.error) {
+      throw new FoodAiInputError(data.error);
+    }
+    if (response.status === 404) {
+      return null;
+    }
+    throw new FoodAiUnavailableError(AI_ESTIMATE_ERROR_MESSAGE);
+  }
+
+  return normalizeAiEstimatePayload(data, name);
+}
+
+function mapStaticEstimateToAiPayload(estimate) {
+  if (!estimate) return null;
+  return normalizeAiEstimatePayload({
+    name: estimate.name,
+    normalizedName: estimate.normalizedName,
+    caloriesPer100g: estimate.calories,
+    proteinPer100g: estimate.protein,
+    fatPer100g: estimate.fats,
+    carbsPer100g: estimate.carbs,
+    source: 'ai_estimate',
+    isAiGenerated: true,
+    confidence: estimate.confidence,
+    notes: 'Средняя оценка для типового продукта или блюда.',
+    approximate: (estimate.confidence ?? 1) < 0.75,
+  }, estimate.name);
+}
+
+/**
+ * Estimates per-100g nutrition for a single product name via backend AI.
+ * Falls back to local reference estimates when the endpoint is unavailable.
+ */
+export async function estimateFoodNutrition(name, {
+  fetchImpl = fetch,
+  env = import.meta.env,
+  findStaticEstimate,
+} = {}) {
+  const trimmed = String(name || '').trim();
+  if (!trimmed) {
+    throw new FoodAiInputError('Введите название продукта или блюда.');
+  }
+  if (trimmed.length > MAX_FOOD_NAME_LENGTH) {
+    throw new FoodAiInputError(`Название не должно быть длиннее ${MAX_FOOD_NAME_LENGTH} символов.`);
+  }
+  if (isVagueFoodQuery(trimmed)) {
+    throw new FoodAiInputError(VAGUE_FOOD_QUERY_MESSAGE);
+  }
+
+  let apiEstimate = null;
+  try {
+    apiEstimate = await requestAiEstimate(trimmed, { fetchImpl, env });
+  } catch (error) {
+    if (error instanceof FoodAiInputError) throw error;
+    if (!(error instanceof FoodAiUnavailableError)) {
+      throw new FoodAiUnavailableError(AI_ESTIMATE_ERROR_MESSAGE);
+    }
+    apiEstimate = null;
+  }
+
+  if (apiEstimate) {
+    const validated = ensureValidEstimate(apiEstimate);
+    if (validated) return validated;
+  }
+
+  const staticEstimate = findStaticEstimate?.(trimmed) ?? null;
+  const mappedStatic = mapStaticEstimateToAiPayload(staticEstimate);
+  const validatedStatic = ensureValidEstimate(mappedStatic);
+  if (validatedStatic) return validatedStatic;
+
+  throw new FoodAiUnavailableError(AI_ESTIMATE_ERROR_MESSAGE);
 }

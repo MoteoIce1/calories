@@ -1,13 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  AI_ESTIMATE_ERROR_MESSAGE,
   AI_UNAVAILABLE_MESSAGE,
   FoodAiInputError,
   FoodAiUnavailableError,
+  VAGUE_FOOD_QUERY_MESSAGE,
+  estimateFoodNutrition,
   formatParsedFoodAmount,
   getFoodAiBaseUrl,
+  isVagueFoodQuery,
   parseFoodText,
 } from '../src/services/foodAi.js';
+import { findEstimatedNutrition } from '../src/utils/food.js';
 
 const parsedItems = [
   { name: 'яйцо', amount: 2, unit: 'pcs', amount_g: null, confidence: 1 },
@@ -93,4 +98,44 @@ test('turns service and network failures into a manual-entry-friendly message', 
 test('does not send empty or overlong text', async () => {
   await assert.rejects(parseFoodText('   '), FoodAiInputError);
   await assert.rejects(parseFoodText('a'.repeat(501)), FoodAiInputError);
+});
+
+test('detects vague food queries', () => {
+  assert.equal(isVagueFoodQuery('что-то вкусное'), true);
+  assert.equal(isVagueFoodQuery('Пицца Маргарита'), false);
+});
+
+test('estimateFoodNutrition falls back to static estimates when API is unavailable', async () => {
+  const estimate = await estimateFoodNutrition('Яйцо жареное', {
+    fetchImpl: async () => new Response(JSON.stringify({ error: 'not found' }), { status: 404 }),
+    findStaticEstimate: findEstimatedNutrition,
+  });
+
+  assert.equal(estimate.name, 'Яйцо жареное');
+  assert.equal(estimate.caloriesPer100g, 205);
+  assert.equal(estimate.source, 'ai_estimate');
+});
+
+test('estimateFoodNutrition rejects vague queries without inventing products', async () => {
+  await assert.rejects(
+    estimateFoodNutrition('что-то вкусное', { findStaticEstimate: findEstimatedNutrition }),
+    (error) => error instanceof FoodAiInputError && error.message === VAGUE_FOOD_QUERY_MESSAGE,
+  );
+});
+
+test('estimateFoodNutrition validates API payload before returning it', async () => {
+  await assert.rejects(
+    estimateFoodNutrition('Пицца домашняя', {
+      fetchImpl: async () => new Response(JSON.stringify({
+        name: 'Пицца домашняя',
+        caloriesPer100g: 250,
+        proteinPer100g: 1,
+        fatPer100g: 1,
+        carbsPer100g: 1,
+        confidence: 0.7,
+      }), { status: 200 }),
+      findStaticEstimate: () => null,
+    }),
+    (error) => error instanceof FoodAiUnavailableError && error.message === AI_ESTIMATE_ERROR_MESSAGE,
+  );
 });

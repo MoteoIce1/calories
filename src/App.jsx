@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'rea
 import firebase, { db, auth, functions, profileRef, dayRef, daysCol, bodyCol, bodyDocRef, OWNER_EMAIL, sharedFoodsRef, legacyRef, publicProfileRef, publicProfilesCol, connectionsCol, connectionRef, challengesCol, challengeRef } from './firebase.js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { evaluateMath } from './utils/math.js';
-import { calculateFoodPortion, createEstimatedFood, findBestFoodMatch, getFoodNameWords, normalizeFoodName, searchFoodsByName } from './utils/food.js';
-import { AI_UNAVAILABLE_MESSAGE, formatParsedFoodAmount, MAX_FOOD_TEXT_LENGTH, parseFoodText } from './services/foodAi.js';
+import { calculateFoodPortion, normalizeFoodName, searchFoodsByName } from './utils/food.js';
+import FoodRecognitionModal from './features/food/FoodRecognitionModal.jsx';
 import { ACTIVITY_LEVELS, DEFAULT_ACTIVITY_KEY, calculateStepCalorieAdjustment, calculateStepsCalories, computeKbju, normalizeActivityKey } from './utils/kbju.js';
 import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
@@ -149,10 +149,6 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
       const [challengeProgressPeriod, setChallengeProgressPeriod] = useState('14d');
       // ИИ разбирает текст на продукты только через VPS API; ключи остаются на сервере.
       const [showMealAiModal, setShowMealAiModal] = useState(false);
-      const [mealAiText, setMealAiText] = useState('');
-      const [mealAiBusy, setMealAiBusy] = useState(false);
-      const [mealAiError, setMealAiError] = useState('');
-      const [mealAiItems, setMealAiItems] = useState(null);
       const [isRefreshingDay, setIsRefreshingDay] = useState(false);
       
       const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
@@ -1798,241 +1794,17 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
         today: getLocalDateString(new Date()),
       });
 
-      // ── ИИ: разбор текста на продукты для дневника ──
-      // Ключ названия — набор слов без учёта порядка/регистра: «масло сливочное» == «Сливочное масло».
-      const foodNameKey = (name) => getFoodNameWords(name || '').sort().join(' ');
-      const findExactFood = (name, sourceFoods = foods) => {
-        const key = foodNameKey(name);
-        return key ? sourceFoods.find(f => foodNameKey(f.name) === key) || null : null;
-      };
-      const findFoodForAi = (name, sourceFoods = foods) => {
-        const best = findBestFoodMatch(sourceFoods, name, { confidentScore: 900, suggestionsLimit: 3 });
-        return {
-          match: best.match || findExactFood(name, sourceFoods),
-          suggestions: best.suggestions || [],
-          score: best.score,
-        };
-      };
-      const makeNutritionDraft = (food) => ({
-        calories: String(food?.calories ?? ''),
-        protein: String(food?.protein ?? ''),
-        fats: String(food?.fats ?? ''),
-        carbs: String(food?.carbs ?? ''),
-      });
-      const parseNutritionDraft = (draft) => {
-        const read = (key) => Number.parseFloat(String(draft?.[key] ?? '').replace(',', '.'));
-        const values = {
-          calories: read('calories'),
-          protein: read('protein'),
-          fats: read('fats'),
-          carbs: read('carbs'),
-        };
-        const valid = Number.isFinite(values.calories) && values.calories > 0
-          && Number.isFinite(values.protein) && values.protein >= 0
-          && Number.isFinite(values.fats) && values.fats >= 0
-          && Number.isFinite(values.carbs) && values.carbs >= 0;
-        return valid ? values : null;
-      };
       const saveAiGeneratedFood = (food) => {
         if (!food) return;
         if (isOwner) saveSharedFoods([food, ...sharedFoods]);
         else savePersonalFoods([food, ...personalFoods]);
       };
-      const makeMealAiCard = (item, index, sourceFoods) => {
-        const found = findFoodForAi(item.name, sourceFoods);
-        const initialGrams = item.amount_g === null ? '' : String(item.amount_g);
-        if (found.match) {
-          return {
-            ...item,
-            name: found.match.name,
-            grams: initialGrams,
-            matchedFoodId: found.match.id,
-            food: found.match,
-            status: 'found',
-            statusText: 'Продукт найден в базе',
-            added: false,
-          };
-        }
-        if (found.suggestions.length && found.score >= 500) {
-          return {
-            ...item,
-            grams: initialGrams,
-            matchedFoodId: null,
-            food: null,
-            status: 'suggestions',
-            statusText: 'Похоже, это один из продуктов',
-            suggestions: found.suggestions,
-            added: false,
-          };
-        }
-        const estimated = createEstimatedFood(item.name, `ai-${Date.now()}-${index}`);
-        if (estimated) {
-          return {
-            ...item,
-            name: estimated.name,
-            grams: initialGrams,
-            matchedFoodId: null,
-            food: estimated,
-            status: 'estimated',
-            statusText: 'Продукта нет в базе. Я рассчитал примерное КБЖУ на 100 г.',
-            createdFood: estimated,
-            nutritionDraft: makeNutritionDraft(estimated),
-            added: false,
-          };
-        }
-        return {
-          ...item,
-          grams: initialGrams,
-          matchedFoodId: null,
-          food: null,
-          status: 'manual',
-          statusText: 'Уточните продукт или блюдо, чтобы я рассчитал КБЖУ точнее.',
-          added: false,
-        };
-      };
-      const runMealAi = async () => {
-        const text = mealAiText.trim();
-        if (!text) return;
-        setMealAiBusy(true); setMealAiError(''); setMealAiItems(null);
-        try {
-          const result = await parseFoodText(text);
-          const workingFoods = [...foods];
-          const list = result.items.map((item, index) => makeMealAiCard(item, index, workingFoods));
-          if (!list.length) setMealAiError('Уточните продукт или блюдо, например: курица с рисом, омлет, пицца Маргарита.');
-          setMealAiItems(list);
-        } catch (e) {
-          setMealAiError(e.message || AI_UNAVAILABLE_MESSAGE);
-        }
-        setMealAiBusy(false);
-      };
-      const updateMealAiItem = (index, patch) => setMealAiItems(arr => (arr || []).map((x, j) => {
-        if (j !== index) return x;
-        return { ...x, ...(typeof patch === 'function' ? patch(x) : patch) };
-      }));
-      const selectMealAiSuggestion = (index, food) => {
-        updateMealAiItem(index, {
-          name: food.name,
-          matchedFoodId: food.id,
-          food,
-          status: 'found',
-          statusText: 'Продукт найден в базе',
-          suggestions: [],
-          needsChoice: false,
-        });
-      };
-      const updateMealAiNutritionDraft = (index, field, value) => {
-        updateMealAiItem(index, item => ({
-          nutritionDraft: { ...(item.nutritionDraft || makeNutritionDraft(item.createdFood || item.food)), [field]: value },
-          nutritionError: '',
-        }));
-      };
-      const editMealAiEstimatedFood = (index) => {
-        updateMealAiItem(index, item => ({
-          isEditingNutrition: true,
-          nutritionDraft: item.nutritionDraft || makeNutritionDraft(item.createdFood || item.food),
-          nutritionError: '',
-        }));
-      };
-      const saveMealAiNutritionDraft = (index) => {
-        const item = mealAiItems?.[index];
-        const values = parseNutritionDraft(item?.nutritionDraft);
-        if (!item || !values) {
-          updateMealAiItem(index, { nutritionError: 'Введите корректные КБЖУ на 100 г' });
-          return;
-        }
-        const updatedFood = {
-          ...(item.createdFood || item.food),
-          calories: values.calories,
-          protein: values.protein,
-          fats: values.fats,
-          carbs: values.carbs,
-          caloriesPer100g: values.calories,
-          proteinPer100g: values.protein,
-          fatPer100g: values.fats,
-          carbsPer100g: values.carbs,
-          updatedAt: new Date().toISOString(),
-        };
-        updateMealAiItem(index, {
-          food: updatedFood,
-          createdFood: updatedFood,
-          nutritionDraft: makeNutritionDraft(updatedFood),
-          isEditingNutrition: false,
-          nutritionError: '',
-        });
-      };
-      const cancelMealAiItem = (index) => {
-        setMealAiItems(arr => (arr || []).filter((_, j) => j !== index));
-      };
-      const addMealAiEstimatedFoodToBase = (index) => {
-        const item = mealAiItems?.[index];
-        if (!item?.createdFood) return;
-        const existing = findFoodForAi(item.createdFood.name).match;
-        if (existing) {
-          updateMealAiItem(index, {
-            name: existing.name,
-            matchedFoodId: existing.id,
-            food: existing,
-            createdFood: null,
-            status: 'found',
-            statusText: 'Продукт найден в базе',
-            addedToBase: true,
-            isEditingNutrition: false,
-            needsBaseConfirm: false,
-          });
-          return;
-        }
-        const now = new Date().toISOString();
-        const foodToSave = {
-          ...item.createdFood,
-          normalizedName: normalizeFoodName(item.createdFood.name),
-          updatedAt: now,
-          createdAt: item.createdFood.createdAt || now,
-        };
-        saveAiGeneratedFood(foodToSave);
-        updateMealAiItem(index, {
-          name: foodToSave.name,
-          matchedFoodId: foodToSave.id,
-          food: foodToSave,
-          createdFood: foodToSave,
-          status: 'created',
-          statusText: 'Продукт добавлен в базу. Сколько грамм вы съели?',
-          addedToBase: true,
-          isEditingNutrition: false,
-          needsBaseConfirm: false,
-        });
-      };
-      const moveMealAiItemToManualEntry = (item) => {
-        setFoodSearch(item.name);
+      const moveMealAiItemToManualEntry = ({ name, grams }) => {
+        setFoodSearch(name || '');
         setSelectedFoodId('');
-        setGramsInput(item.grams || '');
+        setGramsInput(grams || '');
         setShowMealAiModal(false);
-        setMealAiText('');
-        setMealAiItems(null);
-        setMealAiError('');
         setTimeout(() => foodSearchRef.current?.focus(), 0);
-      };
-      const addMealAiItemToDiary = (index) => {
-        const item = mealAiItems?.[index];
-        if (!item || item.added) return;
-        const food = item.matchedFoodId ? (foods.find(f => f.id === item.matchedFoodId) || item.food) : findFoodForAi(item.name).match;
-        const grams = evaluateMath(String(item.grams || ''));
-        if (item.status === 'suggestions') {
-          updateMealAiItem(index, { needsChoice: true });
-          return;
-        }
-        if (item.status === 'estimated' && !item.addedToBase) {
-          updateMealAiItem(index, { needsBaseConfirm: true });
-          return;
-        }
-        if (!food) {
-          moveMealAiItemToManualEntry(item);
-          return;
-        }
-        if (!Number.isFinite(grams) || grams <= 0) {
-          updateMealAiItem(index, { needsWeight: true, portionError: 'Введите вес продукта в граммах' });
-          return;
-        }
-        if (addFoodLog(food, grams)) updateMealAiItem(index, { added: true, needsWeight: false, portionError: '', addedMessage: `${food.name}, ${grams} г добавлено в дневник` });
       };
 
       // Избранное — в порядке favoriteIds (порядок задаёт сам пользователь).
@@ -2481,9 +2253,6 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
                   mealFormRef={mealFormRef}
                   handleAddLog={handleAddLog}
                   setShowMealAiModal={setShowMealAiModal}
-                  setMealAiText={setMealAiText}
-                  setMealAiError={setMealAiError}
-                  setMealAiItems={setMealAiItems}
                   foodSearchRef={foodSearchRef}
                   foodSearch={foodSearch}
                   setFoodSearch={setFoodSearch}
@@ -2941,145 +2710,14 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
             )}
             </AnimatePresence>
 
-            {/* Модалка: текст → продукты для дневника */}
-            <AnimatePresence>
-            {showMealAiModal && (
-              <motion.div key="meal-ai" className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-                <motion.div className="bg-[#18181b] p-6 rounded-3xl border border-zinc-800 w-full max-w-sm max-h-[88vh] overflow-y-auto" initial={{ opacity: 0, scale: 0.9, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }} transition={{ type: 'spring', stiffness: 300, damping: 26 }}>
-                  <h3 className="text-lg font-bold mb-1 text-center flex items-center justify-center gap-2"><IconSparkles className="w-5 h-5 text-indigo-400" /> Распознать продукты</h3>
-                  <p className="text-zinc-500 text-xs mb-4 text-center leading-relaxed">Введите продукт или список продуктов. Сначала покажу КБЖУ на 100 г, затем попрошу вес порции.</p>
-                  <textarea rows={5} maxLength={MAX_FOOD_TEXT_LENGTH} placeholder={'Например:\nПицца Маргарита\nили\nтворог 5% 250 г, банан 100 г'} className="w-full bg-[#27272a] rounded-xl p-3 text-zinc-200 text-sm outline-none border border-zinc-700/30 focus:border-emerald-500 resize-none" value={mealAiText} onChange={(e) => setMealAiText(e.target.value)} />
-                  <div className="mt-1 flex items-center justify-between gap-3 text-[10px] text-zinc-500">
-                    <span>Пустой вес нужно уточнить перед добавлением.</span>
-                    <span aria-live="polite">{mealAiText.length}/{MAX_FOOD_TEXT_LENGTH}</span>
-                  </div>
-                  <button type="button" onClick={runMealAi} disabled={mealAiBusy || !mealAiText.trim() || mealAiText.length > MAX_FOOD_TEXT_LENGTH} className="btn-active w-full mt-3 bg-indigo-600 text-white rounded-xl p-3 font-bold transition-all disabled:opacity-35 flex items-center justify-center gap-2">
-                    {mealAiBusy ? 'Распознаём продукты…' : <><IconSparkles className="w-5 h-5" /> Распознать</>}
-                  </button>
-                  {mealAiBusy && <p className="text-indigo-300 text-xs mt-3 text-center" role="status" aria-live="polite">Распознаём продукты…</p>}
-                  {mealAiError && <p className="text-red-400 text-xs mt-3 leading-relaxed" role="alert">{mealAiError}</p>}
-                  {mealAiItems && mealAiItems.length > 0 && (
-                    <div className="mt-4 space-y-2">
-                      <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Распознано · сначала КБЖУ на 100 г, затем вес порции</p>
-                      {mealAiItems.map((it, i) => {
-                        const food = it.matchedFoodId ? (foods.find(f => f.id === it.matchedFoodId) || it.food) : (it.status === 'estimated' ? it.food : null);
-                        const canAskWeight = Boolean(food && it.status !== 'estimated');
-                        const grams = evaluateMath(String(it.grams || ''));
-                        const portion = canAskWeight && Number.isFinite(grams) && grams > 0 ? calculateFoodPortion(food, grams) : null;
-                        const statusLabel = it.status === 'estimated' ? 'Нет в базе · AI-оценка' : it.status === 'created' ? 'в базе' : it.status === 'found' ? 'в базе' : 'проверка';
-                        const statusClass = it.status === 'estimated' ? 'text-amber-300' : (it.status === 'created' || it.status === 'found') ? 'text-emerald-300' : 'text-zinc-500';
-                        return (
-                        <div key={`${it.name}-${i}`} className="rounded-xl p-3 border bg-[#27272a] border-zinc-700/30 space-y-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="font-bold text-sm text-zinc-100 truncate">{it.name}</p>
-                              <p className="text-xs text-zinc-400 mt-0.5">Распознано: {formatParsedFoodAmount(it)}</p>
-                            </div>
-                            <span className={`shrink-0 text-[9px] font-bold uppercase tracking-wider ${statusClass}`}>{statusLabel}</span>
-                          </div>
-
-                          <p className={`text-[10px] leading-relaxed ${it.status === 'estimated' ? 'text-amber-300' : (it.status === 'created' || it.status === 'found') ? 'text-emerald-300' : 'text-zinc-400'}`}>
-                            {it.statusText}
-                          </p>
-
-                          {it.status === 'found' && (
-                            <p className="text-[10px] text-emerald-300 leading-relaxed">
-                              Этот продукт уже у вас в базе есть. Сколько граммов вы съели этого продукта?
-                            </p>
-                          )}
-
-                          {it.status === 'suggestions' && (
-                            <div className="space-y-2">
-                              <p className="text-[10px] text-amber-300 leading-relaxed">Похоже, это один из продуктов. Выберите совпадение, чтобы не создавать дубль:</p>
-                              <div className="flex flex-col gap-2">
-                                {(it.suggestions || []).map(s => (
-                                  <button key={s.id} type="button" onClick={() => selectMealAiSuggestion(i, s)} className="btn-active text-left bg-zinc-900 rounded-lg p-2 border border-zinc-700/30 text-xs font-bold text-zinc-200">
-                                    {s.name}
-                                  </button>
-                                ))}
-                              </div>
-                              {it.needsChoice && <p className="text-[10px] text-amber-300" role="alert">Сначала выберите продукт из списка.</p>}
-                            </div>
-                          )}
-
-                          {food ? (
-                            <>
-                              <div className="bg-zinc-900/70 rounded-xl p-3 border border-zinc-700/30">
-                                <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mb-2">КБЖУ на 100 г</p>
-                                <div className="grid grid-cols-4 gap-2 text-center">
-                                  <div><p className="text-sm font-black text-emerald-400">{Math.round(food.calories || 0)}</p><p className="text-[9px] text-zinc-500">ккал</p></div>
-                                  <div><p className="text-sm font-black text-indigo-400">{Math.round(food.protein || 0)}</p><p className="text-[9px] text-zinc-500">белки</p></div>
-                                  <div><p className="text-sm font-black text-amber-400">{Math.round(food.fats || 0)}</p><p className="text-[9px] text-zinc-500">жиры</p></div>
-                                  <div><p className="text-sm font-black text-blue-400">{Math.round(food.carbs || 0)}</p><p className="text-[9px] text-zinc-500">углев.</p></div>
-                                </div>
-                              </div>
-
-                              {it.status === 'estimated' ? (
-                                <div className="space-y-2">
-                                  <p className="text-[10px] text-zinc-400 leading-relaxed">Я рассчитал примерное КБЖУ на 100 г. Проверьте значения и добавьте продукт в базу.</p>
-                                  {it.isEditingNutrition && (
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <input type="number" step="0.1" inputMode="decimal" placeholder="Ккал" className="bg-zinc-900 rounded-lg p-2 text-sm text-zinc-100 outline-none border border-zinc-700/30 focus:border-emerald-500" value={it.nutritionDraft?.calories ?? ''} onChange={(e) => updateMealAiNutritionDraft(i, 'calories', e.target.value)} />
-                                      <input type="number" step="0.1" inputMode="decimal" placeholder="Белки" className="bg-zinc-900 rounded-lg p-2 text-sm text-zinc-100 outline-none border border-zinc-700/30 focus:border-emerald-500" value={it.nutritionDraft?.protein ?? ''} onChange={(e) => updateMealAiNutritionDraft(i, 'protein', e.target.value)} />
-                                      <input type="number" step="0.1" inputMode="decimal" placeholder="Жиры" className="bg-zinc-900 rounded-lg p-2 text-sm text-zinc-100 outline-none border border-zinc-700/30 focus:border-emerald-500" value={it.nutritionDraft?.fats ?? ''} onChange={(e) => updateMealAiNutritionDraft(i, 'fats', e.target.value)} />
-                                      <input type="number" step="0.1" inputMode="decimal" placeholder="Углеводы" className="bg-zinc-900 rounded-lg p-2 text-sm text-zinc-100 outline-none border border-zinc-700/30 focus:border-emerald-500" value={it.nutritionDraft?.carbs ?? ''} onChange={(e) => updateMealAiNutritionDraft(i, 'carbs', e.target.value)} />
-                                    </div>
-                                  )}
-                                  {it.nutritionError && <p className="text-[10px] text-amber-300" role="alert">{it.nutritionError}</p>}
-                                  {it.needsBaseConfirm && <p className="text-[10px] text-amber-300" role="alert">Сначала добавьте продукт в базу.</p>}
-                                  <div className="grid grid-cols-1 gap-2">
-                                    {it.isEditingNutrition ? (
-                                      <button type="button" onClick={() => saveMealAiNutritionDraft(i)} className="btn-active w-full bg-emerald-600 text-white rounded-lg p-2.5 text-xs font-bold transition-all">Сохранить КБЖУ</button>
-                                    ) : (
-                                      <button type="button" onClick={() => addMealAiEstimatedFoodToBase(i)} className="btn-active w-full bg-emerald-600 text-white rounded-lg p-2.5 text-xs font-bold transition-all">Добавить в базу</button>
-                                    )}
-                                    <button type="button" onClick={() => editMealAiEstimatedFood(i)} className="btn-active w-full bg-zinc-900 text-zinc-200 border border-zinc-700/30 rounded-lg p-2.5 text-xs font-bold transition-all">Изменить КБЖУ</button>
-                                    <button type="button" onClick={() => cancelMealAiItem(i)} className="btn-active w-full text-zinc-500 border border-zinc-700/30 rounded-lg p-2.5 text-xs font-bold transition-all">Отмена</button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <label className="block text-[10px] text-zinc-500 font-bold">
-                                    Сколько грамм вы съели?
-                                    <div className="mt-1 flex items-center gap-2">
-                                      <input type="number" min="0" step="0.1" inputMode="decimal" placeholder="Например, 150" className={`flex-1 min-w-0 bg-zinc-900 rounded-lg p-2 text-sm text-zinc-100 outline-none border ${it.needsWeight ? 'border-amber-400' : 'border-zinc-700/30'} focus:border-emerald-500`} value={it.grams} onChange={(e) => updateMealAiItem(i, { grams: e.target.value, needsWeight: false, portionError: '' })} />
-                                      <span className="shrink-0 text-xs font-bold text-zinc-500">г</span>
-                                    </div>
-                                  </label>
-
-                                  {it.amount_g === null && <p className="text-[10px] text-amber-300 leading-relaxed">{it.unit === 'pcs' ? 'Количество штук не переводим в граммы автоматически.' : it.unit === 'ml' || it.unit === 'l' ? 'Объём не переводим в граммы без отдельной логики плотности.' : 'Укажите граммовку перед расчётом КБЖУ.'}</p>}
-                                  {it.portionError && <p className="text-[10px] text-amber-300" role="alert">{it.portionError}</p>}
-                                  {portion && (
-                                    <p className="text-[10px] text-zinc-400 leading-relaxed">
-                                      Итого за {grams} г: <span className="font-bold text-zinc-200">{portion.calories} ккал</span> · Б {portion.protein} · Ж {portion.fats} · У {portion.carbs}
-                                    </p>
-                                  )}
-                                  {it.added ? <p className="text-xs font-bold text-emerald-300 flex items-center gap-1"><IconCheck className="w-4 h-4" /> {it.addedMessage || 'Добавлено в дневник'}</p> : (
-                                    <button type="button" onClick={() => addMealAiItemToDiary(i)} className="btn-active w-full bg-emerald-600 text-white rounded-lg p-2.5 text-xs font-bold transition-all">
-                                      Добавить в дневник
-                                    </button>
-                                  )}
-                                </>
-                              )}
-                            </>
-                          ) : it.status !== 'suggestions' && (
-                            <>
-                              <p className="text-[10px] text-zinc-400 leading-relaxed">Уточните продукт или блюдо, например: курица с рисом, омлет, пицца Маргарита. Ручное добавление остаётся запасным вариантом.</p>
-                              <button type="button" onClick={() => moveMealAiItemToManualEntry(it)} className="btn-active w-full bg-zinc-900 text-zinc-200 border border-zinc-700/30 rounded-lg p-2.5 text-xs font-bold transition-all">
-                                Добавить продукт вручную
-                              </button>
-                            </>
-                          )}
-                        </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <button type="button" onClick={() => { setShowMealAiModal(false); setMealAiText(''); setMealAiItems(null); setMealAiError(''); }} className="btn-active w-full mt-3 border border-zinc-800 text-zinc-500 rounded-xl p-3 font-bold transition-all">Закрыть</button>
-                </motion.div>
-              </motion.div>
-            )}
-            </AnimatePresence>
+            <FoodRecognitionModal
+              open={showMealAiModal}
+              onClose={() => setShowMealAiModal(false)}
+              foods={foods}
+              onSaveFood={saveAiGeneratedFood}
+              onAddToDiary={addFoodLog}
+              onManualEntry={moveMealAiItemToManualEntry}
+            />
 
 
             <AnimatePresence>

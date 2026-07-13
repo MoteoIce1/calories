@@ -1,3 +1,5 @@
+import { calculateFoodPortion } from './foodNutrition.js';
+
     const normalizeFoodSearchQuery = (query) => query.toLowerCase().trim().replace(/\s+/g, ' ');
 
     const FOOD_TRANSLITERATION_ALIASES = {
@@ -300,16 +302,7 @@
       };
     };
 
-    const calculateFoodPortion = (food, grams) => {
-      const g = Number(grams);
-      if (!Number.isFinite(g) || g <= 0) return null;
-      return {
-        calories: Math.round(((Number(food?.calories) || 0) * g) / 100),
-        protein: Math.round(((Number(food?.protein) || 0) * g) / 100),
-        fats: Math.round(((Number(food?.fats) || 0) * g) / 100),
-        carbs: Math.round(((Number(food?.carbs) || 0) * g) / 100),
-      };
-    };
+    // Расчёт порции вынесен в foodNutrition.js (округление: ккал — целые, БЖУ — 1 знак).
 
     const searchFoodsByName = (foods, query, limit = 40) => {
       const normalizedQuery = normalizeFoodSearchQuery(query);
@@ -325,7 +318,6 @@
         .slice(0, limit)
         .map(item => item.food);
     };
-
 
 export {
   calculateFoodPortion,
