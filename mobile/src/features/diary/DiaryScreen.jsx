@@ -122,6 +122,24 @@ export default function DiaryScreen() {
         </Pressable>
       </View>
 
+      {/* ── Показатели тела ── */}
+      {blocks.bodyMetrics !== false && (
+        <Card>
+          <SectionTitle>Показатели тела</SectionTitle>
+          <View style={[styles.row, { gap: 8 }]}>
+            {DAILY_BODY_METRICS.map((metric) => (
+              <View key={metric.key} style={{ flex: 1 }}>
+                <Label>{metric.label}</Label>
+                <MetricInput
+                  value={dayMetrics[metric.key]}
+                  onCommit={(val) => updateMetrics(currentDate, metric.key, val)}
+                />
+              </View>
+            ))}
+          </View>
+        </Card>
+      )}
+
       {/* ── Калории ── */}
       {blocks.calories !== false && (
         <Card>
@@ -253,24 +271,6 @@ export default function DiaryScreen() {
                 setCustomWater('');
               }}
             />
-          </View>
-        </Card>
-      )}
-
-      {/* ── Показатели тела ── */}
-      {blocks.bodyMetrics !== false && (
-        <Card>
-          <SectionTitle>Показатели тела</SectionTitle>
-          <View style={[styles.row, { gap: 8 }]}>
-            {DAILY_BODY_METRICS.map((metric) => (
-              <View key={metric.key} style={{ flex: 1 }}>
-                <Label>{metric.label}</Label>
-                <MetricInput
-                  value={dayMetrics[metric.key]}
-                  onCommit={(val) => updateMetrics(currentDate, metric.key, val)}
-                />
-              </View>
-            ))}
           </View>
         </Card>
       )}
