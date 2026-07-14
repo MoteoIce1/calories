@@ -77,11 +77,11 @@ export default function DiaryScreen(props) {
             <IconSteps className="w-5 h-5 text-amber-400" />
             <div className="flex flex-col">
               <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">Шаги</span>
-              <span className="text-[9px] text-zinc-500 font-bold mt-0.5">
-                {stepCaloriesDelta === 0
-                  ? 'без изменения к цели'
-                  : `${stepCaloriesDelta > 0 ? '+' : ''}${stepCaloriesDelta} ккал к цели`}
-              </span>
+              {stepCaloriesDelta !== 0 && (
+                <span className="text-[9px] text-zinc-500 font-bold mt-0.5">
+                  {`${stepCaloriesDelta > 0 ? '+' : ''}${stepCaloriesDelta} ккал к цели`}
+                </span>
+              )}
             </div>
           </div>
           <div className="step-controls flex shrink-0 items-center gap-2">
