@@ -50,39 +50,8 @@ export default function DiaryScreen(props) {
       </div>
 
       {blocks.bodyMetrics && (
-        <div className="section-card card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-4">
+        <div className="section-card card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 space-y-3">
           <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Показатели тела</h2>
-          <div className="metric-date-nav flex items-center w-full min-h-14 bg-zinc-900 rounded-2xl border border-zinc-800/70 p-1">
-            <button
-              type="button"
-              onClick={() => {
-                const date = new Date(currentDate);
-                date.setDate(date.getDate() - 1);
-                setCurrentDate(getLocalDateString(date));
-              }}
-              className="btn-active h-11 w-14 shrink-0 rounded-xl text-zinc-400 flex items-center justify-center"
-              aria-label="Предыдущий день"
-            >
-              <IconChevronLeft className="w-7 h-7" />
-            </button>
-            <div className="relative flex-1 self-stretch flex items-center justify-center">
-              <span className="text-sm font-bold text-zinc-200">{displayDate(currentDate)}</span>
-              <input type="date" aria-label="Дата показателей тела" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" value={currentDate} max={getLocalDateString(new Date())} onChange={(e) => { if(e.target.value) setCurrentDate(e.target.value); }} />
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                const date = new Date(currentDate);
-                date.setDate(date.getDate() + 1);
-                setCurrentDate(getLocalDateString(date));
-              }}
-              disabled={currentDate === getLocalDateString(new Date())}
-              className="btn-active h-11 w-14 shrink-0 rounded-xl text-zinc-400 flex items-center justify-center disabled:opacity-20"
-              aria-label="Следующий день"
-            >
-              <IconChevronRight className="w-7 h-7" />
-            </button>
-          </div>
           <div className="grid grid-cols-4 gap-2">
             {DAILY_BODY_METRICS.map((metric) => (
               <div key={metric.key} className="bg-[#27272a] rounded-xl p-2 flex flex-col items-center border border-zinc-700/50 focus-within:border-emerald-500">
