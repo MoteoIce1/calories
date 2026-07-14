@@ -12,7 +12,7 @@ export default function DiaryScreen(props) {
     currentDate, setCurrentDate,
     blocks,
     totalCals, dailyAvailableCalories, calsColorClass, displayCals, calsLabel, isOver, progressCals,
-    todaySteps, todayStepCalories, stepCaloriesDelta, refreshCurrentDayVitals, isRefreshingDay, uid, handleUpdateSteps,
+    todaySteps, stepCaloriesDelta, refreshCurrentDayVitals, isRefreshingDay, uid, handleUpdateSteps,
     toggleWorkout, dailyWorkouts,
     extraActivityCalories, openExtraActivityModal, todayExtraActivities, removeExtraActivity,
     totalPro, totalFats, totalCarbs, activeGoals, dailyCarbGoal, proteinPerKg, proteinGoalPerKg,
@@ -78,7 +78,9 @@ export default function DiaryScreen(props) {
             <div className="flex flex-col">
               <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest">Шаги</span>
               <span className="text-[9px] text-zinc-500 font-bold mt-0.5">
-                {todaySteps} × 0.04 = {todayStepCalories} ккал{stepCaloriesDelta !== 0 ? ` · ${stepCaloriesDelta > 0 ? '+' : ''}${stepCaloriesDelta} к цели` : ''}
+                {stepCaloriesDelta === 0
+                  ? 'без изменения к цели'
+                  : `${stepCaloriesDelta > 0 ? '+' : ''}${stepCaloriesDelta} ккал к цели`}
               </span>
             </div>
           </div>
@@ -239,7 +241,10 @@ export default function DiaryScreen(props) {
       <form ref={mealFormRef} onSubmit={handleAddLog} className="meal-composer section-card card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-3">
         <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</h2>
 
-        <p className="text-[10px] text-zinc-500 leading-tight">Найдите продукт в базе, укажите вес порции и добавьте запись в дневник.</p>
+        <p className="text-[10px] text-zinc-500 leading-relaxed">
+          Найдите продукт в базе, укажите вес порции и добавьте запись в дневник.
+          Если вашего блюда или продукта нет в списке — добавьте его в Базу: там КБЖУ можно рассчитать с помощью ИИ или вписать вручную.
+        </p>
         <div className="relative" onClick={(e) => e.stopPropagation()}>
           <label htmlFor="food-search" className="sr-only">Поиск продукта</label>
           <IconSearch aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500" />
@@ -290,7 +295,7 @@ export default function DiaryScreen(props) {
           <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/40 p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
             <p className="text-sm font-bold text-zinc-200">Продукт не найден</p>
             <p className="text-xs text-zinc-500 leading-relaxed">
-              Если нужного продукта нет, добавьте его в Базу. ИИ поможет рассчитать примерное КБЖУ на 100 г.
+              Добавьте продукт в Базу — там КБЖУ можно рассчитать с помощью ИИ или вписать вручную.
             </p>
             <button
               type="button"

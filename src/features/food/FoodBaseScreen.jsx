@@ -55,7 +55,7 @@ export default function FoodBaseScreen({
       <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
         <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Добавить продукт</h2>
         <p className="text-[11px] text-zinc-500 leading-relaxed">
-          Новый продукт создаётся только здесь. Сначала проверим базу, при необходимости ИИ рассчитает КБЖУ на 100 г.
+          Новый продукт создаётся только здесь. КБЖУ можно рассчитать с помощью ИИ или вписать вручную на 100 г.
         </p>
         <button
           type="button"

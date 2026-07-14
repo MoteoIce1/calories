@@ -1348,7 +1348,6 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
         ? dailySteps[currentDate]
         : baseStepsGoal;
       const stepCaloriesDelta = calculateStepCalorieAdjustment(todaySteps, baseStepsGoal);
-      const todayStepCalories = calculateStepsCalories(todaySteps);
       const baseTargetCalories = Number(activeGoals.calories) || 0;
       const targetCalories = baseTargetCalories + stepCaloriesDelta;
       const todayExtraActivities = normalizeExtraActivities(dailyExtraActivities[currentDate] || []);
@@ -2226,7 +2225,6 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
                   isOver={isOver}
                   progressCals={progressCals}
                   todaySteps={todaySteps}
-                  todayStepCalories={todayStepCalories}
                   stepCaloriesDelta={stepCaloriesDelta}
                   refreshCurrentDayVitals={refreshCurrentDayVitals}
                   isRefreshingDay={isRefreshingDay}

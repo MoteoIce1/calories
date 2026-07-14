@@ -70,7 +70,33 @@ export default function FoodAddProductModal({
     return result.type === 'exact' ? result.match : null;
   };
 
-  const runDatabaseSearch = () => {
+  const checkDatabase = (trimmed) => {
+    const item = createRecognitionItem({
+      name: trimmed,
+      amount: null,
+      unit: 'unknown',
+      amount_g: null,
+      confidence: 1,
+    }, 0);
+    const search = classifyFoodSearch(foods, trimmed);
+
+    if (search.type === 'none') {
+      return {
+        search,
+        item: {
+          ...item,
+          query: trimmed,
+          flowStep: FLOW_STEP.NOT_IN_BASE,
+          statusText: 'Продукта нет в базе. Выберите способ добавления КБЖУ.',
+          error: '',
+        },
+      };
+    }
+
+    return { search, item: applySearchResult(item, search) };
+  };
+
+  const beginAiPath = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
     if (trimmed.length > MAX_FOOD_NAME_LENGTH) {
@@ -82,25 +108,33 @@ export default function FoodAddProductModal({
     setBusy(true);
 
     try {
-      const item = createRecognitionItem({
-        name: trimmed,
-        amount: null,
-        unit: 'unknown',
-        amount_g: null,
-        confidence: 1,
-      }, 0);
-      const search = classifyFoodSearch(foods, trimmed);
+      const { search, item } = checkDatabase(trimmed);
+      setFlow(item);
+      if (search.type === 'none') runAiEstimate(1, trimmed);
+    } catch {
+      setError('Не удалось проверить базу продуктов. Повторите попытку.');
+    }
 
-      if (search.type === 'none') {
-        setFlow({
-          ...item,
-          query: trimmed,
-          flowStep: FLOW_STEP.NOT_IN_BASE,
-          statusText: 'Продукта нет в базе. Рассчитайте КБЖУ через ИИ или введите значения вручную.',
-          error: '',
-        });
+    setBusy(false);
+  };
+
+  const beginManualPath = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (trimmed.length > MAX_FOOD_NAME_LENGTH) {
+      setError(`Название не должно быть длиннее ${MAX_FOOD_NAME_LENGTH} символов.`);
+      return;
+    }
+
+    setError('');
+    setBusy(true);
+
+    try {
+      const { search, item } = checkDatabase(trimmed);
+      if (search.type === 'exact') {
+        setFlow(item);
       } else {
-        setFlow(applySearchResult(item, search));
+        startManualEntry(trimmed);
       }
     } catch {
       setError('Не удалось проверить базу продуктов. Повторите попытку.');
@@ -109,8 +143,8 @@ export default function FoodAddProductModal({
     setBusy(false);
   };
 
-  const runAiEstimate = async (retryLeft = 1) => {
-    const query = (flow?.query || name).trim();
+  const runAiEstimate = async (retryLeft = 1, queryOverride) => {
+    const query = String(queryOverride ?? flow?.query ?? name).trim();
     if (!query) return;
 
     setFlow((current) => ({
@@ -231,8 +265,8 @@ export default function FoodAddProductModal({
     }));
   };
 
-  const startManualEntry = () => {
-    const draftName = (flow?.query || name).trim();
+  const startManualEntry = (queryName) => {
+    const draftName = String(queryName ?? flow?.query ?? name).trim();
     setFlow({
       ...createRecognitionItem({ name: draftName, amount: null, unit: 'unknown', amount_g: null, confidence: 1 }, 0),
       flowStep: FLOW_STEP.EDITING,
@@ -281,7 +315,7 @@ export default function FoodAddProductModal({
         >
           <h3 className="text-lg font-bold mb-1 text-center">Добавить продукт</h3>
           <p className="text-zinc-500 text-xs mb-4 text-center leading-relaxed">
-            Сначала проверим базу. Если продукта нет — ИИ рассчитает КБЖУ на 100 г. Сохранение только после подтверждения.
+            Сначала проверим базу. Затем можно рассчитать КБЖУ через ИИ или вписать значения вручную.
           </p>
 
           {showNameInput && (
@@ -295,14 +329,27 @@ export default function FoodAddProductModal({
                 onChange={(e) => setName(e.target.value)}
                 disabled={busy}
               />
-              <button
-                type="button"
-                onClick={runDatabaseSearch}
-                disabled={busy || !name.trim()}
-                className="btn-active w-full bg-emerald-600 text-white rounded-xl p-3 font-bold transition-all disabled:opacity-35"
-              >
-                {busy ? 'Проверяем базу…' : 'Продолжить'}
-              </button>
+              {name.trim() && (
+                <div className="grid grid-cols-1 gap-2">
+                  <button
+                    type="button"
+                    onClick={beginAiPath}
+                    disabled={busy}
+                    className="btn-active w-full bg-indigo-600 text-white rounded-xl p-3 font-bold transition-all disabled:opacity-35 flex items-center justify-center gap-2"
+                  >
+                    <IconSparkles className="w-5 h-5" />
+                    {busy ? 'Проверяем базу…' : 'Рассчитать с помощью ИИ'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={beginManualPath}
+                    disabled={busy}
+                    className="btn-active w-full bg-zinc-900 text-zinc-200 border border-zinc-700/30 rounded-xl p-3 font-bold transition-all disabled:opacity-35"
+                  >
+                    Вписать КБЖУ вручную
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -339,8 +386,9 @@ export default function FoodAddProductModal({
                 </button>
               ))}
               <button type="button" onClick={() => runAiEstimate()} disabled={busy} className="btn-active w-full bg-indigo-600 text-white rounded-lg p-2.5 text-xs font-bold transition-all disabled:opacity-50">
-                <span className="inline-flex items-center justify-center gap-1"><IconSparkles className="w-4 h-4" /> Рассчитать новый продукт</span>
+                <span className="inline-flex items-center justify-center gap-1"><IconSparkles className="w-4 h-4" /> Рассчитать с помощью ИИ</span>
               </button>
+              <button type="button" onClick={() => startManualEntry(flow.query)} className="btn-active w-full bg-zinc-900 text-zinc-200 border border-zinc-700/30 rounded-lg p-2.5 text-xs font-bold transition-all">Вписать КБЖУ вручную</button>
               <button type="button" onClick={resetAndClose} className="btn-active w-full text-zinc-500 border border-zinc-700/30 rounded-lg p-2.5 text-xs font-bold transition-all">Отмена</button>
             </div>
           )}
@@ -349,9 +397,9 @@ export default function FoodAddProductModal({
             <div className="mt-4 space-y-2">
               <p className="text-sm font-bold text-zinc-100">{flow.query}</p>
               <button type="button" onClick={() => runAiEstimate()} disabled={busy} className="btn-active w-full bg-indigo-600 text-white rounded-lg p-2.5 text-xs font-bold transition-all disabled:opacity-50">
-                <span className="inline-flex items-center justify-center gap-1"><IconSparkles className="w-4 h-4" /> Рассчитать КБЖУ через ИИ</span>
+                <span className="inline-flex items-center justify-center gap-1"><IconSparkles className="w-4 h-4" /> Рассчитать с помощью ИИ</span>
               </button>
-              <button type="button" onClick={startManualEntry} className="btn-active w-full bg-zinc-900 text-zinc-200 border border-zinc-700/30 rounded-lg p-2.5 text-xs font-bold transition-all">Добавить вручную</button>
+              <button type="button" onClick={() => startManualEntry(flow.query)} className="btn-active w-full bg-zinc-900 text-zinc-200 border border-zinc-700/30 rounded-lg p-2.5 text-xs font-bold transition-all">Вписать КБЖУ вручную</button>
               <button type="button" onClick={resetAndClose} className="btn-active w-full text-zinc-500 border border-zinc-700/30 rounded-lg p-2.5 text-xs font-bold transition-all">Отмена</button>
             </div>
           )}
