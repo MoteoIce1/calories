@@ -3,7 +3,7 @@ import firebase, { db, auth, functions, profileRef, dayRef, daysCol, bodyCol, bo
 import { motion, AnimatePresence } from 'framer-motion';
 import { evaluateMath } from './utils/math.js';
 import { calculateFoodPortion, normalizeFoodName, searchFoodsByName } from './utils/food.js';
-import FoodRecognitionModal from './features/food/FoodRecognitionModal.jsx';
+import FoodAddProductModal from './features/food/FoodAddProductModal.jsx';
 import { ACTIVITY_LEVELS, DEFAULT_ACTIVITY_KEY, calculateStepCalorieAdjustment, calculateStepsCalories, computeKbju, normalizeActivityKey } from './utils/kbju.js';
 import { movingAverage } from './utils/stats.js';
 import { getLocalDateString, getDefaultStartDate, getDefaultExportEndDate, displayDate } from './utils/date.js';
@@ -147,8 +147,9 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
       const resolveConfirm = (result) => { if (confirmState) confirmState.resolve(result); setConfirmState(null); };
       const [challengeProgressFriendUid, setChallengeProgressFriendUid] = useState('');
       const [challengeProgressPeriod, setChallengeProgressPeriod] = useState('14d');
-      // ИИ разбирает текст на продукты только через VPS API; ключи остаются на сервере.
-      const [showMealAiModal, setShowMealAiModal] = useState(false);
+      const [showFoodAddModal, setShowFoodAddModal] = useState(false);
+      const [foodAddInitialName, setFoodAddInitialName] = useState('');
+      const [baseSearch, setBaseSearch] = useState('');
       const [isRefreshingDay, setIsRefreshingDay] = useState(false);
       
       const [currentDate, setCurrentDate] = useState(getLocalDateString(new Date()));
@@ -160,7 +161,6 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
       const [selectedFoodId, setSelectedFoodId] = useState('');
       const [gramsInput, setGramsInput] = useState('');
       const [foodSearch, setFoodSearch] = useState('');
-      const [newFood, setNewFood] = useState({ name: '', cals: '', pro: '', fat: '', carb: '' });
 
       const [editingLogId, setEditingLogId] = useState(null);
       const [editingFoodId, setEditingFoodId] = useState(null);
@@ -818,33 +818,6 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
         } catch (e) {
           notify('Не удалось опубликовать: ' + e.message + '\n\nПроверь правила Firestore для shared/foods (запись разрешена только владельцу).');
         }
-      };
-
-      const handleAddFood = (e) => {
-        e.preventDefault();
-        const now = new Date().toISOString();
-        const foodItem = {
-          id: Date.now().toString(), name: newFood.name,
-          normalizedName: normalizeFoodName(newFood.name),
-          aliases: [],
-          calories: parseFloat(newFood.cals || 0),
-          protein: parseFloat(newFood.pro || 0),
-          fats: parseFloat(newFood.fat || 0),
-          carbs: parseFloat(newFood.carb || 0),
-          caloriesPer100g: parseFloat(newFood.cals || 0),
-          proteinPer100g: parseFloat(newFood.pro || 0),
-          fatPer100g: parseFloat(newFood.fat || 0),
-          carbsPer100g: parseFloat(newFood.carb || 0),
-          source: 'manual',
-          isAiGenerated: false,
-          confidence: 1,
-          createdAt: now,
-          updatedAt: now,
-        };
-        // Владелец добавляет в общую базу, остальные — в свои личные продукты (поверх базы).
-        if (isOwner) saveSharedFoods([foodItem, ...sharedFoods]);
-        else savePersonalFoods([foodItem, ...personalFoods]);
-        setNewFood({ name: '', cals: '', pro: '', fat: '', carb: '' });
       };
 
       const updateFoodBase = (id) => {
@@ -1795,16 +1768,44 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
       });
 
       const saveAiGeneratedFood = (food) => {
-        if (!food) return;
+        if (!food) return Promise.resolve();
+        const existing = foods.find((item) => item.normalizedName === food.normalizedName || item.name === food.name);
+        if (existing) return Promise.resolve(existing);
         if (isOwner) saveSharedFoods([food, ...sharedFoods]);
         else savePersonalFoods([food, ...personalFoods]);
+        return Promise.resolve(food);
       };
-      const moveMealAiItemToManualEntry = ({ name, grams }) => {
-        setFoodSearch(name || '');
-        setSelectedFoodId('');
-        setGramsInput(grams || '');
-        setShowMealAiModal(false);
-        setTimeout(() => foodSearchRef.current?.focus(), 0);
+
+      const openFoodProductInBase = (food) => {
+        if (!food) return;
+        setEditingFoodId(food.id);
+        setEditValue({
+          name: food.name,
+          calories: food.calories,
+          protein: food.protein,
+          fats: food.fats,
+          carbs: food.carbs,
+        });
+        setBaseSearch(food.name);
+      };
+
+      const goToFoodBaseFromDiary = (query) => {
+        const trimmed = String(query || '').trim();
+        setBaseSearch(trimmed);
+        setFoodAddInitialName(trimmed);
+        setActiveTab('directory');
+      };
+
+      const openFoodAddModal = (initialName = '') => {
+        setFoodAddInitialName(String(initialName || '').trim());
+        setShowFoodAddModal(true);
+      };
+
+      const addSavedFoodToDiary = (food) => {
+        if (!food) return;
+        setActiveTab('diary');
+        setFoodSearch(food.name);
+        selectFood(food.id);
       };
 
       // Избранное — в порядке favoriteIds (порядок задаёт сам пользователь).
@@ -1825,6 +1826,10 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
       const allMealFoods = useMemo(
         () => foodSearch.trim() ? searchFoodsByName(regularFoods, foodSearch, 200) : regularFoods,
         [regularFoods, foodSearch],
+      );
+      const filteredBaseFoods = useMemo(
+        () => baseSearch.trim() ? searchFoodsByName(sortedFoods, baseSearch, 400) : sortedFoods,
+        [sortedFoods, baseSearch],
       );
       const selectedFood = selectedFoodId ? foods.find(f => f.id === selectedFoodId) : null;
       const sortedBodyEntries = [...bodyEntries].sort((a, b) => b.date.localeCompare(a.date));
@@ -2252,7 +2257,7 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
                   resetWater={resetWater}
                   mealFormRef={mealFormRef}
                   handleAddLog={handleAddLog}
-                  setShowMealAiModal={setShowMealAiModal}
+                  onGoToFoodBase={goToFoodBaseFromDiary}
                   foodSearchRef={foodSearchRef}
                   foodSearch={foodSearch}
                   setFoodSearch={setFoodSearch}
@@ -2408,15 +2413,15 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
                   handleDraftGoalChange={handleDraftGoalChange}
                   hasUnsavedGoals={hasUnsavedGoals}
                   onOpenGoalModal={() => setShowGoalModal(true)}
-                  handleAddFood={handleAddFood}
-                  newFood={newFood}
-                  setNewFood={setNewFood}
+                  onOpenAddProduct={openFoodAddModal}
+                  baseSearch={baseSearch}
+                  setBaseSearch={setBaseSearch}
                   downloadBackup={downloadBackup}
                   importBackup={importBackup}
                   importLegacy={importLegacy}
                   foods={foods}
                   favoriteFoods={favoriteFoods}
-                  sortedFoods={sortedFoods}
+                  sortedFoods={filteredBaseFoods}
                   isReorderingFavorites={isReorderingFavorites}
                   setIsReorderingFavorites={setIsReorderingFavorites}
                   draggingFavoriteId={draggingFavoriteId}
@@ -2710,13 +2715,14 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
             )}
             </AnimatePresence>
 
-            <FoodRecognitionModal
-              open={showMealAiModal}
-              onClose={() => setShowMealAiModal(false)}
+            <FoodAddProductModal
+              open={showFoodAddModal}
+              initialName={foodAddInitialName}
+              onClose={() => { setShowFoodAddModal(false); setFoodAddInitialName(''); }}
               foods={foods}
               onSaveFood={saveAiGeneratedFood}
-              onAddToDiary={addFoodLog}
-              onManualEntry={moveMealAiItemToManualEntry}
+              onOpenProduct={openFoodProductInBase}
+              onAddToDiary={addSavedFoodToDiary}
             />
 
 

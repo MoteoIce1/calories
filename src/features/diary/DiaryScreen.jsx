@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { IconCalc, IconChevronLeft, IconChevronRight, IconSteps, IconRefresh, IconDumbbell, IconCheck, IconDrop, IconMinus, IconPlus, IconSparkles, IconSearch, IconClose, IconTrash } from '../../components/Icons.jsx';
+import { IconCalc, IconChevronLeft, IconChevronRight, IconSteps, IconRefresh, IconDumbbell, IconCheck, IconDrop, IconMinus, IconPlus, IconSearch, IconClose, IconTrash } from '../../components/Icons.jsx';
 import AnimatedNumber from '../../components/AnimatedNumber.jsx';
 import { MacroBar } from '../../components/Charts.jsx';
 import { getLocalDateString, displayDate } from '../../utils/date.js';
@@ -19,7 +19,7 @@ export default function DiaryScreen(props) {
     dailyMetrics, handleUpdateMetrics,
     todayWater, waterGoal, waterProgress, addWater, customWater, setCustomWater, addCustomWater, resetWater,
     mealFormRef, handleAddLog,
-    setShowMealAiModal,
+    onGoToFoodBase,
     foodSearchRef, foodSearch, setFoodSearch,
     favScrollRef, favoriteMealFoods, selectedFoodId, clearFoodSelection, selectFood,
     mealListScrollRef, allMealFoods,
@@ -239,19 +239,7 @@ export default function DiaryScreen(props) {
       <form ref={mealFormRef} onSubmit={handleAddLog} className="meal-composer section-card card-enter bg-[#18181b] rounded-3xl p-4 border border-zinc-800/50 flex flex-col gap-3">
         <h2 className="section-legend text-[10px] text-zinc-500 uppercase font-bold tracking-widest">Добавить приём пищи</h2>
 
-        <div className="flex items-center justify-between gap-3" onClick={(e) => e.stopPropagation()}>
-          <p className="min-w-0 text-[10px] text-zinc-500 leading-tight">Введите список продуктов — ИИ разберёт названия и количество.</p>
-          <button
-            type="button"
-            onClick={() => setShowMealAiModal(true)}
-            className="btn-active shrink-0 flex items-center gap-1 bg-indigo-600/15 text-indigo-300 border border-indigo-600/30 rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all"
-          >
-            <IconSparkles className="w-3.5 h-3.5" />
-            Распознать
-          </button>
-        </div>
-
-        {/* Поиск — первая точка выбора продукта. */}
+        <p className="text-[10px] text-zinc-500 leading-tight">Найдите продукт в базе, укажите вес порции и добавьте запись в дневник.</p>
         <div className="relative" onClick={(e) => e.stopPropagation()}>
           <label htmlFor="food-search" className="sr-only">Поиск продукта</label>
           <IconSearch aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500" />
@@ -297,6 +285,22 @@ export default function DiaryScreen(props) {
             </div>
           </div>
         </div>
+
+        {foodSearch.trim() && favoriteMealFoods.length === 0 && allMealFoods.length === 0 && (
+          <div className="rounded-2xl border border-zinc-800/50 bg-zinc-900/40 p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-bold text-zinc-200">Продукт не найден</p>
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              Если нужного продукта нет, добавьте его в Базу. ИИ поможет рассчитать примерное КБЖУ на 100 г.
+            </p>
+            <button
+              type="button"
+              onClick={() => onGoToFoodBase?.(foodSearch.trim())}
+              className="btn-active w-full bg-emerald-600 text-white rounded-xl p-3 text-xs font-bold uppercase tracking-widest transition-all"
+            >
+              Перейти в Базу
+            </button>
+          </div>
+        )}
 
         {/* Вес и добавление — после поиска и списка продуктов. */}
         <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>

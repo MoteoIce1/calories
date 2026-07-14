@@ -1,4 +1,4 @@
-import { IconTarget, IconSave, IconDownload, IconCheck, IconStar, IconTrash } from '../../components/Icons.jsx';
+import { IconTarget, IconSave, IconDownload, IconCheck, IconStar, IconTrash, IconSearch, IconClose, IconPlus } from '../../components/Icons.jsx';
 
 // Экран «База»: цели КБЖУ, добавление продукта, база продуктов с избранным и редактированием.
 export default function FoodBaseScreen({
@@ -9,9 +9,9 @@ export default function FoodBaseScreen({
   handleDraftGoalChange,
   hasUnsavedGoals,
   onOpenGoalModal,
-  handleAddFood,
-  newFood,
-  setNewFood,
+  onOpenAddProduct,
+  baseSearch,
+  setBaseSearch,
   downloadBackup,
   importBackup,
   importLegacy,
@@ -52,17 +52,19 @@ export default function FoodBaseScreen({
         {hasUnsavedGoals && <button onClick={onOpenGoalModal} className="btn-active w-full bg-indigo-600 text-white p-4 rounded-xl font-bold mt-4 shadow-lg shadow-indigo-900/30 transition-all flex items-center justify-center gap-2"><IconSave className="w-5 h-5" />Сохранить цели</button>}
       </div>
 
-      <form onSubmit={handleAddFood} className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
-        <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Добавить продукт (на 100г)</h2>
-        <input type="text" placeholder="Название" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.name} onChange={(e) => setNewFood({...newFood, name: e.target.value})} required />
-        <div className="grid grid-cols-2 gap-3">
-          <input type="number" step="0.1" placeholder="Ккал" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.cals} onChange={(e) => setNewFood({...newFood, cals: e.target.value})} onFocus={(e) => e.target.select()} required />
-          <input type="number" step="0.1" placeholder="Б (г)" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.pro} onChange={(e) => setNewFood({...newFood, pro: e.target.value})} onFocus={(e) => e.target.select()} required />
-          <input type="number" step="0.1" placeholder="Ж (г)" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.fat} onChange={(e) => setNewFood({...newFood, fat: e.target.value})} onFocus={(e) => e.target.select()} required />
-          <input type="number" step="0.1" placeholder="У (г)" className="w-full bg-[#27272a] rounded-xl p-3 outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={newFood.carb} onChange={(e) => setNewFood({...newFood, carb: e.target.value})} onFocus={(e) => e.target.select()} required />
-        </div>
-        <button type="submit" className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold shadow-lg shadow-emerald-900/20 transition-all">Добавить в базу</button>
-      </form>
+      <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-4">
+        <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Добавить продукт</h2>
+        <p className="text-[11px] text-zinc-500 leading-relaxed">
+          Новый продукт создаётся только здесь. Сначала проверим базу, при необходимости ИИ рассчитает КБЖУ на 100 г.
+        </p>
+        <button
+          type="button"
+          onClick={() => onOpenAddProduct?.(baseSearch.trim())}
+          className="btn-active w-full bg-emerald-600 text-white rounded-xl p-4 font-bold shadow-lg shadow-emerald-900/20 transition-all flex items-center justify-center gap-2"
+        >
+          <IconPlus className="w-5 h-5" /> Добавить продукт
+        </button>
+      </div>
 
       {false && (
       <div className="card-enter bg-[#18181b] rounded-3xl p-5 border border-zinc-800/50 space-y-3">
@@ -79,11 +81,25 @@ export default function FoodBaseScreen({
 
       <div className="space-y-2">
         <p className="text-[11px] text-zinc-500 leading-relaxed px-1 mb-1">
-          Отмечайте часто используемые продукты звёздочкой: они появятся в «Избранном» для быстрого выбора в дневнике.<br />
-          ➕ Не нашли нужный продукт? Добавьте свой с КБЖУ через форму выше.
+          Отмечайте часто используемые продукты звёздочкой: они появятся в «Избранном» для быстрого выбора в дневнике.
         </p>
+        <div className="relative px-1 mb-2">
+          <IconSearch aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500" />
+          <input
+            type="search"
+            placeholder="Поиск в базе"
+            className="w-full bg-[#27272a] rounded-2xl py-3 pl-11 pr-14 outline-none text-zinc-200 text-sm border border-zinc-700/30 focus:border-emerald-500"
+            value={baseSearch}
+            onChange={(e) => setBaseSearch(e.target.value)}
+          />
+          {baseSearch && (
+            <button type="button" onClick={() => setBaseSearch('')} className="absolute right-1 top-1/2 -translate-y-1/2 w-11 h-11 bg-transparent text-zinc-400 flex items-center justify-center active:text-zinc-200" title="Очистить поиск">
+              <IconClose className="w-5 h-5" />
+            </button>
+          )}
+        </div>
         <div className="flex items-center justify-between gap-3 px-1 mb-2">
-          <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">База продуктов ({foods.length})</h2>
+          <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">База продуктов ({sortedFoods.length})</h2>
           {favoriteFoods.length > 1 && (
             <button type="button" onClick={() => { setIsReorderingFavorites(!isReorderingFavorites); setDraggingFavoriteId(null); }} className={`btn-active px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all ${isReorderingFavorites ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-zinc-900 text-zinc-400 border-zinc-800'}`}>
               {isReorderingFavorites ? 'Готово' : 'Изменить порядок'}

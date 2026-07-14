@@ -16,6 +16,7 @@ export const FLOW_STEP = {
   SAVING_DIARY: 'saving_diary',
   SUCCESS: 'success',
   ERROR: 'error',
+  NOT_IN_BASE: 'not_in_base',
 };
 
 export function createRecognitionItem(parsedItem, index) {
