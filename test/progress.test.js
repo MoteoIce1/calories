@@ -11,7 +11,7 @@ import {
 test('progress periods use the required order and do not include 15 days', () => {
   assert.deepEqual(
     progressPeriods.map((period) => period.label),
-    ['1 неделя', '2 недели', '3 недели', '30 дней', '45 дней', '60 дней', '90 дней', '180 дней', 'Весь период'],
+    ['Весь период', '1 неделя', '2 недели', '3 недели', '30 дней', '45 дней', '60 дней', '90 дней', '180 дней'],
   );
   assert.equal(progressPeriods.some((period) => period.days === 15 || period.key === '15d'), false);
 });

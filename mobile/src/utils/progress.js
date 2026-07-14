@@ -1,6 +1,7 @@
 import { getLocalDateString } from './date.js';
 
 const progressPeriods = [
+  { key: 'all', label: 'Весь период', days: null },
   { key: '7d', label: '1 неделя', days: 7 },
   { key: '14d', label: '2 недели', days: 14 },
   { key: '21d', label: '3 недели', days: 21 },
@@ -9,13 +10,12 @@ const progressPeriods = [
   { key: '60d', label: '60 дней', days: 60 },
   { key: '90d', label: '90 дней', days: 90 },
   { key: '180d', label: '180 дней', days: 180 },
-  { key: 'all', label: 'Весь период', days: null },
 ];
 
 const roundOne = (value) => Math.round(value * 10) / 10;
 
 const getProgressPeriod = (key) => (
-  progressPeriods.find((period) => period.key === key) || progressPeriods[progressPeriods.length - 1]
+  progressPeriods.find((period) => period.key === key) || progressPeriods[0]
 );
 
 const shiftDateString = (dateString, diffDays) => {

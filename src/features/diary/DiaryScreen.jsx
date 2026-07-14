@@ -41,12 +41,12 @@ export default function DiaryScreen(props) {
         </div>
       )}
       <div className="date-toolbar card-enter flex items-center justify-between bg-[#18181b] rounded-2xl p-1 border border-zinc-800/50">
-        <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(getLocalDateString(d));}} className="btn-active p-3 text-zinc-400"><IconChevronLeft className="w-5 h-5" /></button>
+        <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()-1); setCurrentDate(getLocalDateString(d));}} className="btn-active flex h-12 w-12 shrink-0 items-center justify-center text-zinc-400" aria-label="Предыдущий день"><IconChevronLeft className="w-7 h-7" /></button>
         <div className="relative font-bold text-sm text-zinc-200 flex items-center justify-center cursor-pointer px-4">
           {displayDate(currentDate)}
           <input type="date" className="absolute opacity-0 top-0 left-0 w-full h-full cursor-pointer" value={currentDate} max={getLocalDateString(new Date())} onChange={(e) => { if(e.target.value) setCurrentDate(e.target.value); }} />
         </div>
-        <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()+1); setCurrentDate(getLocalDateString(d));}} disabled={currentDate === getLocalDateString(new Date())} className="btn-active p-3 text-zinc-400 disabled:opacity-20"><IconChevronRight className="w-5 h-5" /></button>
+        <button onClick={() => {const d = new Date(currentDate); d.setDate(d.getDate()+1); setCurrentDate(getLocalDateString(d));}} disabled={currentDate === getLocalDateString(new Date())} className="btn-active flex h-12 w-12 shrink-0 items-center justify-center text-zinc-400 disabled:opacity-20" aria-label="Следующий день"><IconChevronRight className="w-7 h-7" /></button>
       </div>
 
       {blocks.bodyMetrics && (

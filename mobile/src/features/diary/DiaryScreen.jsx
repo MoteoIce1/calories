@@ -108,8 +108,8 @@ export default function DiaryScreen() {
       <UpdateBanner visible={updateAvailable} applying={applying} onApply={applyUpdate} />
       {/* ── Дата ── */}
       <View style={styles.dateRow}>
-        <Pressable onPress={() => changeDate(-1)} hitSlop={10} style={styles.dateArrow}>
-          <Ionicons name="chevron-back" size={22} color={t.accent} />
+        <Pressable onPress={() => changeDate(-1)} hitSlop={10} style={styles.dateArrow} accessibilityLabel="Предыдущий день">
+          <Ionicons name="chevron-back" size={28} color={t.accent} />
         </Pressable>
         <Text style={[styles.dateText, { color: t.text }]}>{displayDate(currentDate)}</Text>
         <Pressable
@@ -118,7 +118,7 @@ export default function DiaryScreen() {
           style={[styles.dateArrow, currentDate >= todayStr && { opacity: 0.3 }]}
           disabled={currentDate >= todayStr}
         >
-          <Ionicons name="chevron-forward" size={22} color={t.accent} />
+          <Ionicons name="chevron-forward" size={28} color={t.accent} />
         </Pressable>
       </View>
 
@@ -367,7 +367,10 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   dateArrow: {
-    padding: 8,
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dateText: {
     fontSize: 17,
