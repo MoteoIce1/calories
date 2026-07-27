@@ -646,12 +646,16 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
                 if (date < todayStr && !updatedDailyGoals[date]) updatedDailyGoals[date] = { ...goals };
             });
         }
-        // База шагов живёт в двух местах: goals.baseSteps и profileData.usualSteps.
-        // Синхронизируем профиль при сохранении целей, иначе настройки показывают старое
-        // значение, а авто-режим КБЖУ перезаписывает цели обратно из profileData.usualSteps.
+        // База шагов и дефицит живут и в goals, и в profileData.
+        // Синхронизируем профиль при сохранении целей, иначе авто-режим КБЖУ
+        // перезаписывает цели обратно из устаревшего profileData.
         const nextUsualSteps = getUsualSteps(draftGoals.baseSteps);
-        const profileChanged = getUsualSteps(profileData.usualSteps) !== nextUsualSteps;
-        const nextProfile = profileChanged ? { ...profileData, usualSteps: nextUsualSteps } : profileData;
+        const nextDeficit = goalNum(draftGoals.deficit) ?? 0;
+        const profileChanged = getUsualSteps(profileData.usualSteps) !== nextUsualSteps
+          || Number(profileData.deficit) !== Number(nextDeficit);
+        const nextProfile = profileChanged
+          ? { ...profileData, usualSteps: nextUsualSteps, deficit: nextDeficit }
+          : profileData;
         if (profileDoc) profileDoc.set({ goals: draftGoals, dailyGoals: updatedDailyGoals, ...(profileChanged ? { profileData: nextProfile } : {}) }, { merge: true });
         setGoals(draftGoals); setDailyGoals(updatedDailyGoals);
         if (profileChanged) setProfileData(nextProfile);
@@ -661,8 +665,8 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
       const getEffectiveGoals = (date) => dailyGoals[date] || goals;
 
       const handleUpdateSteps = (val) => {
-        const num = parseInt(val);
-        const value = isNaN(num) ? '' : num;
+        const num = parseInt(val, 10);
+        const value = Number.isNaN(num) ? 0 : Math.max(0, num);
         setDailySteps({ ...dailySteps, [currentDate]: value });
         writeDay(currentDate, { steps: value });
       };

@@ -239,8 +239,9 @@ export function AppDataProvider({ children }) {
   const getEffectiveGoals = (date) => dailyGoals[date] || goals;
 
   const updateSteps = (date, val) => {
-    const num = parseInt(val, 10);
-    const value = Number.isNaN(num) ? '' : num;
+    const trimmed = String(val ?? '').trim();
+    const num = parseInt(trimmed, 10);
+    const value = trimmed === '' || Number.isNaN(num) ? 0 : Math.max(0, num);
     setDailySteps((prev) => ({ ...prev, [date]: value }));
     writeDay(date, { steps: value });
   };
@@ -473,8 +474,12 @@ export function AppDataProvider({ children }) {
 
   const saveGoals = (nextGoals, { resetDailyGoals = false } = {}) => {
     const nextUsualSteps = getUsualSteps(nextGoals.baseSteps);
-    const profileChanged = getUsualSteps(profileData.usualSteps) !== nextUsualSteps;
-    const nextProfile = profileChanged ? { ...profileData, usualSteps: nextUsualSteps } : profileData;
+    const nextDeficit = Number.isFinite(Number(nextGoals.deficit)) ? Number(nextGoals.deficit) : 0;
+    const profileChanged = getUsualSteps(profileData.usualSteps) !== nextUsualSteps
+      || Number(profileData.deficit) !== Number(nextDeficit);
+    const nextProfile = profileChanged
+      ? { ...profileData, usualSteps: nextUsualSteps, deficit: nextDeficit }
+      : profileData;
     const nextDailyGoals = resetDailyGoals ? {} : dailyGoals;
     saveProfilePatch({ goals: nextGoals, dailyGoals: nextDailyGoals, ...(profileChanged ? { profileData: nextProfile } : {}) });
     setGoals(nextGoals);

@@ -183,7 +183,10 @@ export default function DiaryScreen() {
               placeholder={`База: ${baseStepsGoal}`}
               onChangeText={setStepsInput}
               onBlur={() => {
-                if (stepsInput !== null) updateSteps(currentDate, stepsInput);
+                if (stepsInput !== null) {
+                  const trimmed = String(stepsInput).trim();
+                  updateSteps(currentDate, trimmed === '' ? 0 : stepsInput);
+                }
                 setStepsInput(null);
               }}
             />

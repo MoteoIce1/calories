@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IconCalc, IconChevronLeft, IconChevronRight, IconSteps, IconRefresh, IconDumbbell, IconCheck, IconDrop, IconMinus, IconPlus, IconSearch, IconClose, IconTrash } from '../../components/Icons.jsx';
 import AnimatedNumber from '../../components/AnimatedNumber.jsx';
@@ -26,6 +27,19 @@ export default function DiaryScreen(props) {
     gramsInputRef, gramsInput, setGramsInput,
     currentDayLogs, editingLogId, setEditingLogId, editValue, setEditValue, modifier, setModifier, submitEdit, foods, deleteLog,
   } = props;
+
+  // Черновик шагов: пустое поле остаётся пустым, пока не уйдём с инпута.
+  // На blur пустое значение сохраняется как 0.
+  const [stepsDraft, setStepsDraft] = useState(null);
+  useEffect(() => { setStepsDraft(null); }, [currentDate]);
+
+  const commitStepsDraft = () => {
+    if (stepsDraft === null) return;
+    const trimmed = String(stepsDraft).trim();
+    const num = parseInt(trimmed, 10);
+    handleUpdateSteps(trimmed === '' || Number.isNaN(num) ? 0 : num);
+    setStepsDraft(null);
+  };
 
   return (
     <div className="space-y-4">
@@ -112,7 +126,19 @@ export default function DiaryScreen(props) {
             <button type="button" onClick={refreshCurrentDayVitals} disabled={isRefreshingDay || !uid} className="btn-active w-10 h-10 rounded-xl bg-zinc-800 text-zinc-300 flex items-center justify-center border border-zinc-700/30 disabled:opacity-40 transition-all" title="Обновить шаги">
               <IconRefresh className={`w-5 h-5 ${isRefreshingDay ? 'animate-spin' : ''}`} />
             </button>
-            <input type="number" className="step-input w-24 bg-zinc-800 rounded-xl p-2 text-center text-sm font-bold outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors" value={todaySteps} onChange={(e) => handleUpdateSteps(e.target.value)} onFocus={(e) => e.target.select()} />
+            <input
+              type="number"
+              inputMode="numeric"
+              className="step-input w-24 bg-zinc-800 rounded-xl p-2 text-center text-sm font-bold outline-none text-zinc-200 border border-zinc-700/30 focus:border-emerald-500 transition-colors"
+              value={stepsDraft !== null ? stepsDraft : todaySteps}
+              onChange={(e) => setStepsDraft(e.target.value)}
+              onFocus={(e) => {
+                setStepsDraft(String(todaySteps ?? ''));
+                e.target.select();
+              }}
+              onBlur={commitStepsDraft}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+            />
           </div>
         </div>
         )}
