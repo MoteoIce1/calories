@@ -666,7 +666,8 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
 
       const handleUpdateSteps = (val) => {
         const num = parseInt(val, 10);
-        const value = Number.isNaN(num) ? 0 : Math.max(0, num);
+        if (Number.isNaN(num)) return;
+        const value = Math.max(0, num);
         setDailySteps({ ...dailySteps, [currentDate]: value });
         writeDay(currentDate, { steps: value });
       };

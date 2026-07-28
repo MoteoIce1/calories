@@ -29,7 +29,7 @@ export default function DiaryScreen(props) {
   } = props;
 
   // Черновик шагов: пустое поле остаётся пустым, пока не уйдём с инпута.
-  // На blur пустое значение сохраняется как 0.
+  // На blur пустое значение откатывается к данным из БД или к базе шагов.
   const [stepsDraft, setStepsDraft] = useState(null);
   useEffect(() => { setStepsDraft(null); }, [currentDate]);
 
@@ -37,7 +37,12 @@ export default function DiaryScreen(props) {
     if (stepsDraft === null) return;
     const trimmed = String(stepsDraft).trim();
     const num = parseInt(trimmed, 10);
-    handleUpdateSteps(trimmed === '' || Number.isNaN(num) ? 0 : num);
+    if (trimmed === '' || Number.isNaN(num)) {
+      // Пустое поле: возвращаем значение из БД или базу по умолчанию, ничего не пишем.
+      setStepsDraft(null);
+      return;
+    }
+    handleUpdateSteps(Math.max(0, num));
     setStepsDraft(null);
   };
 

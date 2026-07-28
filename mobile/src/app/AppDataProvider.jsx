@@ -239,9 +239,9 @@ export function AppDataProvider({ children }) {
   const getEffectiveGoals = (date) => dailyGoals[date] || goals;
 
   const updateSteps = (date, val) => {
-    const trimmed = String(val ?? '').trim();
-    const num = parseInt(trimmed, 10);
-    const value = trimmed === '' || Number.isNaN(num) ? 0 : Math.max(0, num);
+    const num = parseInt(val, 10);
+    if (Number.isNaN(num)) return;
+    const value = Math.max(0, num);
     setDailySteps((prev) => ({ ...prev, [date]: value }));
     writeDay(date, { steps: value });
   };

@@ -179,13 +179,17 @@ export default function DiaryScreen() {
             <Input
               style={{ flex: 1 }}
               keyboardType="number-pad"
-              value={stepsInput !== null ? stepsInput : String(dailySteps[currentDate] ?? '')}
+              value={stepsInput !== null ? stepsInput : String(dailySteps[currentDate] ?? baseStepsGoal)}
               placeholder={`База: ${baseStepsGoal}`}
               onChangeText={setStepsInput}
               onBlur={() => {
                 if (stepsInput !== null) {
                   const trimmed = String(stepsInput).trim();
-                  updateSteps(currentDate, trimmed === '' ? 0 : stepsInput);
+                  const num = parseInt(trimmed, 10);
+                  // Пустое поле: возвращаем значение из БД или базу по умолчанию.
+                  if (trimmed !== '' && !Number.isNaN(num)) {
+                    updateSteps(currentDate, Math.max(0, num));
+                  }
                 }
                 setStepsInput(null);
               }}
