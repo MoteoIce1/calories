@@ -107,7 +107,7 @@ export default function ExportReport({
           <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 5px 0', color: '#1e40af' }}>Дисциплина и прогноз:</h2>
           <p><strong>Дней с записями:</strong> {filteredDatesForPdf.length} из {rangeDayCount} ({adherence}%)</p>
           <p><strong>Текущий стрик:</strong> {streak} дн. подряд</p>
-          {latestWeekTrend && <p><strong>Тренд веса за последнюю неделю:</strong> {latestWeekTrend} ({latestWeek.dW > 0 ? '+' : ''}{latestWeek.dW} кг к прошлой неделе)</p>}
+          {latestWeekTrend && latestWeek && <p><strong>Тренд веса за последнюю неделю:</strong> {latestWeekTrend} ({latestWeek.dW > 0 ? '+' : ''}{latestWeek.dW} кг к прошлой неделе)</p>}
           {projectionDate
             ? <p><strong>Прогноз до {targetFat}% жира:</strong> ~{projectionDate} (≈{Math.round(daysToGoal / 7)} нед.) <span style={{ color: '#555' }}>— при темпе {fatWeeklyRate} %/нед</span></p>
             : (latestSmoothedFat !== null && latestSmoothedFat <= targetFat
