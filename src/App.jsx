@@ -22,17 +22,18 @@ import Header from './components/layout/Header.jsx';
 import BottomNav from './components/layout/BottomNav.jsx';
 import DrawerMenu from './components/layout/DrawerMenu.jsx';
 import DiaryScreen from './features/diary/DiaryScreen.jsx';
+import ExportReport from './features/export/ExportReport.jsx';
 import UpdateCallout from './features/updates/UpdateCallout.jsx';
 import { getBodyPhotoSrc, getBodyPhotoLabel, countBodyPhotos } from './features/progress/bodyPhotos.js';
 
 // Дневник — стартовый экран, грузится сразу; остальные экраны подтягиваются лениво,
-// чтобы уменьшить первичный бандл.
+// чтобы уменьшить первичный бандл. PDF-отчёт тоже eager: кнопка печати вне Suspense,
+// иначе window.print часто срабатывает на пустом fallback.
 const SettingsScreen = lazy(() => import('./features/settings/SettingsScreen.jsx'));
 const ProfileScreen = lazy(() => import('./features/profile/ProfileScreen.jsx'));
 const SocialScreen = lazy(() => import('./features/friends/SocialScreen.jsx'));
 const ProgressScreen = lazy(() => import('./features/progress/ProgressScreen.jsx'));
 const FoodBaseScreen = lazy(() => import('./features/food/FoodBaseScreen.jsx'));
-const ExportReport = lazy(() => import('./features/export/ExportReport.jsx'));
 const SupportScreen = lazy(() => import('./features/settings/SupportScreen.jsx'));
 const AboutScreen = lazy(() => import('./features/updates/AboutScreen.jsx'));
 
@@ -580,22 +581,33 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
         setShowReportView(true);
       };
 
-      const handlePrintClick = () => {
-        setIsPrinting(true); 
-        
-        const onAfterPrint = () => {
-           setIsPrinting(false);
-           window.removeEventListener('afterprint', onAfterPrint);
-        };
-        window.addEventListener('afterprint', onAfterPrint);
+      const handlePrintClick = async () => {
+        if (isPrinting) return;
+        const reportEl = document.querySelector('.report-modern');
+        if (!reportEl) {
+          notify('Отчёт ещё не готов — подождите секунду и попробуйте снова.');
+          return;
+        }
+        setIsPrinting(true);
 
-        setTimeout(() => {
+        const finish = () => {
+          setIsPrinting(false);
+          window.removeEventListener('afterprint', finish);
+        };
+        window.addEventListener('afterprint', finish);
+
+        try {
+          if (document.fonts?.ready) await document.fonts.ready;
+          // Два кадра: layout отчёта успевает отрисоваться до диалога печати.
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
           window.print();
-          setTimeout(() => {
-             setIsPrinting(false);
-             window.removeEventListener('afterprint', onAfterPrint);
-          }, 45000); 
-        }, 300);
+        } catch (err) {
+          finish();
+          notify('Не удалось открыть печать: ' + (err.message || err));
+          return;
+        }
+        // Fallback, если afterprint не придёт (некоторые WebView/PWA).
+        setTimeout(finish, 45000);
       };
 
       // Дефицит ↔ цель калорий ↔ норма связаны: цель = норма − дефицит.
@@ -670,6 +682,18 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
         const value = Math.max(0, num);
         setDailySteps({ ...dailySteps, [currentDate]: value });
         writeDay(currentDate, { steps: value });
+      };
+
+      // Пустое поле шагов = сброс дневного оверрайда к базе usualSteps.
+      // Не пишем 0: иначе 0 остаётся в Firestore и подменяет дефолт.
+      const clearDaySteps = (date = currentDate) => {
+        setDailySteps((prev) => {
+          if (prev[date] === undefined) return prev;
+          const next = { ...prev };
+          delete next[date];
+          return next;
+        });
+        if (uid) writeDay(date, { steps: firebase.firestore.FieldValue.delete() });
       };
 
       const handleUpdateMetrics = (field, val) => {
@@ -2186,9 +2210,7 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
                  {isPrinting ? 'Обработка...' : <><IconPrinter className="w-4 h-4" /> Сохранить PDF</>}
                </button>
             </div>
-            <Suspense fallback={<ScreenLoader />}>
             <ExportReport {...{ exportStart, exportEnd, allExportDates, totalPeriodCals, totalPeriodBurned, totalPeriodExtraActivityCalories, totalPeriodSteps, avgPeriodSteps, periodDefText, avgDeficit, filteredDatesForPdf, rangeDayCount, adherence, streak, latestWeekTrend, latestWeek, projectionDate, targetFat, daysToGoal, fatWeeklyRate, latestSmoothedFat, projectionConfidence, projectionConfidenceText, dayStats, bestDeficitDays, worstBalanceDays, highStepAvgDeficit, lowStepAvgDeficit, stepDeficitDelta, workoutDays, restDays, workoutAvgDeficit, workoutAvgCals, workoutAvgSteps, restAvgDeficit, restAvgCals, restAvgSteps, tdeeReal, weeklyRate, modelTdee, tdeeDiff, daysBetweenWeigh, workoutCount, weeklySummary, hasBodyData, wStart, wEnd, fStart, fEnd, lStart, lEnd, fmStart, fmEnd, bodyMeasureSummary, bodyMeasureSeries, bodyMeasureDates, datesWithMetrics, allWeight, allFat, allLean, allFatMass, chartDates, allSteps, stepChartLabels, getEffectiveGoals, dailyLogs, dailyMetrics, dailySteps, dailyWater, dailyExtraActivities, dailyWorkouts, foods }} />
-            </Suspense>
           </div>
         );
       }
@@ -2235,6 +2257,7 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
                   isRefreshingDay={isRefreshingDay}
                   uid={uid}
                   handleUpdateSteps={handleUpdateSteps}
+                  clearDaySteps={clearDaySteps}
                   toggleWorkout={toggleWorkout}
                   dailyWorkouts={dailyWorkouts}
                   extraActivityCalories={extraActivityCalories}

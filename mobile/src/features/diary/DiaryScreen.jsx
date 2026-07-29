@@ -28,7 +28,7 @@ export default function DiaryScreen() {
   const {
     foods, settings, getEffectiveGoals,
     dailyLogs, dailySteps, dailyMetrics, dailyWorkouts, dailyWater, dailyExtraActivities,
-    updateSteps, updateMetrics, addFoodLog, updateLogWeight, deleteLog, copyPreviousDay,
+    updateSteps, clearDaySteps, updateMetrics, addFoodLog, updateLogWeight, deleteLog, copyPreviousDay,
     toggleWorkout, addWater, resetWater, removeExtraActivity, confirmDialog,
   } = useAppData();
 
@@ -186,8 +186,9 @@ export default function DiaryScreen() {
                 if (stepsInput !== null) {
                   const trimmed = String(stepsInput).trim();
                   const num = parseInt(trimmed, 10);
-                  // Пустое поле: возвращаем значение из БД или базу по умолчанию.
-                  if (trimmed !== '' && !Number.isNaN(num)) {
+                  if (trimmed === '' || Number.isNaN(num)) {
+                    clearDaySteps(currentDate);
+                  } else {
                     updateSteps(currentDate, Math.max(0, num));
                   }
                 }
