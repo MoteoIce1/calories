@@ -10,7 +10,6 @@ import {
   onSnapshot,
   setDoc,
   deleteDoc,
-  deleteField,
   getDocs,
   writeBatch,
   query,
@@ -245,17 +244,6 @@ export function AppDataProvider({ children }) {
     const value = Math.max(0, num);
     setDailySteps((prev) => ({ ...prev, [date]: value }));
     writeDay(date, { steps: value });
-  };
-
-  // Пустое поле: удаляем оверрайд дня, не пишем 0 (иначе 0 подменяет базу).
-  const clearDaySteps = (date) => {
-    setDailySteps((prev) => {
-      if (prev[date] === undefined) return prev;
-      const next = { ...prev };
-      delete next[date];
-      return next;
-    });
-    writeDay(date, { steps: deleteField() });
   };
 
   const updateMetrics = (date, field, val) => {
@@ -826,7 +814,7 @@ export function AppDataProvider({ children }) {
     acceptedFriends, incomingRequests, outgoingRequests, friendName, otherUid, friendMetricNow,
     myFriendCode, myDisplayName, myWeightProgressHistory,
     // действия
-    writeDay, updateSteps, clearDaySteps, updateMetrics, addFoodLog, updateLogWeight, deleteLog, copyPreviousDay,
+    writeDay, updateSteps, updateMetrics, addFoodLog, updateLogWeight, deleteLog, copyPreviousDay,
     addFood, saveAiGeneratedFood, updateFoodBase, deleteFood, toggleFavorite, moveFavorite,
     toggleWorkout, addWater, resetWater, saveExtraActivity, removeExtraActivity,
     saveProfileData, saveSettings, setTheme, setFontScale, toggleBlock, saveGoals,

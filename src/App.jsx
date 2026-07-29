@@ -589,25 +589,31 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
           return;
         }
         setIsPrinting(true);
-
-        const finish = () => {
-          setIsPrinting(false);
-          window.removeEventListener('afterprint', finish);
-        };
-        window.addEventListener('afterprint', finish);
-
         try {
-          if (document.fonts?.ready) await document.fonts.ready;
-          // Два кадра: layout отчёта успевает отрисоваться до диалога печати.
-          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-          window.print();
+          // window.print в PWA/iOS часто молча ничего не делает и оставляет «Обработка…».
+          // Скачиваем PDF напрямую из DOM отчёта.
+          const html2pdf = (await import('html2pdf.js')).default;
+          await html2pdf()
+            .set({
+              margin: [10, 10, 10, 10],
+              filename: `diet_${exportStart}_${exportEnd}.pdf`,
+              image: { type: 'jpeg', quality: 0.92 },
+              html2canvas: { scale: 2, useCORS: true, logging: false, windowWidth: 920 },
+              jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+              pagebreak: { mode: ['css', 'legacy'] },
+            })
+            .from(reportEl)
+            .save();
         } catch (err) {
-          finish();
-          notify('Не удалось открыть печать: ' + (err.message || err));
-          return;
+          notify('Не удалось сохранить PDF: ' + (err.message || err));
+        } finally {
+          setIsPrinting(false);
         }
-        // Fallback, если afterprint не придёт (некоторые WebView/PWA).
-        setTimeout(finish, 45000);
+      };
+
+      const closeReportView = () => {
+        setIsPrinting(false);
+        setShowReportView(false);
       };
 
       // Дефицит ↔ цель калорий ↔ норма связаны: цель = норма − дефицит.
@@ -682,18 +688,6 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
         const value = Math.max(0, num);
         setDailySteps({ ...dailySteps, [currentDate]: value });
         writeDay(currentDate, { steps: value });
-      };
-
-      // Пустое поле шагов = сброс дневного оверрайда к базе usualSteps.
-      // Не пишем 0: иначе 0 остаётся в Firestore и подменяет дефолт.
-      const clearDaySteps = (date = currentDate) => {
-        setDailySteps((prev) => {
-          if (prev[date] === undefined) return prev;
-          const next = { ...prev };
-          delete next[date];
-          return next;
-        });
-        if (uid) writeDay(date, { steps: firebase.firestore.FieldValue.delete() });
       };
 
       const handleUpdateMetrics = (field, val) => {
@@ -2189,33 +2183,8 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
         );
       }
 
-
-      if (showReportView) {
-        return (
-          <div className="report-view" style={{ background: 'var(--bg-deep)', color: 'var(--text)', height: '100lvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '8px', paddingTop: 'max(10px, calc(env(safe-area-inset-top) + 4px))', position: 'relative', zIndex: 2 }}>
-            <div className="print-hide" style={{ position: 'sticky', top: '6px', zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '22px', padding: '10px', background: 'var(--header-bg)', border: '1px solid var(--line)', borderRadius: '14px', boxShadow: 'none', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
-               <button 
-                 onClick={() => { setIsPrinting(false); setShowReportView(false); }} 
-                 className="btn-active" 
-                 style={{ padding: '12px 18px', background: 'var(--surface-strong)', borderRadius: '12px', fontWeight: 'bold', color: 'var(--text)', border: '1px solid var(--line-strong)', fontSize: '14px', transition: 'all 0.2s', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-               >
-                 <IconArrowLeft className="w-4 h-4" /> Назад
-               </button>
-               <button 
-                 onClick={handlePrintClick} 
-                 disabled={isPrinting}
-                 className="btn-active" 
-                 style={{ padding: '12px 18px', background: isPrinting ? 'var(--accent-strong)' : 'var(--accent)', borderRadius: '12px', fontWeight: 'bold', color: 'var(--accent-ink)', border: 'none', fontSize: '14px', boxShadow: 'none', transition: 'all 0.2s', opacity: isPrinting ? 0.8 : 1, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-               >
-                 {isPrinting ? 'Обработка...' : <><IconPrinter className="w-4 h-4" /> Сохранить PDF</>}
-               </button>
-            </div>
-            <ExportReport {...{ exportStart, exportEnd, allExportDates, totalPeriodCals, totalPeriodBurned, totalPeriodExtraActivityCalories, totalPeriodSteps, avgPeriodSteps, periodDefText, avgDeficit, filteredDatesForPdf, rangeDayCount, adherence, streak, latestWeekTrend, latestWeek, projectionDate, targetFat, daysToGoal, fatWeeklyRate, latestSmoothedFat, projectionConfidence, projectionConfidenceText, dayStats, bestDeficitDays, worstBalanceDays, highStepAvgDeficit, lowStepAvgDeficit, stepDeficitDelta, workoutDays, restDays, workoutAvgDeficit, workoutAvgCals, workoutAvgSteps, restAvgDeficit, restAvgCals, restAvgSteps, tdeeReal, weeklyRate, modelTdee, tdeeDiff, daysBetweenWeigh, workoutCount, weeklySummary, hasBodyData, wStart, wEnd, fStart, fEnd, lStart, lEnd, fmStart, fmEnd, bodyMeasureSummary, bodyMeasureSeries, bodyMeasureDates, datesWithMetrics, allWeight, allFat, allLean, allFatMass, chartDates, allSteps, stepChartLabels, getEffectiveGoals, dailyLogs, dailyMetrics, dailySteps, dailyWater, dailyExtraActivities, dailyWorkouts, foods }} />
-          </div>
-        );
-      }
-
       return (
+        <>
         <div
           className="app-shell flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-[#09090b] text-zinc-100 font-sans shadow-2xl border-x border-zinc-900 relative overflow-hidden"
           onFocusCapture={handleEditableFieldFocus}
@@ -2257,7 +2226,6 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
                   isRefreshingDay={isRefreshingDay}
                   uid={uid}
                   handleUpdateSteps={handleUpdateSteps}
-                  clearDaySteps={clearDaySteps}
                   toggleWorkout={toggleWorkout}
                   dailyWorkouts={dailyWorkouts}
                   extraActivityCalories={extraActivityCalories}
@@ -2798,6 +2766,45 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
             )}
             </AnimatePresence>
         </div>
+        {showReportView && (
+          <div
+            className="report-view"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 80,
+              background: 'var(--bg-deep)',
+              color: 'var(--text)',
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              padding: '8px',
+              paddingTop: 'max(10px, calc(env(safe-area-inset-top) + 4px))',
+              paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
+            }}
+          >
+            <div className="print-hide" style={{ position: 'sticky', top: '6px', zIndex: 5, display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '22px', padding: '10px', background: 'var(--header-bg)', border: '1px solid var(--line)', borderRadius: '14px', boxShadow: 'none', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+              <button
+                type="button"
+                onClick={closeReportView}
+                className="btn-active"
+                style={{ padding: '12px 18px', background: 'var(--surface-strong)', borderRadius: '12px', fontWeight: 'bold', color: 'var(--text)', border: '1px solid var(--line-strong)', fontSize: '14px', transition: 'all 0.2s', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              >
+                <IconArrowLeft className="w-4 h-4" /> Назад
+              </button>
+              <button
+                type="button"
+                onClick={handlePrintClick}
+                disabled={isPrinting}
+                className="btn-active"
+                style={{ padding: '12px 18px', background: isPrinting ? 'var(--accent-strong)' : 'var(--accent)', borderRadius: '12px', fontWeight: 'bold', color: 'var(--accent-ink)', border: 'none', fontSize: '14px', boxShadow: 'none', transition: 'all 0.2s', opacity: isPrinting ? 0.8 : 1, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              >
+                {isPrinting ? 'Сохраняю…' : <><IconPrinter className="w-4 h-4" /> Сохранить PDF</>}
+              </button>
+            </div>
+            <ExportReport {...{ exportStart, exportEnd, allExportDates, totalPeriodCals, totalPeriodBurned, totalPeriodExtraActivityCalories, totalPeriodSteps, avgPeriodSteps, periodDefText, avgDeficit, filteredDatesForPdf, rangeDayCount, adherence, streak, latestWeekTrend, latestWeek, projectionDate, targetFat, daysToGoal, fatWeeklyRate, latestSmoothedFat, projectionConfidence, projectionConfidenceText, dayStats, bestDeficitDays, worstBalanceDays, highStepAvgDeficit, lowStepAvgDeficit, stepDeficitDelta, workoutDays, restDays, workoutAvgDeficit, workoutAvgCals, workoutAvgSteps, restAvgDeficit, restAvgCals, restAvgSteps, tdeeReal, weeklyRate, modelTdee, tdeeDiff, daysBetweenWeigh, workoutCount, weeklySummary, hasBodyData, wStart, wEnd, fStart, fEnd, lStart, lEnd, fmStart, fmEnd, bodyMeasureSummary, bodyMeasureSeries, bodyMeasureDates, datesWithMetrics, allWeight, allFat, allLean, allFatMass, chartDates, allSteps, stepChartLabels, getEffectiveGoals, dailyLogs, dailyMetrics, dailySteps, dailyWater, dailyExtraActivities, dailyWorkouts, foods }} />
+          </div>
+        )}
+        </>
       );
     }
 

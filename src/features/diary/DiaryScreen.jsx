@@ -13,7 +13,7 @@ export default function DiaryScreen(props) {
     currentDate, setCurrentDate,
     blocks,
     totalCals, dailyAvailableCalories, calsColorClass, displayCals, calsLabel, isOver, progressCals,
-    todaySteps, stepCaloriesDelta, refreshCurrentDayVitals, isRefreshingDay, uid, handleUpdateSteps, clearDaySteps,
+    todaySteps, stepCaloriesDelta, refreshCurrentDayVitals, isRefreshingDay, uid, handleUpdateSteps,
     toggleWorkout, dailyWorkouts,
     extraActivityCalories, openExtraActivityModal, todayExtraActivities, removeExtraActivity,
     totalPro, totalFats, totalCarbs, activeGoals, dailyCarbGoal, proteinPerKg, proteinGoalPerKg,
@@ -29,7 +29,7 @@ export default function DiaryScreen(props) {
   } = props;
 
   // Черновик шагов: пустое поле остаётся пустым, пока не уйдём с инпута.
-  // Пустой blur сбрасывает дневной оверрайд (не пишет 0) — снова база usualSteps.
+  // Пустой blur ничего не пишет и возвращает ранее сохранённое значение (или базу).
   const [stepsDraft, setStepsDraft] = useState(null);
   useEffect(() => { setStepsDraft(null); }, [currentDate]);
 
@@ -38,7 +38,6 @@ export default function DiaryScreen(props) {
     const trimmed = String(stepsDraft).trim();
     const num = parseInt(trimmed, 10);
     if (trimmed === '' || Number.isNaN(num)) {
-      clearDaySteps();
       setStepsDraft(null);
       return;
     }
