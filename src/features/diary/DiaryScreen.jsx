@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IconCalc, IconChevronLeft, IconChevronRight, IconSteps, IconRefresh, IconDumbbell, IconCheck, IconDrop, IconMinus, IconPlus, IconSearch, IconClose, IconTrash, IconCopy } from '../../components/Icons.jsx';
+import { IconCalc, IconChevronLeft, IconChevronRight, IconSteps, IconRefresh, IconDumbbell, IconCheck, IconDrop, IconMinus, IconPlus, IconSearch, IconClose, IconTrash } from '../../components/Icons.jsx';
 import AnimatedNumber from '../../components/AnimatedNumber.jsx';
 import { MacroBar } from '../../components/Charts.jsx';
 import { getLocalDateString, displayDate } from '../../utils/date.js';
@@ -354,7 +354,7 @@ export default function DiaryScreen(props) {
                     <span className="text-blue-400 text-[9px] font-bold">У:{Math.round(log.totalCarbs || 0)}</span>
                 </div>
               </div>
-              <button onClick={() => repeatLog(log.id)} title="Повторить" aria-label={`Повторить ${foods.find(f => f.id === log.foodId)?.name || 'запись'}`} className="btn-active text-zinc-700 active:text-emerald-500 p-2 transition-colors"><IconCopy className="w-5 h-5" /></button>
+              <button onClick={() => repeatLog(log.id)} title="Повторить" aria-label={`Повторить ${foods.find(f => f.id === log.foodId)?.name || 'запись'}`} className="btn-active text-zinc-700 active:text-emerald-500 p-2 transition-colors"><IconRefresh className="w-5 h-5" /></button>
               <button onClick={() => deleteLog(log.id)} className="btn-active text-zinc-700 active:text-red-500 p-2 transition-colors"><IconTrash className="w-5 h-5" /></button>
             </div>
           </motion.div>

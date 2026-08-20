@@ -329,7 +329,7 @@ export default function DiaryScreen() {
                       <Ionicons name="pencil-outline" size={18} color={t.textMuted} />
                     </Pressable>
                     <Pressable onPress={() => repeatLog(currentDate, log.id)} hitSlop={8} style={{ padding: 6 }}>
-                      <Ionicons name="copy-outline" size={18} color={t.accent} />
+                      <Ionicons name="reload-outline" size={18} color={t.accent} />
                     </Pressable>
                     <Pressable onPress={() => confirmDeleteLog(log)} hitSlop={8} style={{ padding: 6 }}>
                       <Ionicons name="trash-outline" size={18} color={t.danger} />
