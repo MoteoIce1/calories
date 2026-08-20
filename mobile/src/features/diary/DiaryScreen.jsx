@@ -28,7 +28,7 @@ export default function DiaryScreen() {
   const {
     foods, settings, getEffectiveGoals,
     dailyLogs, dailySteps, dailyMetrics, dailyWorkouts, dailyWater, dailyExtraActivities,
-    updateSteps, updateMetrics, addFoodLog, updateLogWeight, deleteLog, copyPreviousDay,
+    updateSteps, updateMetrics, addFoodLog, updateLogWeight, deleteLog, repeatLog, copyPreviousDay,
     toggleWorkout, addWater, resetWater, removeExtraActivity, confirmDialog,
   } = useAppData();
 
@@ -327,6 +327,9 @@ export default function DiaryScreen() {
                       style={{ padding: 6 }}
                     >
                       <Ionicons name="pencil-outline" size={18} color={t.textMuted} />
+                    </Pressable>
+                    <Pressable onPress={() => repeatLog(currentDate, log.id)} hitSlop={8} style={{ padding: 6 }}>
+                      <Ionicons name="copy-outline" size={18} color={t.accent} />
                     </Pressable>
                     <Pressable onPress={() => confirmDeleteLog(log)} hitSlop={8} style={{ padding: 6 }}>
                       <Ionicons name="trash-outline" size={18} color={t.danger} />

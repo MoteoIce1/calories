@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IconCalc, IconChevronLeft, IconChevronRight, IconSteps, IconRefresh, IconDumbbell, IconCheck, IconDrop, IconMinus, IconPlus, IconSearch, IconClose, IconTrash } from '../../components/Icons.jsx';
+import { IconCalc, IconChevronLeft, IconChevronRight, IconSteps, IconRefresh, IconDumbbell, IconCheck, IconDrop, IconMinus, IconPlus, IconSearch, IconClose, IconTrash, IconCopy } from '../../components/Icons.jsx';
 import AnimatedNumber from '../../components/AnimatedNumber.jsx';
 import { MacroBar } from '../../components/Charts.jsx';
 import { getLocalDateString, displayDate } from '../../utils/date.js';
@@ -25,7 +25,7 @@ export default function DiaryScreen(props) {
     favScrollRef, favoriteMealFoods, selectedFoodId, clearFoodSelection, selectFood,
     mealListScrollRef, allMealFoods,
     gramsInputRef, gramsInput, setGramsInput,
-    currentDayLogs, editingLogId, setEditingLogId, editValue, setEditValue, modifier, setModifier, submitEdit, foods, deleteLog,
+    currentDayLogs, editingLogId, setEditingLogId, editValue, setEditValue, modifier, setModifier, submitEdit, foods, deleteLog, repeatLog,
   } = props;
 
   // Черновик шагов: пустое поле остаётся пустым, пока не уйдём с инпута.
@@ -345,7 +345,7 @@ export default function DiaryScreen(props) {
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               <div className="flex flex-col justify-center items-end text-right">
                 <span className="text-emerald-400 font-bold text-sm mb-1">{Math.round(log.totalCalories || 0)} ккал</span>
                 <div className="flex gap-1.5 opacity-80">
@@ -354,6 +354,7 @@ export default function DiaryScreen(props) {
                     <span className="text-blue-400 text-[9px] font-bold">У:{Math.round(log.totalCarbs || 0)}</span>
                 </div>
               </div>
+              <button onClick={() => repeatLog(log.id)} title="Повторить" aria-label={`Повторить ${foods.find(f => f.id === log.foodId)?.name || 'запись'}`} className="btn-active text-zinc-700 active:text-emerald-500 p-2 transition-colors"><IconCopy className="w-5 h-5" /></button>
               <button onClick={() => deleteLog(log.id)} className="btn-active text-zinc-700 active:text-red-500 p-2 transition-colors"><IconTrash className="w-5 h-5" /></button>
             </div>
           </motion.div>

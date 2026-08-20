@@ -823,6 +823,20 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
         writeDay(currentDate, { logs: updatedLogs[currentDate] });
       };
 
+      // Повтор записи: тот же продукт и вес уходят в конец списка за день.
+      const repeatLog = (id) => {
+        const dayLogs = dailyLogs[currentDate] || [];
+        const source = dayLogs.find(l => l.id === id);
+        if (!source) return;
+        // id — это и метка времени записи, поэтому при быстрых нажатиях сдвигаем его.
+        const usedIds = new Set(dayLogs.map(l => l.id));
+        let nextId = Date.now();
+        while (usedIds.has(nextId.toString())) nextId += 1;
+        const dayLogsWithCopy = [...dayLogs, { ...source, id: nextId.toString() }];
+        setDailyLogs({ ...dailyLogs, [currentDate]: dayLogsWithCopy });
+        writeDay(currentDate, { logs: dayLogsWithCopy });
+      };
+
       // Запись общей базы (только владелец) и личных продуктов пользователя — с видимой ошибкой при сбое.
       const saveSharedFoods = (list) => { setSharedFoods(list); sharedFoodsRef.set({ list }, { merge: true }).catch(err => notify('Не удалось сохранить общую базу: ' + err.message)); };
       const savePersonalFoods = (list) => { setPersonalFoods(list); if (profileDoc) profileDoc.set({ foods: list }, { merge: true }).catch(() => {}); };
@@ -2273,6 +2287,7 @@ import { IconClose, IconCheck, IconDownload, IconBowl, IconTimer, IconArrowLeft,
                   modifier={modifier}
                   setModifier={setModifier}
                   submitEdit={submitEdit}
+                  repeatLog={repeatLog}
                   foods={foods}
                   deleteLog={deleteLog}
                 />

@@ -295,6 +295,20 @@ export function AppDataProvider({ children }) {
     writeDay(date, { logs: nextLogs });
   };
 
+  // Повтор записи: тот же продукт и вес уходят в конец списка за день.
+  const repeatLog = (date, id) => {
+    const dayLogs = dailyLogs[date] || [];
+    const source = dayLogs.find((l) => l.id === id);
+    if (!source) return;
+    // id — это и метка времени записи, поэтому при быстрых нажатиях сдвигаем его.
+    const usedIds = new Set(dayLogs.map((l) => l.id));
+    let nextId = Date.now();
+    while (usedIds.has(nextId.toString())) nextId += 1;
+    const nextLogs = [...dayLogs, { ...source, id: nextId.toString() }];
+    setDailyLogs((prev) => ({ ...prev, [date]: nextLogs }));
+    writeDay(date, { logs: nextLogs });
+  };
+
   const copyPreviousDay = async (date) => {
     const d = new Date(date); d.setDate(d.getDate() - 1);
     const prev = getLocalDateString(d);
@@ -814,7 +828,7 @@ export function AppDataProvider({ children }) {
     acceptedFriends, incomingRequests, outgoingRequests, friendName, otherUid, friendMetricNow,
     myFriendCode, myDisplayName, myWeightProgressHistory,
     // действия
-    writeDay, updateSteps, updateMetrics, addFoodLog, updateLogWeight, deleteLog, copyPreviousDay,
+    writeDay, updateSteps, updateMetrics, addFoodLog, updateLogWeight, deleteLog, repeatLog, copyPreviousDay,
     addFood, saveAiGeneratedFood, updateFoodBase, deleteFood, toggleFavorite, moveFavorite,
     toggleWorkout, addWater, resetWater, saveExtraActivity, removeExtraActivity,
     saveProfileData, saveSettings, setTheme, setFontScale, toggleBlock, saveGoals,
