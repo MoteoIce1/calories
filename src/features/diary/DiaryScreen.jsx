@@ -345,7 +345,7 @@ export default function DiaryScreen(props) {
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
               <div className="flex flex-col justify-center items-end text-right">
                 <span className="text-emerald-400 font-bold text-sm mb-1">{Math.round(log.totalCalories || 0)} ккал</span>
                 <div className="flex gap-1.5 opacity-80">
@@ -354,8 +354,8 @@ export default function DiaryScreen(props) {
                     <span className="text-blue-400 text-[9px] font-bold">У:{Math.round(log.totalCarbs || 0)}</span>
                 </div>
               </div>
-              <button onClick={() => repeatLog(log.id)} title="Повторить" aria-label={`Повторить ${foods.find(f => f.id === log.foodId)?.name || 'запись'}`} className="btn-active text-zinc-700 active:text-emerald-500 p-2 transition-colors"><IconRefresh className="w-5 h-5" /></button>
-              <button onClick={() => deleteLog(log.id)} className="btn-active text-zinc-700 active:text-red-500 p-2 transition-colors"><IconTrash className="w-5 h-5" /></button>
+              <button onClick={() => repeatLog(log.id)} title="Повторить" aria-label={`Повторить ${foods.find(f => f.id === log.foodId)?.name || 'запись'}`} className="btn-active text-zinc-700 active:text-emerald-500 p-1.5 transition-colors"><IconRefresh className="w-4 h-4" /></button>
+              <button onClick={() => deleteLog(log.id)} className="btn-active text-zinc-700 active:text-red-500 p-1.5 transition-colors"><IconTrash className="w-4 h-4" /></button>
             </div>
           </motion.div>
         ))}
